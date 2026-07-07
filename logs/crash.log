@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\main.py", line 129, in <module>
+    main()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\main.py", line 109, in main
+    window.show()
+RuntimeError: super-class __init__() of type MainWindow was never called

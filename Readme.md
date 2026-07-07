@@ -38,7 +38,7 @@ pip install -r requirements.txt
 ### 3. Запуск
 
 ```bash
-python main.py
+python src/main.py
 ```
 
 ---

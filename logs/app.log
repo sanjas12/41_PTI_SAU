@@ -1,0 +1,38 @@
+2026-07-07 12:58:54,679:INFO:__main__:=======================================================
+2026-07-07 12:58:54,679:INFO:__main__:PTI_SAU-0.0.1+rev1 — запуск
+2026-07-07 12:58:54,679:INFO:__main__:=======================================================
+2026-07-07 12:58:54,679:INFO:__main__:PID:        23472
+2026-07-07 12:58:54,680:INFO:__main__:Python:     3.8.10
+2026-07-07 12:58:54,680:INFO:__main__:Платформа:  win32
+2026-07-07 12:58:54,680:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-07 12:58:54,680:INFO:__main__:Уровень лога: INFO
+2026-07-07 12:58:54,680:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-07 12:58:54,681:INFO:config.config:settings.json успешно прочитан (7 параметров)
+2026-07-07 12:58:54,711:CRITICAL:__main__:Критическая ошибка при запуске
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\main.py", line 109, in main
+    window.show()
+RuntimeError: super-class __init__() of type MainWindow was never called
+2026-07-07 12:58:54,711:WARNING:__main__:Приложение завершено с ошибкой (код 1)
+2026-07-07 12:58:54,713:CRITICAL:__main__:Необработанное исключение:
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\main.py", line 129, in <module>
+    main()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\main.py", line 109, in main
+    window.show()
+RuntimeError: super-class __init__() of type MainWindow was never called
+
+2026-07-07 13:03:25,259:INFO:__main__:=======================================================
+2026-07-07 13:03:25,259:INFO:__main__:PTI_SAU-0.0.1+rev1 — запуск
+2026-07-07 13:03:25,259:INFO:__main__:=======================================================
+2026-07-07 13:03:25,259:INFO:__main__:PID:        17012
+2026-07-07 13:03:25,259:INFO:__main__:Python:     3.8.10
+2026-07-07 13:03:25,259:INFO:__main__:Платформа:  win32
+2026-07-07 13:03:25,260:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-07 13:03:25,260:INFO:__main__:Уровень лога: INFO
+2026-07-07 13:03:25,260:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-07 13:03:25,260:INFO:config.config:settings.json успешно прочитан (7 параметров)
+2026-07-07 13:03:27,492:INFO:__main__:=======================================================
+2026-07-07 13:03:27,492:INFO:__main__:  Приложение запущено  (2.23 с)
+2026-07-07 13:03:27,493:INFO:__main__:=======================================================
+2026-07-07 13:04:18,167:INFO:__main__:Приложение завершено штатно (код 0)

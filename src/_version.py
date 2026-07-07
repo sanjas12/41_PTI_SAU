@@ -3,8 +3,8 @@ from __future__ import annotations
 import subprocess
 from functools import lru_cache
 
-__app_name__ = "TG-Naladka"
-__version__ = "0.3.1"
+__app_name__ = "PTI_SAU"
+__version__ = "0.0.1"
 
 GIT_REVISION_CMD: tuple[str, ...] = ("git", "rev-list", "--count", "HEAD")
 
