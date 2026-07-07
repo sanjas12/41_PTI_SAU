@@ -12,6 +12,7 @@ from core.signal_generator import SignalGenerator
 from core.channel import AnalogChannel
 from core.signal_types import SignalType
 from ui.plot_widget import PlotWindow
+from ui.logger_window import LoggerWindow
 
 
 class ChannelWidget(QFrame):
@@ -128,6 +129,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Analog Signal Simulator v1.0")
         self.setGeometry(100, 100, 900, 700)
+        self.logger_window = None
         
         # Создаем генератор с 20 каналами
         self.generator = SignalGenerator()
@@ -254,6 +256,25 @@ class MainWindow(QMainWindow):
         """)
         layout.addWidget(self.start_btn)
         
+        # Новая кнопка - открыть журнал
+        self.logger_btn = QPushButton("📋 Журнал")
+        self.logger_btn.clicked.connect(self.open_logger_window)
+        self.logger_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+        """)
+        layout.addWidget(self.logger_btn)
+
         self.reset_btn = QPushButton("↺ Сброс")
         self.reset_btn.clicked.connect(self.reset_signals)
         self.reset_btn.setStyleSheet("""
@@ -432,4 +453,29 @@ class MainWindow(QMainWindow):
         """Закрытие главного окна"""
         if self.plot_window:
             self.plot_window.close()
+        event.accept()
+    
+    def open_logger_window(self):
+        """Открыть окно с журналом"""
+        if self.logger_window is None or not self.logger_window.isVisible():
+            self.logger_window = LoggerWindow(self)
+            self.logger_window.show()
+        else:
+            self.logger_window.raise_()
+            self.logger_window.activateWindow()
+            
+    def log(self, message: str, level: str = "info"):
+        """Добавить сообщение в журнал"""
+        if self.logger_window and self.logger_window.isVisible():
+            self.logger_window.log(message, level)
+        else:
+            # Если окно журнала не открыто, пишем в консоль
+            print(f"[{level.upper()}] {message}")
+            
+    def closeEvent(self, event):
+        """Закрытие главного окна"""
+        if self.plot_window:
+            self.plot_window.close()
+        if self.logger_window:
+            self.logger_window.close()
         event.accept()

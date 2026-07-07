@@ -2,7 +2,6 @@
 ├── src/
 │   ├── __init__.py
 │   ├── main.py                 # Точка входа
-│   ├── app.py                  # Класс приложения
 │   │
 │   ├── ui/                     # UI слой
 │   │   ├── __init__.py
@@ -12,6 +11,7 @@
 │   │   ├── plot_widget.py      # График (matplotlib/pyqtgraph)
 │   │   ├── settings_dialog.py  # Настройки
 │   │   └── resources/          # .qrc, иконки, стили
+│   │   └── logger_window.py    # ← НОВЫЙ ФАЙЛ (окно журнала)    
 │   │
 │   ├── core/                   # Бизнес-логика
 │   │   ├── __init__.py
@@ -22,9 +22,9 @@
 │   │
 │   ├── modbus/                 # Modbus слой
 │   │   ├── __init__.py
-│   │   ├── modbus_server.py    # Modbus TCP сервер
+│   │   ├── modbus_client.py    # Modbus TCP сервер
 │   │   ├── modbus_mapping.py   # Отображение регистров
-│   │   └── data_store.py       # Хранилище значений
+│   │   └── worker.py           # Асинхронный воркер
 │   │
 │   ├── config/                 # Конфигурация
 │   │   ├── __init__.py

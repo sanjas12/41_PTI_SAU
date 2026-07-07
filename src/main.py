@@ -13,6 +13,7 @@ from _version import __full_version__
 from ui.main_window import MainWindow
 from ui.styles import app_stylesheet
 
+
 logger = logging.getLogger(__name__)
 
 
