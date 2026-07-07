@@ -35,4 +35,16 @@ wheels/
 *.egg
 MANIFEST
 
+# Тесты
+.pytest_cache/
+htmlcov/
+.coverage
+test_faults.db
+
 # Project
+logs/
+*.db
+backend/faults.db
+docs/.$db.drawio.dtmp
+uploads/
+backups/

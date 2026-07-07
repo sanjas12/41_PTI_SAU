@@ -1,6 +1,6 @@
 Traceback (most recent call last):
-  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\main.py", line 129, in <module>
-    main()
-  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\main.py", line 109, in main
-    window.show()
-RuntimeError: super-class __init__() of type MainWindow was never called
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 279, in showEvent
+    self._update_display()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 214, in _update_display
+    self.log_text.setHtml(display_text)
+AttributeError: 'QPlainTextEdit' object has no attribute 'setHtml'

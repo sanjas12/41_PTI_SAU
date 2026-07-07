@@ -36,3 +36,38 @@ RuntimeError: super-class __init__() of type MainWindow was never called
 2026-07-07 13:03:27,492:INFO:__main__:  Приложение запущено  (2.23 с)
 2026-07-07 13:03:27,493:INFO:__main__:=======================================================
 2026-07-07 13:04:18,167:INFO:__main__:Приложение завершено штатно (код 0)
+2026-07-07 13:18:21,425:INFO:__main__:=======================================================
+2026-07-07 13:18:21,426:INFO:__main__:PTI_SAU-0.0.1+rev2 — запуск
+2026-07-07 13:18:21,426:INFO:__main__:=======================================================
+2026-07-07 13:18:21,426:INFO:__main__:PID:        21320
+2026-07-07 13:18:21,426:INFO:__main__:Python:     3.8.10
+2026-07-07 13:18:21,426:INFO:__main__:Платформа:  win32
+2026-07-07 13:18:21,426:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-07 13:18:21,426:INFO:__main__:Уровень лога: INFO
+2026-07-07 13:18:21,426:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-07 13:18:21,426:INFO:config.config:settings.json успешно прочитан (7 параметров)
+2026-07-07 13:18:22,275:INFO:__main__:=======================================================
+2026-07-07 13:18:22,276:INFO:__main__:  Приложение запущено  (0.86 с)
+2026-07-07 13:18:22,276:INFO:__main__:=======================================================
+2026-07-07 13:51:04,512:INFO:__main__:=======================================================
+2026-07-07 13:51:04,512:INFO:__main__:PTI_SAU-0.0.1+rev3 — запуск
+2026-07-07 13:51:04,512:INFO:__main__:=======================================================
+2026-07-07 13:51:04,512:INFO:__main__:PID:        17500
+2026-07-07 13:51:04,512:INFO:__main__:Python:     3.8.10
+2026-07-07 13:51:04,512:INFO:__main__:Платформа:  win32
+2026-07-07 13:51:04,512:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-07 13:51:04,512:INFO:__main__:Уровень лога: INFO
+2026-07-07 13:51:04,512:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-07 13:51:04,517:INFO:config.config:settings.json успешно прочитан (7 параметров)
+2026-07-07 13:51:07,422:INFO:__main__:=======================================================
+2026-07-07 13:51:07,422:INFO:__main__:  Приложение запущено  (2.90 с)
+2026-07-07 13:51:07,423:INFO:__main__:=======================================================
+2026-07-07 13:51:25,617:CRITICAL:__main__:Необработанное исключение:
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 279, in showEvent
+    self._update_display()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 214, in _update_display
+    self.log_text.setHtml(display_text)
+AttributeError: 'QPlainTextEdit' object has no attribute 'setHtml'
+
+2026-07-07 13:51:44,144:INFO:__main__:Приложение завершено штатно (код 0)
