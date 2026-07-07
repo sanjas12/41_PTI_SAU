@@ -1,0 +1,9 @@
+{
+  "FONT_SIZE": 8,
+  "TICK_MARK_COUNT_X": 15,
+  "TICK_MARK_COUNT_Y": 10,
+  "LEVEL_LOG": "INFO",
+  "ANALYS_AIM": "Значение развертки. Положение ГСМ",
+  "GSM_A_CUR": "ГСМ-А.Текущее положение",
+  "GSM_B_CUR": "ГСМ-Б.Текущее положение"
+}

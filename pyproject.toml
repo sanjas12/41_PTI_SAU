@@ -1,0 +1,56 @@
+[project]
+name = "project"
+version = "0.0.1"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    {name = "sanja_s", email = "sanja100v@gmail.com"}
+]
+
+dependencies = []
+
+[project.urls]
+Repository = ".git"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+build = [
+    "cx-freeze==7.2.10 ; sys_platform == 'win32'",
+]
+dev = [
+    "pre-commit>= 2.0.0, < 3.0.0",
+]
+
+[tool.uv]
+environments = [
+    "sys_platform == 'win32'",
+    # "sys_platform == 'linux'",  # раскоментить если будет в linux собираться
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ─── Ruff: линтер + форматер ─────────────────────────────────────────────────
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "N",
+    "SIM",
+]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

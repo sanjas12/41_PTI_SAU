@@ -1,0 +1,88 @@
+41_PTI_SAU
+├── src/
+│   ├── __init__.py
+│   ├── main.py                 # Точка входа
+│   ├── app.py                  # Класс приложения
+│   │
+│   ├── ui/                     # UI слой
+│   │   ├── __init__.py
+│   │   ├── main_window.py      # Главное окно
+│   │   ├── channel_widget.py   # Виджет одного канала
+│   │   ├── channels_grid.py    # Сетка каналов
+│   │   ├── plot_widget.py      # График (matplotlib/pyqtgraph)
+│   │   ├── settings_dialog.py  # Настройки
+│   │   └── resources/          # .qrc, иконки, стили
+│   │
+│   ├── core/                   # Бизнес-логика
+│   │   ├── __init__.py
+│   │   ├── signal_generator.py # Генерация сигналов
+│   │   ├── channel.py          # Модель канала
+│   │   ├── signal_types.py     # Типы сигналов (enum)
+│   │   └── engine.py           # Оркестрация (QThread)
+│   │
+│   ├── modbus/                 # Modbus слой
+│   │   ├── __init__.py
+│   │   ├── modbus_server.py    # Modbus TCP сервер
+│   │   ├── modbus_mapping.py   # Отображение регистров
+│   │   └── data_store.py       # Хранилище значений
+│   │
+│   ├── config/                 # Конфигурация
+│   │   ├── __init__.py
+│   │   ├── config_manager.py   # Загрузка/сохранение
+│   │   └── default_config.json # Дефолтные настройки
+│   │
+│   └── utils/                  # Утилиты
+│       ├── __init__.py
+│       ├── logger.py           # Настройка логирования
+│       └── exceptions.py       # Кастомные исключения
+│
+├── tests/                      # Тесты
+│   ├── test_signal_generator.py
+│   ├── test_modbus.py
+│   └── ...
+│
+├── requirements.txt            # Зависимости
+├── setup.py                    # Установка
+├── run.py                      # Запуск
+└── README.md
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│                      Desktop App (Win7)                       │
+│                      Python 3.8.10 + PyQt5                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
+│  │   UI Layer   │  │  Signal      │  │  Modbus TCP Server   │ │
+│  │   (PyQt5)    │◄─┤  Generator   │──┤  (pymodbus)          │ │
+│  │              │  │  (Core)      │  │                      │ │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘ │
+│         │                  │                      │             │
+│         ▼                  ▼                      ▼             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
+│  │  Widgets:    │  │  Analog      │  │  Holding Registers   │ │
+│  │  - MainWin   │  │  Channels    │  │  (20+ channels)      │ │
+│  │  - Controls  │  │  (20 шт)     │  │  Float32 / INT16     │ │
+│  │  - Plots     │  │  Types:      │  │                      │ │
+│  │  - Settings  │  │  - Sine      │  │  Modbus Mapping:     │ │
+│  │              │  │  - Square    │  │  Ch1: 40001-40002    │ │
+│  │              │  │  - Sawtooth  │  │  Ch2: 40003-40004    │ │
+│  │              │  │  - Random    │  │  ...                 │ │
+│  │              │  │  - Custom    │  │                      │ │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘ │
+│                                                                 │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │              Configuration Manager (JSON/YAML)            │ │
+│  │  - Channel settings (name, type, min/max, freq)          │ │
+│  │  - Modbus settings (port, IP, mapping)                   │ │
+│  │  - UI preferences                                        │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                               │
+                               │ Ethernet (Modbus TCP)
+                               ▼
+                    ┌─────────────────────┐
+                    │  Schneider PLC      │
+                    │  (M340/M580/...)    │
+                    │  Modbus TCP Slave   │
+                    └─────────────────────┘
