@@ -18,7 +18,7 @@ from modbus.worker import Runnable
 from plc.plc_interface import PLCInterface
 from plc.plc_register_view import PLCRegisterView
 from _version import __full_version__
-
+from ui.interval_control import IntervalControl
 
 class ChannelWidget(QFrame):
     """Виджет для отображения одного канала"""
@@ -205,11 +205,16 @@ class MainWindow(QMainWindow):
         self.connection_panel.connection_changed.connect(self.on_connection_changed)
         self.connection_panel.connected.connect(self.on_connection_status_changed)
         left_layout.addWidget(self.connection_panel)
-        
+    
         # Панель управления
         control_panel = self._create_control_panel()
         left_layout.addWidget(control_panel)
         
+        # НОВЫЙ ВИДЖЕТ - Интервал обновления
+        self.interval_control = IntervalControl()
+        self.interval_control.interval_changed.connect(self.on_interval_changed)
+        left_layout.addWidget(self.interval_control)
+    
         # Сетка каналов
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -229,7 +234,7 @@ class MainWindow(QMainWindow):
             col = i % cols
             grid_layout.addWidget(widget, row, col)
             self.channel_widgets.append(widget)
-            
+        
         scroll.setWidget(grid_widget)
         left_layout.addWidget(scroll)
         
@@ -242,7 +247,7 @@ class MainWindow(QMainWindow):
         # Устанавливаем пропорции
         main_layout.setStretchFactor(left_panel, 2)
         main_layout.setStretchFactor(right_panel, 1)
-        
+    
         self.setStyleSheet("""
             QMainWindow { background-color: #f5f5f5; }
             QLabel { color: #333333; }
@@ -541,7 +546,25 @@ class MainWindow(QMainWindow):
         if self.frame_count >= 50:
             self.fps_label.setText(f"FPS: {self.frame_count * 2}")
             self.frame_count = 0
-            
+    
+    def on_interval_changed(self, interval: float):
+        """Изменен интервал обновления сигналов"""
+        # Обновляем интервал в генераторе
+        self.generator.set_update_interval(interval)
+        
+        # Логируем изменение
+        freq = 1.0 / interval if interval > 0 else 0
+        self.log(f"Интервал обновления изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
+        
+        # Обновляем статус
+        self.status_label.setText(f"⏱ Интервал: {interval:.3f} с")
+        self.status_label.setStyleSheet("color: #FF9800; font-weight: bold; font-size: 12px;")
+        
+        # Возвращаем статус через 2 секунды
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(2000, lambda: self.status_label.setText("● Работает"))
+        QTimer.singleShot(2000, lambda: self.status_label.setStyleSheet("color: #00CC00; font-weight: bold; font-size: 12px;"))
+
     def closeEvent(self, event):
         if self.plot_window:
             self.plot_window.close()
