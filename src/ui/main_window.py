@@ -7,12 +7,15 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QColor, QPalette
 
-# Простые импорты (без src)
+# Импорты
 from core.signal_generator import SignalGenerator
 from core.channel import AnalogChannel
 from core.signal_types import SignalType
 from ui.plot_widget import PlotWindow
 from ui.logger_window import LoggerWindow
+from ui.connection_panel import ConnectionPanel  # НОВЫЙ ИМПОРТ
+from modbus.modbus_client import ModbusClientWrapper  # НОВЫЙ ИМПОРТ
+from modbus.worker import Runnable  # НОВЫЙ ИМПОРТ
 
 
 class ChannelWidget(QFrame):
@@ -44,7 +47,6 @@ class ChannelWidget(QFrame):
         layout.setSpacing(2)
         layout.setContentsMargins(5, 5, 5, 5)
         
-        # Имя канала (кликабельно для выбора графика)
         self.name_label = QLabel(f"Ch{self.channel.id+1}: {self.channel.name}")
         self.name_label.setAlignment(Qt.AlignCenter)
         self.name_label.setFont(QFont("Arial", 8, QFont.Bold))
@@ -52,26 +54,22 @@ class ChannelWidget(QFrame):
         self.name_label.mousePressEvent = self.on_name_click
         layout.addWidget(self.name_label)
         
-        # Значение
         self.value_label = QLabel("0.00")
         self.value_label.setAlignment(Qt.AlignCenter)
         self.value_label.setFont(QFont("Arial", 14, QFont.Bold))
         self.value_label.setStyleSheet("color: #0066CC;")
         layout.addWidget(self.value_label)
         
-        # Мини-индикатор (полоска)
         self.bar = QFrame()
         self.bar.setFixedHeight(4)
         self.bar.setStyleSheet("background-color: #4CAF50; border-radius: 2px;")
         layout.addWidget(self.bar)
         
-        # Информация о типе сигнала
         self.type_label = QLabel(str(self.channel.signal_type))
         self.type_label.setAlignment(Qt.AlignCenter)
         self.type_label.setStyleSheet("color: #999999; font-size: 7px;")
         layout.addWidget(self.type_label)
         
-        # Включен/Выключен
         self.enabled_check = QCheckBox("Вкл")
         self.enabled_check.setChecked(self.channel.enabled)
         self.enabled_check.stateChanged.connect(self.on_enabled_changed)
@@ -83,7 +81,6 @@ class ChannelWidget(QFrame):
         self.setMaximumSize(120, 130)
         
     def on_name_click(self, event):
-        """Клик по имени канала - выбираем для графика"""
         self.channel_selected.emit(self.channel.id)
         
     def on_enabled_changed(self, state):
@@ -96,11 +93,9 @@ class ChannelWidget(QFrame):
             self.bar.setStyleSheet("background-color: #4CAF50; border-radius: 2px;")
             
     def update_display(self):
-        """Обновить отображение значения"""
         if self.channel.enabled:
             value = self.channel.current_value
             self.value_label.setText(f"{value:.1f}")
-            # Обновляем полоску
             percent = (value - self.channel.min_value) / (self.channel.max_value - self.channel.min_value)
             bar_width = max(0, min(100, percent * 100))
             self.bar.setStyleSheet(f"""
@@ -114,7 +109,6 @@ class ChannelWidget(QFrame):
             self.bar.setStyleSheet("background-color: #cccccc; border-radius: 2px;")
             
     def update_channel(self, channel: AnalogChannel):
-        """Обновить данные канала"""
         self.channel = channel
         self.name_label.setText(f"Ch{channel.id+1}: {channel.name}")
         self.type_label.setText(str(channel.signal_type))
@@ -128,12 +122,14 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Analog Signal Simulator v1.0")
-        self.setGeometry(100, 100, 900, 700)
-        self.logger_window = None
+        self.setGeometry(100, 100, 1200, 800)
         
         # Создаем генератор с 20 каналами
         self.generator = SignalGenerator()
         self._setup_channels()
+        
+        # Создаем Modbus клиент
+        self.modbus = ModbusClientWrapper()
         
         # Настраиваем UI
         self.setup_ui()
@@ -143,13 +139,17 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self.update_signals)
         self.timer.start(10)  # 100 Гц
         
-        # Счетчик для статистики
+        # Счетчик
         self.frame_count = 0
         self.is_running = True
-        self.plot_window = None  # Окно с графиками
+        self.plot_window = None
+        self.logger_window = None
+        
+        # Потоковый пул для Modbus операций
+        self.thread_pool = QThreadPool.globalInstance()
         
     def _setup_channels(self):
-        """Создать 20 каналов с разными сигналами"""
+        """Создать 20 каналов"""
         signal_types = [SignalType.SINE, SignalType.SQUARE, 
                        SignalType.SAWTOOTH, SignalType.TRIANGLE,
                        SignalType.RANDOM]
@@ -170,18 +170,29 @@ class MainWindow(QMainWindow):
             self.generator.add_channel(channel)
             
     def setup_ui(self):
-        """Настройка пользовательского интерфейса"""
+        """Настройка UI"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        main_layout = QVBoxLayout()
+        main_layout = QHBoxLayout()
         central_widget.setLayout(main_layout)
         
-        # Верхняя панель управления
-        control_layout = self._create_control_panel()
-        main_layout.addLayout(control_layout)
+        # Левая панель - подключение и каналы
+        left_panel = QWidget()
+        left_layout = QVBoxLayout()
+        left_panel.setLayout(left_layout)
         
-        # Сетка каналов с прокруткой
+        # Панель подключения к ПЛК
+        self.connection_panel = ConnectionPanel()
+        self.connection_panel.connection_changed.connect(self.on_connection_changed)
+        self.connection_panel.connected.connect(self.on_connection_status_changed)
+        left_layout.addWidget(self.connection_panel)
+        
+        # Панель управления
+        control_panel = self._create_control_panel()
+        left_layout.addWidget(control_panel)
+        
+        # Сетка каналов
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background-color: #f5f5f5; }")
@@ -191,9 +202,8 @@ class MainWindow(QMainWindow):
         grid_layout.setSpacing(3)
         grid_widget.setLayout(grid_layout)
         
-        # Добавляем виджеты каналов
         self.channel_widgets = []
-        cols = 5
+        cols = 4
         for i, channel in enumerate(self.generator.channels):
             widget = ChannelWidget(channel)
             widget.channel_selected.connect(self.on_channel_selected)
@@ -203,20 +213,32 @@ class MainWindow(QMainWindow):
             self.channel_widgets.append(widget)
             
         scroll.setWidget(grid_widget)
-        main_layout.addWidget(scroll)
+        left_layout.addWidget(scroll)
         
-        # Нижняя информационная панель
-        info_layout = self._create_info_panel()
-        main_layout.addLayout(info_layout)
+        main_layout.addWidget(left_panel)
         
-        # Применяем общий стиль
+        # Правая панель - информационная
+        right_panel = self._create_info_panel()
+        main_layout.addWidget(right_panel)
+        
+        # Устанавливаем пропорции
+        main_layout.setStretchFactor(left_panel, 2)
+        main_layout.setStretchFactor(right_panel, 1)
+        
         self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f5f5f5;
-            }
-            QLabel {
-                color: #333333;
-            }
+            QMainWindow { background-color: #f5f5f5; }
+            QLabel { color: #333333; }
+        """)
+        
+    def _create_control_panel(self):
+        """Создать панель управления"""
+        panel = QGroupBox("Управление")
+        layout = QHBoxLayout()
+        panel.setLayout(layout)
+        
+        self.start_btn = QPushButton("⏸ Стоп")
+        self.start_btn.clicked.connect(self.toggle_generation)
+        self.start_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
@@ -225,56 +247,10 @@ class MainWindow(QMainWindow):
                 border-radius: 4px;
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-        """)
-        
-    def _create_control_panel(self):
-        """Создать панель управления"""
-        layout = QHBoxLayout()
-        
-        # Кнопки управления
-        self.start_btn = QPushButton("⏸ Стоп")
-        self.start_btn.clicked.connect(self.toggle_generation)
-        self.start_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
+            QPushButton:hover { background-color: #45a049; }
         """)
         layout.addWidget(self.start_btn)
         
-        # Новая кнопка - открыть журнал
-        self.logger_btn = QPushButton("📋 Журнал")
-        self.logger_btn.clicked.connect(self.open_logger_window)
-        self.logger_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FF9800;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #F57C00;
-            }
-        """)
-        layout.addWidget(self.logger_btn)
-
         self.reset_btn = QPushButton("↺ Сброс")
         self.reset_btn.clicked.connect(self.reset_signals)
         self.reset_btn.setStyleSheet("""
@@ -282,18 +258,14 @@ class MainWindow(QMainWindow):
                 background-color: #FF9800;
                 color: white;
                 border: none;
-                padding: 8px 16px;
+                padding: 6px 12px;
                 border-radius: 4px;
                 font-weight: bold;
-                min-width: 80px;
             }
-            QPushButton:hover {
-                background-color: #F57C00;
-            }
+            QPushButton:hover { background-color: #F57C00; }
         """)
         layout.addWidget(self.reset_btn)
         
-        # Кнопка открытия графиков
         self.plot_btn = QPushButton("📊 Графики")
         self.plot_btn.clicked.connect(self.open_plot_window)
         self.plot_btn.setStyleSheet("""
@@ -301,87 +273,146 @@ class MainWindow(QMainWindow):
                 background-color: #2196F3;
                 color: white;
                 border: none;
-                padding: 8px 16px;
+                padding: 6px 12px;
                 border-radius: 4px;
                 font-weight: bold;
-                min-width: 80px;
             }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
+            QPushButton:hover { background-color: #1976D2; }
         """)
         layout.addWidget(self.plot_btn)
         
-        # Статус
-        self.status_label = QLabel("● Работает")
-        self.status_label.setStyleSheet("color: #00CC00; font-weight: bold;")
-        layout.addWidget(self.status_label)
+        self.logger_btn = QPushButton("📋 Журнал")
+        self.logger_btn.clicked.connect(self.open_logger_window)
+        self.logger_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9C27B0;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #7B1FA2; }
+        """)
+        layout.addWidget(self.logger_btn)
         
         layout.addStretch()
         
-        # Информация
         self.fps_label = QLabel("FPS: 0")
         self.fps_label.setStyleSheet("color: #666666;")
         layout.addWidget(self.fps_label)
         
-        self.channels_count_label = QLabel("Каналы: 20")
-        self.channels_count_label.setStyleSheet("color: #666666;")
-        layout.addWidget(self.channels_count_label)
-        
-        return layout
+        return panel
         
     def _create_info_panel(self):
-        """Создать нижнюю информационную панель"""
-        layout = QHBoxLayout()
+        """Создать информационную панель"""
+        panel = QGroupBox("Информация")
+        layout = QVBoxLayout()
+        panel.setLayout(layout)
         
-        modbus_info = QLabel("🔌 Modbus TCP: 127.0.0.1:502 | Holding Registers: 40001-40040")
-        modbus_info.setStyleSheet("color: #666666; font-size: 10px;")
-        layout.addWidget(modbus_info)
+        # Статус
+        self.status_label = QLabel("● Работает")
+        self.status_label.setStyleSheet("color: #00CC00; font-weight: bold; font-size: 12px;")
+        layout.addWidget(self.status_label)
         
-        layout.addStretch()
+        # Разделитель
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line)
         
-        # Информация о выбранном канале для графика
-        self.selected_channel_label = QLabel("Выбран: Канал 1")
-        self.selected_channel_label.setStyleSheet("color: #0066CC; font-size: 10px; font-weight: bold;")
+        # Выбранный канал
+        layout.addWidget(QLabel("Выбранный канал:"))
+        self.selected_channel_label = QLabel("Канал 1")
+        self.selected_channel_label.setStyleSheet("color: #0066CC; font-weight: bold;")
         layout.addWidget(self.selected_channel_label)
         
+        layout.addSpacing(10)
+        
+        # Статистика
+        layout.addWidget(QLabel("Статистика:"))
+        self.stats_label = QLabel("Каналов: 20\nАктивных: 20")
+        self.stats_label.setStyleSheet("color: #666666; font-size: 10px;")
+        layout.addWidget(self.stats_label)
+        
         layout.addStretch()
         
-        version_label = QLabel("Версия: 1.1.0")
+        # Версия
+        version_label = QLabel("Версия: 1.2.0")
         version_label.setStyleSheet("color: #999999; font-size: 9px;")
         layout.addWidget(version_label)
         
-        return layout
+        return panel
         
+    def on_connection_changed(self, params):
+        """Изменены параметры подключения"""
+        host = params['host']
+        port = params['port']
+        unit_id = params['unit_id']
+        
+        # Настраиваем Modbus клиент
+        try:
+            self.modbus.configure(host, port, unit_id)
+            self.log(f"Настроено подключение к {host}:{port} (Unit ID: {unit_id})", "info")
+        except Exception as e:
+            self.log(f"Ошибка настройки подключения: {e}", "error")
+            
+    def on_connection_status_changed(self, connected):
+        """Изменен статус подключения"""
+        if connected:
+            # Подключаемся
+            def after_connect(ok):
+                if ok:
+                    self.log("Подключение установлено", "success")
+                    self.connection_panel.set_connection_status(True)
+                else:
+                    self.log("Не удалось подключиться", "error")
+                    self.connection_panel.set_connection_status(False)
+                    
+            self._submit(self.modbus.open, after_connect)
+        else:
+            # Отключаемся
+            self.modbus.close()
+            self.log("Соединение закрыто", "info")
+            
+    def _submit(self, fn, on_result, *args, **kwargs):
+        """Выполнить асинхронную операцию"""
+        job = Runnable(fn, *args, **kwargs)
+        job.signals.result.connect(on_result)
+        job.signals.error.connect(lambda e: self.log(f"Ошибка: {e}", "error"))
+        self.thread_pool.start(job)
+        
+    def log(self, message: str, level: str = "info"):
+        """Добавить сообщение в журнал"""
+        if self.logger_window and self.logger_window.isVisible():
+            self.logger_window.log(message, level)
+        else:
+            print(f"[{level.upper()}] {message}")
+            
     def on_channel_selected(self, channel_id):
-        """Обработчик выбора канала для графика"""
         channel = self.generator.get_channel(channel_id)
         if channel:
-            self.selected_channel_label.setText(f"Выбран: Канал {channel_id+1} - {channel.name}")
+            self.selected_channel_label.setText(f"Канал {channel_id+1}: {channel.name}")
             self.status_label.setText(f"📊 Канал {channel_id+1}: {channel.name}")
-            self.status_label.setStyleSheet("color: #0066CC; font-weight: bold;")
+            self.status_label.setStyleSheet("color: #0066CC; font-weight: bold; font-size: 12px;")
             
-            # Если окно графиков открыто, обновляем его
-            if self.plot_window and self.plot_window.isVisible():
-                # Добавляем выбранный канал в список выбора в окне графиков
-                # Находим элемент в списке
-                for i in range(self.plot_window.channels_list.count()):
-                    item = self.plot_window.channels_list.item(i)
-                    if item.data(Qt.UserRole) == channel_id:
-                        self.plot_window.channels_list.setCurrentItem(item)
-                        break
-        
     def open_plot_window(self):
-        """Открыть окно с графиками"""
         if self.plot_window is None or not self.plot_window.isVisible():
             self.plot_window = PlotWindow(self.generator, self)
             self.plot_window.show()
         else:
             self.plot_window.raise_()
             self.plot_window.activateWindow()
+            
+    def open_logger_window(self):
+        if self.logger_window is None or not self.logger_window.isVisible():
+            self.logger_window = LoggerWindow(self)
+            self.logger_window.show()
+        else:
+            self.logger_window.raise_()
+            self.logger_window.activateWindow()
         
     def toggle_generation(self):
-        """Включить/выключить генерацию"""
         if self.is_running:
             self.timer.stop()
             self.start_btn.setText("▶ Старт")
@@ -390,17 +421,14 @@ class MainWindow(QMainWindow):
                     background-color: #f44336;
                     color: white;
                     border: none;
-                    padding: 8px 16px;
+                    padding: 6px 12px;
                     border-radius: 4px;
                     font-weight: bold;
-                    min-width: 80px;
                 }
-                QPushButton:hover {
-                    background-color: #da190b;
-                }
+                QPushButton:hover { background-color: #da190b; }
             """)
             self.status_label.setText("● Остановлен")
-            self.status_label.setStyleSheet("color: #FF4444; font-weight: bold;")
+            self.status_label.setStyleSheet("color: #FF4444; font-weight: bold; font-size: 12px;")
             self.is_running = False
         else:
             self.timer.start(10)
@@ -410,72 +438,47 @@ class MainWindow(QMainWindow):
                     background-color: #4CAF50;
                     color: white;
                     border: none;
-                    padding: 8px 16px;
+                    padding: 6px 12px;
                     border-radius: 4px;
                     font-weight: bold;
-                    min-width: 80px;
                 }
-                QPushButton:hover {
-                    background-color: #45a049;
-                }
+                QPushButton:hover { background-color: #45a049; }
             """)
             self.status_label.setText("● Работает")
-            self.status_label.setStyleSheet("color: #00CC00; font-weight: bold;")
+            self.status_label.setStyleSheet("color: #00CC00; font-weight: bold; font-size: 12px;")
             self.is_running = True
             
     def reset_signals(self):
-        """Сбросить все сигналы"""
         for channel in self.generator.channels:
             channel.time = 0
             channel.current_value = 0
         self.update_signals()
             
     def update_signals(self):
-        """Обновить сигналы и UI"""
         if not self.is_running:
             return
             
-        # Обновляем значения
         self.generator.update(dt=0.01)
         
-        # Обновляем виджеты каналов
+        active_count = 0
         for i, widget in enumerate(self.channel_widgets):
             if i < len(self.generator.channels):
                 widget.update_display()
-                
-        # Счетчик FPS
+                if self.generator.channels[i].enabled:
+                    active_count += 1
+                    
+        # Обновляем статистику
+        self.stats_label.setText(f"Каналов: 20\nАктивных: {active_count}")
+        
         self.frame_count += 1
         if self.frame_count >= 50:
             self.fps_label.setText(f"FPS: {self.frame_count * 2}")
             self.frame_count = 0
             
     def closeEvent(self, event):
-        """Закрытие главного окна"""
-        if self.plot_window:
-            self.plot_window.close()
-        event.accept()
-    
-    def open_logger_window(self):
-        """Открыть окно с журналом"""
-        if self.logger_window is None or not self.logger_window.isVisible():
-            self.logger_window = LoggerWindow(self)
-            self.logger_window.show()
-        else:
-            self.logger_window.raise_()
-            self.logger_window.activateWindow()
-            
-    def log(self, message: str, level: str = "info"):
-        """Добавить сообщение в журнал"""
-        if self.logger_window and self.logger_window.isVisible():
-            self.logger_window.log(message, level)
-        else:
-            # Если окно журнала не открыто, пишем в консоль
-            print(f"[{level.upper()}] {message}")
-            
-    def closeEvent(self, event):
-        """Закрытие главного окна"""
         if self.plot_window:
             self.plot_window.close()
         if self.logger_window:
             self.logger_window.close()
+        self.modbus.close()
         event.accept()

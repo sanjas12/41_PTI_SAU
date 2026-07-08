@@ -71,3 +71,83 @@ Traceback (most recent call last):
 AttributeError: 'QPlainTextEdit' object has no attribute 'setHtml'
 
 2026-07-07 13:51:44,144:INFO:__main__:Приложение завершено штатно (код 0)
+2026-07-07 14:22:53,242:INFO:__main__:=======================================================
+2026-07-07 14:22:53,242:INFO:__main__:PTI_SAU-0.0.1+rev5 — запуск
+2026-07-07 14:22:53,242:INFO:__main__:=======================================================
+2026-07-07 14:22:53,242:INFO:__main__:PID:        18308
+2026-07-07 14:22:53,242:INFO:__main__:Python:     3.8.10
+2026-07-07 14:22:53,243:INFO:__main__:Платформа:  win32
+2026-07-07 14:22:53,243:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-07 14:22:53,243:INFO:__main__:Уровень лога: INFO
+2026-07-07 14:22:53,243:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-07 14:22:53,243:INFO:config.config:settings.json успешно прочитан (7 параметров)
+2026-07-07 14:22:55,320:INFO:__main__:=======================================================
+2026-07-07 14:22:55,320:INFO:__main__:  Приложение запущено  (2.09 с)
+2026-07-07 14:22:55,320:INFO:__main__:=======================================================
+2026-07-07 14:23:22,793:INFO:__main__:Приложение завершено штатно (код 0)
+2026-07-07 15:22:58,153:INFO:__main__:=======================================================
+2026-07-07 15:22:58,153:INFO:__main__:PTI_SAU-0.0.1+rev5 — запуск
+2026-07-07 15:22:58,153:INFO:__main__:=======================================================
+2026-07-07 15:22:58,153:INFO:__main__:PID:        20052
+2026-07-07 15:22:58,153:INFO:__main__:Python:     3.8.10
+2026-07-07 15:22:58,153:INFO:__main__:Платформа:  win32
+2026-07-07 15:22:58,153:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-07 15:22:58,154:INFO:__main__:Уровень лога: INFO
+2026-07-07 15:22:58,154:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-07 15:22:58,154:INFO:config.config:settings.json успешно прочитан (7 параметров)
+2026-07-07 15:22:59,232:INFO:__main__:=======================================================
+2026-07-07 15:22:59,232:INFO:__main__:  Приложение запущено  (1.08 с)
+2026-07-07 15:22:59,232:INFO:__main__:=======================================================
+2026-07-07 16:07:51,630:INFO:__main__:Приложение завершено штатно (код 0)
+2026-07-08 08:28:49,302:INFO:__main__:=======================================================
+2026-07-08 08:28:49,302:INFO:__main__:PTI_SAU-0.0.1+rev5 — запуск
+2026-07-08 08:28:49,302:INFO:__main__:=======================================================
+2026-07-08 08:28:49,302:INFO:__main__:PID:        13192
+2026-07-08 08:28:49,302:INFO:__main__:Python:     3.8.10
+2026-07-08 08:28:49,302:INFO:__main__:Платформа:  win32
+2026-07-08 08:28:49,302:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-08 08:28:49,302:INFO:__main__:Уровень лога: INFO
+2026-07-08 08:28:49,302:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-08 08:28:49,303:INFO:config.config:settings.json успешно прочитан (7 параметров)
+2026-07-08 08:29:54,750:INFO:__main__:=======================================================
+2026-07-08 08:29:54,751:INFO:__main__:  Приложение запущено  (65.44 с)
+2026-07-08 08:29:54,751:INFO:__main__:=======================================================
+2026-07-08 08:30:45,965:CRITICAL:__main__:Необработанное исключение:
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 279, in showEvent
+    self._update_display()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 214, in _update_display
+    self.log_text.setHtml(display_text)
+AttributeError: 'QPlainTextEdit' object has no attribute 'setHtml'
+
+2026-07-08 08:31:00,852:CRITICAL:__main__:Необработанное исключение:
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 222, in apply_filter
+    self._update_display()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 214, in _update_display
+    self.log_text.setHtml(display_text)
+AttributeError: 'QPlainTextEdit' object has no attribute 'setHtml'
+
+2026-07-08 08:31:02,167:CRITICAL:__main__:Необработанное исключение:
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 222, in apply_filter
+    self._update_display()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 214, in _update_display
+    self.log_text.setHtml(display_text)
+AttributeError: 'QPlainTextEdit' object has no attribute 'setHtml'
+
+2026-07-08 08:31:07,004:INFO:__main__:Приложение завершено штатно (код 0)
+2026-07-08 08:59:17,631:INFO:__main__:=======================================================
+2026-07-08 08:59:17,631:INFO:__main__:PTI_SAU-0.0.1+rev5 — запуск
+2026-07-08 08:59:17,631:INFO:__main__:=======================================================
+2026-07-08 08:59:17,631:INFO:__main__:PID:        23956
+2026-07-08 08:59:17,631:INFO:__main__:Python:     3.8.10
+2026-07-08 08:59:17,631:INFO:__main__:Платформа:  win32
+2026-07-08 08:59:17,631:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-08 08:59:17,631:INFO:__main__:Уровень лога: INFO
+2026-07-08 08:59:17,631:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-08 08:59:17,632:INFO:config.config:settings.json успешно прочитан (7 параметров)
+2026-07-08 08:59:28,554:INFO:__main__:=======================================================
+2026-07-08 08:59:28,554:INFO:__main__:  Приложение запущено  (10.92 с)
+2026-07-08 08:59:28,554:INFO:__main__:=======================================================
+2026-07-08 09:01:19,149:INFO:__main__:Приложение завершено штатно (код 0)

@@ -10,8 +10,9 @@
 │   │   ├── channels_grid.py    # Сетка каналов
 │   │   ├── plot_widget.py      # График (matplotlib/pyqtgraph)
 │   │   ├── settings_dialog.py  # Настройки
-│   │   └── resources/          # .qrc, иконки, стили
-│   │   └── logger_window.py    # ← НОВЫЙ ФАЙЛ (окно журнала)    
+│   │   ├── resources/          # .qrc, иконки, стили
+│   │   ├── logger_window.py    # ← НОВЫЙ ФАЙЛ (окно журнала)    
+│       └── connection_panel.py     # ← НОВЫЙ ФАЙЛ
 │   │
 │   ├── core/                   # Бизнес-логика
 │   │   ├── __init__.py

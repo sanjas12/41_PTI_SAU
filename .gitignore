@@ -48,3 +48,4 @@ backend/faults.db
 docs/.$db.drawio.dtmp
 uploads/
 backups/
+*.log
