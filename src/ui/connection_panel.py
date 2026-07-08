@@ -14,10 +14,8 @@ class ConnectionPanel(QGroupBox):
     
     def __init__(self, parent=None):
         super().__init__("🔌 Подключение", parent)
-        self.setup_ui()
-        self.setup_connections()
         
-        # Состояние подключения
+        # ИНИЦИАЛИЗИРУЕМ АТРИБУТЫ ДО ВЫЗОВА setup_ui()
         self._is_connected = False
         self._connection_params = {
             'host': '192.168.0.20',
@@ -27,10 +25,13 @@ class ConnectionPanel(QGroupBox):
         
         # Список сохраненных подключений (для быстрого выбора)
         self.saved_connections = [
-            {'name': 'PLC-1', 'host': '192.168.0.20', 'port': 502, 'unit_id': 1},
-            {'name': 'PLC-2', 'host': '192.168.0.21', 'port': 502, 'unit_id': 1},
             {'name': 'Simulator', 'host': '127.0.0.1', 'port': 502, 'unit_id': 1},
+            {'name': 'PLC-1', 'host': '192.168.0.20', 'port': 502, 'unit_id': 1},
         ]
+        
+        # ТЕПЕРЬ ВЫЗЫВАЕМ setup_ui()
+        self.setup_ui()
+        self.setup_connections()
         
     def setup_ui(self):
         """Настройка интерфейса"""

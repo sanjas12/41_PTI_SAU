@@ -1,5 +1,5 @@
 Traceback (most recent call last):
-  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 222, in apply_filter
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 188, in _append_log
     self._update_display()
   File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\logger_window.py", line 214, in _update_display
     self.log_text.setHtml(display_text)

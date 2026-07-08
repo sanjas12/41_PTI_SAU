@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox,
                              QCheckBox, QSlider, QFrame, QSplitter, QTabWidget,
                              QScrollArea, QListWidget, QListWidgetItem)
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QThreadPool
 from PyQt5.QtGui import QFont, QColor, QPalette
 
 # Импорты
