@@ -1,10 +1,12 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QPushButton, QPlainTextEdit, QLabel, QCheckBox,
-                             QSpinBox, QGroupBox, QFileDialog, QMessageBox)
+                             QPushButton, QTextEdit, QLabel, QCheckBox,
+                             QSpinBox, QGroupBox, QFileDialog, QMessageBox,
+                             QComboBox)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont, QColor, QTextCursor, QTextDocument
+from PyQt5.QtGui import QFont, QColor, QTextCursor
 import datetime
 import os
+import re
 
 
 class LoggerWindow(QMainWindow):
@@ -43,10 +45,36 @@ class LoggerWindow(QMainWindow):
         
         self.clear_btn = QPushButton("🗑 Очистить")
         self.clear_btn.clicked.connect(self.clear_log)
+        self.clear_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+        """)
         control_layout.addWidget(self.clear_btn)
         
         self.save_btn = QPushButton("💾 Сохранить")
         self.save_btn.clicked.connect(self.save_log)
+        self.save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
         control_layout.addWidget(self.save_btn)
         
         self.auto_scroll_cb = QCheckBox("Авто-прокрутка")
@@ -57,31 +85,51 @@ class LoggerWindow(QMainWindow):
         control_layout.addStretch()
         
         self.count_label = QLabel("Сообщений: 0")
+        self.count_label.setStyleSheet("color: #666666;")
         control_layout.addWidget(self.count_label)
         
         layout.addLayout(control_layout)
         
-        # Текстовое поле для логов
-        self.log_text = QPlainTextEdit()
+        # Текстовое поле для логов - используем QTextEdit (поддерживает HTML)
+        self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Consolas", 9))
-        self.log_text.setLineWrapMode(QPlainTextEdit.NoWrap)
+        self.log_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+                border-radius: 4px;
+                font-family: Consolas;
+                font-size: 10pt;
+            }
+        """)
         layout.addWidget(self.log_text)
         
         # Нижняя панель
         info_layout = QHBoxLayout()
         
         self.filter_label = QLabel("Фильтр:")
+        self.filter_label.setStyleSheet("color: #666666;")
         info_layout.addWidget(self.filter_label)
         
         self.filter_combo = QComboBox()
         self.filter_combo.addItems(["Все", "Информация", "Успех", "Ошибка", "Предупреждение"])
         self.filter_combo.currentTextChanged.connect(self.apply_filter)
+        self.filter_combo.setStyleSheet("""
+            QComboBox {
+                padding: 4px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background-color: white;
+            }
+        """)
         info_layout.addWidget(self.filter_combo)
         
         info_layout.addStretch()
         
         self.timestamp_label = QLabel("Время: " + datetime.datetime.now().strftime("%H:%M:%S"))
+        self.timestamp_label.setStyleSheet("color: #666666;")
         info_layout.addWidget(self.timestamp_label)
         
         layout.addLayout(info_layout)
@@ -102,36 +150,7 @@ class LoggerWindow(QMainWindow):
             QPushButton:hover {
                 background-color: #45a049;
             }
-            QPushButton#save_btn {
-                background-color: #2196F3;
-            }
-            QPushButton#save_btn:hover {
-                background-color: #1976D2;
-            }
-            QPushButton#clear_btn {
-                background-color: #f44336;
-            }
-            QPushButton#clear_btn:hover {
-                background-color: #da190b;
-            }
-            QPlainTextEdit {
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas;
-                font-size: 10pt;
-                border: 1px solid #3c3c3c;
-                border-radius: 4px;
-            }
-            QComboBox {
-                padding: 4px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-            }
         """)
-        
-        # Применяем ID для кнопок
-        self.clear_btn.setObjectName("clear_btn")
-        self.save_btn.setObjectName("save_btn")
         
     def setup_connections(self):
         """Настройка соединений"""
@@ -175,8 +194,8 @@ class LoggerWindow(QMainWindow):
         
         # Формируем HTML строку
         html = f'<span style="color: #888888;">{timestamp}</span> ' \
-               f'<span style="color: {color};">{prefix}</span> ' \
-               f'<span style="color: #d4d4d4;">{message}</span>'
+               f'<span style="color: {color}; font-weight: bold;">{prefix}</span> ' \
+               f'<span style="color: {color};">{message}</span>'
         
         # Добавляем в буфер
         self.log_buffer.append((html, level))
@@ -207,11 +226,18 @@ class LoggerWindow(QMainWindow):
             filter_level = filter_map.get(filter_text)
         
         # Фильтруем сообщения
-        display_text = ""
+        filtered = []
         for html, level in self.log_buffer:
             if filter_level is None or level == filter_level:
-                display_text += html + "<br>"
+                filtered.append(html)
         
+        # Собираем HTML
+        if filtered:
+            display_text = "<br>".join(filtered)
+        else:
+            display_text = "<span style='color: #666666;'>Нет сообщений для отображения</span>"
+        
+        # Устанавливаем HTML (QTextEdit поддерживает setHtml)
         self.log_text.setHtml(display_text)
         
         # Автопрокрутка
@@ -255,19 +281,34 @@ class LoggerWindow(QMainWindow):
                 with open(filename, 'w', encoding='utf-8') as f:
                     f.write("<!DOCTYPE html>\n")
                     f.write("<html><head><meta charset='utf-8'>\n")
-                    f.write("<style>body { font-family: Consolas; background: #1e1e1e; color: #d4d4d4; }</style>\n")
-                    f.write("</head><body>\n")
+                    f.write("""
+                    <style>
+                        body { 
+                            font-family: Consolas; 
+                            background: #1e1e1e; 
+                            color: #d4d4d4; 
+                            padding: 20px;
+                        }
+                        .timestamp { color: #888888; }
+                        .prefix { font-weight: bold; }
+                        .info { color: #d4d4d4; }
+                        .success { color: #4CAF50; }
+                        .error { color: #f44336; }
+                        .warning { color: #FF9800; }
+                        .debug { color: #9C27B0; }
+                    </style>
+                    </head><body>\n")
                     for html, _ in self.log_buffer:
                         f.write(html + "<br>\n")
-                    f.write("</body></html>")
+                    f.write("</body></html>"
+                    """)
             else:
                 # Сохраняем как текстовый файл
                 with open(filename, 'w', encoding='utf-8') as f:
-                    for html, _ in self.log_buffer:
+                    for html, level in self.log_buffer:
                         # Извлекаем текст из HTML
-                        import re
                         text = re.sub(r'<[^>]+>', '', html)
-                        f.write(text + "\n")
+                        f.write(f"[{level.upper()}] {text}\n")
                         
             QMessageBox.information(self, "Успех", f"Журнал сохранен в {filename}")
             self.log("Журнал сохранен в файл", "success")
@@ -284,7 +325,3 @@ class LoggerWindow(QMainWindow):
         """При закрытии окна не закрываем приложение"""
         self.hide()
         event.ignore()
-
-
-# Добавляем импорт QComboBox
-from PyQt5.QtWidgets import QComboBox
