@@ -138,16 +138,16 @@ class MainWindow(QMainWindow):
         # Создаем Modbus клиент
         self.modbus = ModbusClientWrapper()
         
-        # Создаем интерфейс для PLC - УБЕДИТЕСЬ ЧТО ПЕРЕДАЕТЕ generator
+        # Создаем интерфейс для PLC
         self.plc_interface = PLCInterface(
-            self.generator,      # ← ОБЯЗАТЕЛЬНО передаем generator
-            self,                # ← parent
-            debug=True           # ← Включаем дебаг
+            self.generator,
+            self,
+            debug=True  # Включаем дебаг
         )
         self.plc_interface.connection_status.connect(self.on_plc_connection_status)
         self.plc_interface.error_occurred.connect(lambda e: self.log(f"PLC Error: {e}", "error"))
-        self.plc_interface.debug_data.connect(self.on_plc_debug_data)
-                
+        self.plc_interface.debug_data.connect(self.on_plc_debug_data)  # ← ТЕПЕРЬ МЕТОД СУЩЕСТВУЕТ
+        
         # Настраиваем UI
         self.setup_ui()
         
@@ -161,7 +161,7 @@ class MainWindow(QMainWindow):
         self.is_running = True
         self.plot_window = None
         self.logger_window = None
-        self.plc_view = None  # Окно просмотра регистров PLC
+        self.plc_view = None
         
         # Потоковый пул для Modbus операций
         self.thread_pool = QThreadPool.globalInstance()
@@ -403,7 +403,6 @@ class MainWindow(QMainWindow):
                     self.connection_panel.set_connection_status(True)
                     # Подключаем PLC интерфейс
                     self.plc_interface.connect()
-                    # Убираем дублирующее сообщение - оно будет отправлено из plc_interface
                 else:
                     self.log("Не удалось подключиться", "error")
                     self.connection_panel.set_connection_status(False)
@@ -467,6 +466,18 @@ class MainWindow(QMainWindow):
             self.log("PLC интерфейс активен", "success")
         else:
             self.log("PLC интерфейс отключен", "warning")
+            
+    def on_plc_debug_data(self, debug_info: dict):
+        """Получить отладочные данные от PLC"""
+        # Выводим в консоль
+        print(f"\n[PLC_DEBUG] Запись #{debug_info['write_count']} - "
+              f"{len(debug_info.get('registers', []))} регистров записано")
+        
+        # Если окно журнала открыто, отправляем туда
+        if self.logger_window and self.logger_window.isVisible():
+            # Используем существующий метод для вывода дебаг-информации
+            if hasattr(self.logger_window, 'log_debug_data'):
+                self.logger_window.log_debug_data(debug_info)
         
     def toggle_generation(self):
         if self.is_running:
