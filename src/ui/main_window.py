@@ -105,7 +105,7 @@ class ChannelWidget(QFrame):
         layout.addWidget(self.enabled_check, alignment=Qt.AlignCenter)
         
         self.setLayout(layout)
-        self.setMinimumSize(100, 140)  # Увеличил высоту для combo
+        self.setMinimumSize(100, 140)
         self.setMaximumSize(120, 160)
         
     def on_name_click(self, event):
@@ -117,8 +117,8 @@ class ChannelWidget(QFrame):
             # Находим соответствующий SignalType
             signal_type = SignalType[text.upper()]
             self.channel.signal_type = signal_type
-            # Обновляем отображение типа
-            self.type_label.setText(str(signal_type))
+            # УБИРАЕМ СТРОКУ С type_label - его больше нет
+            # self.type_label.setText(str(signal_type))  # ← УДАЛЯЕМ ЭТУ СТРОКУ
             # Отправляем сигнал об изменении
             self.channel_type_changed.emit(self.channel.id, text)
         except KeyError:
@@ -275,7 +275,7 @@ class MainWindow(QMainWindow):
         for i, channel in enumerate(self.generator.channels):
             widget = ChannelWidget(channel)
             widget.channel_selected.connect(self.on_channel_selected)
-            widget.channel_type_changed.connect(self.on_channel_type_changed)  # ← НОВЫЙ СИГНАЛ
+            widget.channel_type_changed.connect(self.on_channel_type_changed)
             row = i // cols
             col = i % cols
             grid_layout.addWidget(widget, row, col)
