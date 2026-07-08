@@ -3,3 +3,4 @@ pymodbus
 numpy==1.24.3
 pyqtgraph==0.13.3
 pyModbusTCP
+cx_Freeze

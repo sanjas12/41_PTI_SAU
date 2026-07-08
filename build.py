@@ -85,7 +85,7 @@ build_options = {
 setup(
     name=__app_name__,
     version=__version__,
-    description="TG Analysis Tool",
+    description="PTI SAU",
     options={"build_exe": build_options},
     executables=[
         Executable(
