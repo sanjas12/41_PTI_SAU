@@ -297,3 +297,53 @@ Traceback (most recent call last):
 AttributeError: 'QPlainTextEdit' object has no attribute 'setHtml'
 
 2026-07-08 09:13:11,645:INFO:__main__:Приложение завершено штатно (код 0)
+2026-07-08 10:07:23,505:INFO:__main__:=======================================================
+2026-07-08 10:07:23,614:INFO:__main__:PTI_SAU-0.0.1+rev9 — запуск
+2026-07-08 10:07:23,614:INFO:__main__:=======================================================
+2026-07-08 10:07:23,614:INFO:__main__:PID:        28300
+2026-07-08 10:07:23,614:INFO:__main__:Python:     3.8.10
+2026-07-08 10:07:23,614:INFO:__main__:Платформа:  win32
+2026-07-08 10:07:23,614:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-08 10:07:23,614:INFO:__main__:Уровень лога: INFO
+2026-07-08 10:07:23,615:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-08 10:07:23,615:INFO:config.config:settings.json успешно прочитан (7 параметров)
+2026-07-08 10:07:36,861:CRITICAL:__main__:Критическая ошибка при запуске
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\main.py", line 109, in main
+    window = MainWindow()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\main_window.py", line 225, in __init__
+    self.setup_ui()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\main_window.py", line 298, in setup_ui
+    widget = ChannelWidget(channel)
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\main_window.py", line 35, in __init__
+    self.plc_interface = PLCInterface(self.generator)
+AttributeError: 'ChannelWidget' object has no attribute 'generator'
+2026-07-08 10:07:36,862:WARNING:__main__:Приложение завершено с ошибкой (код 1)
+2026-07-08 10:07:36,863:CRITICAL:__main__:Необработанное исключение:
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\main.py", line 130, in <module>
+    main()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\main.py", line 109, in main
+    window = MainWindow()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\main_window.py", line 225, in __init__
+    self.setup_ui()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\main_window.py", line 298, in setup_ui
+    widget = ChannelWidget(channel)
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\main_window.py", line 35, in __init__
+    self.plc_interface = PLCInterface(self.generator)
+AttributeError: 'ChannelWidget' object has no attribute 'generator'
+
+2026-07-08 10:09:20,379:INFO:__main__:=======================================================
+2026-07-08 10:09:20,379:INFO:__main__:PTI_SAU-0.0.1+rev9 — запуск
+2026-07-08 10:09:20,379:INFO:__main__:=======================================================
+2026-07-08 10:09:20,379:INFO:__main__:PID:        27892
+2026-07-08 10:09:20,380:INFO:__main__:Python:     3.8.10
+2026-07-08 10:09:20,380:INFO:__main__:Платформа:  win32
+2026-07-08 10:09:20,380:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-08 10:09:20,380:INFO:__main__:Уровень лога: INFO
+2026-07-08 10:09:20,380:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-08 10:09:20,380:INFO:config.config:settings.json успешно прочитан (7 параметров)
+2026-07-08 10:09:22,994:INFO:__main__:=======================================================
+2026-07-08 10:09:22,994:INFO:__main__:  Приложение запущено  (2.60 с)
+2026-07-08 10:09:22,994:INFO:__main__:=======================================================
+2026-07-08 10:09:38,324:INFO:__main__:Приложение завершено штатно (код 0)

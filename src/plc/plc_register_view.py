@@ -1,3 +1,4 @@
+from typing import List
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QPushButton, QLabel, QTableWidget, QTableWidgetItem,
                              QGroupBox, QSpinBox, QComboBox, QHeaderView)

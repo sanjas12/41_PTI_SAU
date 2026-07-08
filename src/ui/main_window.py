@@ -13,12 +13,12 @@ from core.channel import AnalogChannel
 from core.signal_types import SignalType
 from ui.plot_widget import PlotWindow
 from ui.logger_window import LoggerWindow
-from ui.connection_panel import ConnectionPanel  # НОВЫЙ ИМПОРТ
-from modbus.modbus_client import ModbusClientWrapper  # НОВЫЙ ИМПОРТ
-from modbus.worker import Runnable  # НОВЫЙ ИМПОРТ
+from ui.connection_panel import ConnectionPanel
+from modbus.modbus_client import ModbusClientWrapper
+from modbus.worker import Runnable
+from plc.plc_interface import PLCInterface  # ← ДОБАВЛЕН ИМПОРТ
+from plc.plc_register_view import PLCRegisterView  # ← ДОБАВЛЕН ИМПОРТ
 
-from plc.plc_interface import PLCInterface
-from plc.plc_register_view import PLCRegisterView
 
 class ChannelWidget(QFrame):
     """Виджет для отображения одного канала"""
@@ -30,13 +30,6 @@ class ChannelWidget(QFrame):
         self.channel = channel
         self.setup_ui()
         self.update_display()
-        
-        # Создаем интерфейс для PLC
-        self.plc_interface = PLCInterface(self.generator)
-        self.plc_interface.connection_status.connect(self.on_plc_connection_status)
-        self.plc_interface.error_occurred.connect(lambda e: self.log(f"PLC Error: {e}", "error"))
-        
-        self.plc_view = None  # Окно просмотра регистров
         
     def setup_ui(self):
         self.setFrameStyle(QFrame.Box | QFrame.Raised)
@@ -56,6 +49,7 @@ class ChannelWidget(QFrame):
         layout.setSpacing(2)
         layout.setContentsMargins(5, 5, 5, 5)
         
+        # Имя канала (кликабельно)
         self.name_label = QLabel(f"Ch{self.channel.id+1}: {self.channel.name}")
         self.name_label.setAlignment(Qt.AlignCenter)
         self.name_label.setFont(QFont("Arial", 8, QFont.Bold))
@@ -63,22 +57,26 @@ class ChannelWidget(QFrame):
         self.name_label.mousePressEvent = self.on_name_click
         layout.addWidget(self.name_label)
         
+        # Значение
         self.value_label = QLabel("0.00")
         self.value_label.setAlignment(Qt.AlignCenter)
         self.value_label.setFont(QFont("Arial", 14, QFont.Bold))
         self.value_label.setStyleSheet("color: #0066CC;")
         layout.addWidget(self.value_label)
         
+        # Мини-индикатор (полоска)
         self.bar = QFrame()
         self.bar.setFixedHeight(4)
         self.bar.setStyleSheet("background-color: #4CAF50; border-radius: 2px;")
         layout.addWidget(self.bar)
         
+        # Информация о типе сигнала
         self.type_label = QLabel(str(self.channel.signal_type))
         self.type_label.setAlignment(Qt.AlignCenter)
         self.type_label.setStyleSheet("color: #999999; font-size: 7px;")
         layout.addWidget(self.type_label)
         
+        # Включен/Выключен
         self.enabled_check = QCheckBox("Вкл")
         self.enabled_check.setChecked(self.channel.enabled)
         self.enabled_check.stateChanged.connect(self.on_enabled_changed)
@@ -124,87 +122,6 @@ class ChannelWidget(QFrame):
         self.enabled_check.setChecked(channel.enabled)
         self.update_display()
 
-    def _create_control_panel(self):
-        """Создать панель управления"""
-        panel = QGroupBox("Управление")
-        layout = QHBoxLayout()
-        panel.setLayout(layout)
-        
-        # Существующие кнопки...
-        
-        # Новая кнопка - просмотр регистров PLC
-        self.plc_btn = QPushButton("📋 PLC Регистры")
-        self.plc_btn.clicked.connect(self.open_plc_view)
-        self.plc_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #795548;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #5D4037;
-            }
-        """)
-        layout.addWidget(self.plc_btn)
-        
-        # ... остальной код ...
-        return panel
-        
-    def on_connection_changed(self, params):
-        """Изменены параметры подключения"""
-        host = params['host']
-        port = params['port']
-        unit_id = params['unit_id']
-        
-        # Настраиваем Modbus клиент
-        try:
-            self.modbus.configure(host, port, unit_id)
-            self.log(f"Настроено подключение к {host}:{port} (Unit ID: {unit_id})", "info")
-            
-            # Также настраиваем PLC интерфейс
-            self.plc_interface.configure(host, port, unit_id)
-        except Exception as e:
-            self.log(f"Ошибка настройки подключения: {e}", "error")
-            
-    def on_connection_status_changed(self, connected):
-        """Изменен статус подключения"""
-        if connected:
-            # Подключаемся
-            def after_connect(ok):
-                if ok:
-                    self.log("Подключение установлено", "success")
-                    self.connection_panel.set_connection_status(True)
-                    # Подключаем PLC интерфейс
-                    self.plc_interface.connect()
-                else:
-                    self.log("Не удалось подключиться", "error")
-                    self.connection_panel.set_connection_status(False)
-                    
-            self._submit(self.modbus.open, after_connect)
-        else:
-            # Отключаемся
-            self.modbus.close()
-            self.plc_interface.disconnect()
-            self.log("Соединение закрыто", "info")
-            
-    def on_plc_connection_status(self, connected):
-        """Статус подключения к PLC"""
-        if connected:
-            self.log("PLC интерфейс активен", "success")
-        else:
-            self.log("PLC интерфейс отключен", "warning")
-            
-    def open_plc_view(self):
-        """Открыть окно просмотра регистров PLC"""
-        if self.plc_view is None or not self.plc_view.isVisible():
-            self.plc_view = PLCRegisterView(self.plc_interface, self)
-            self.plc_view.show()
-        else:
-            self.plc_view.raise_()
-            self.plc_view.activateWindow()
 
 class MainWindow(QMainWindow):
     """Главное окно приложения"""
@@ -221,6 +138,11 @@ class MainWindow(QMainWindow):
         # Создаем Modbus клиент
         self.modbus = ModbusClientWrapper()
         
+        # Создаем интерфейс для PLC
+        self.plc_interface = PLCInterface(self.generator)
+        self.plc_interface.connection_status.connect(self.on_plc_connection_status)
+        self.plc_interface.error_occurred.connect(lambda e: self.log(f"PLC Error: {e}", "error"))
+        
         # Настраиваем UI
         self.setup_ui()
         
@@ -234,6 +156,7 @@ class MainWindow(QMainWindow):
         self.is_running = True
         self.plot_window = None
         self.logger_window = None
+        self.plc_view = None  # Окно просмотра регистров PLC
         
         # Потоковый пул для Modbus операций
         self.thread_pool = QThreadPool.globalInstance()
@@ -386,6 +309,21 @@ class MainWindow(QMainWindow):
         """)
         layout.addWidget(self.logger_btn)
         
+        self.plc_btn = QPushButton("📋 PLC Регистры")
+        self.plc_btn.clicked.connect(self.open_plc_view)
+        self.plc_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #795548;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #5D4037; }
+        """)
+        layout.addWidget(self.plc_btn)
+        
         layout.addStretch()
         
         self.fps_label = QLabel("FPS: 0")
@@ -444,6 +382,9 @@ class MainWindow(QMainWindow):
         try:
             self.modbus.configure(host, port, unit_id)
             self.log(f"Настроено подключение к {host}:{port} (Unit ID: {unit_id})", "info")
+            
+            # Также настраиваем PLC интерфейс
+            self.plc_interface.configure(host, port, unit_id)
         except Exception as e:
             self.log(f"Ошибка настройки подключения: {e}", "error")
             
@@ -455,6 +396,8 @@ class MainWindow(QMainWindow):
                 if ok:
                     self.log("Подключение установлено", "success")
                     self.connection_panel.set_connection_status(True)
+                    # Подключаем PLC интерфейс
+                    self.plc_interface.connect()
                 else:
                     self.log("Не удалось подключиться", "error")
                     self.connection_panel.set_connection_status(False)
@@ -463,6 +406,7 @@ class MainWindow(QMainWindow):
         else:
             # Отключаемся
             self.modbus.close()
+            self.plc_interface.disconnect()
             self.log("Соединение закрыто", "info")
             
     def _submit(self, fn, on_result, *args, **kwargs):
@@ -501,6 +445,22 @@ class MainWindow(QMainWindow):
         else:
             self.logger_window.raise_()
             self.logger_window.activateWindow()
+            
+    def open_plc_view(self):
+        """Открыть окно просмотра регистров PLC"""
+        if self.plc_view is None or not self.plc_view.isVisible():
+            self.plc_view = PLCRegisterView(self.plc_interface, self)
+            self.plc_view.show()
+        else:
+            self.plc_view.raise_()
+            self.plc_view.activateWindow()
+            
+    def on_plc_connection_status(self, connected):
+        """Статус подключения к PLC"""
+        if connected:
+            self.log("PLC интерфейс активен", "success")
+        else:
+            self.log("PLC интерфейс отключен", "warning")
         
     def toggle_generation(self):
         if self.is_running:
@@ -570,5 +530,8 @@ class MainWindow(QMainWindow):
             self.plot_window.close()
         if self.logger_window:
             self.logger_window.close()
+        if self.plc_view:
+            self.plc_view.close()
+        self.plc_interface.disconnect()
         self.modbus.close()
         event.accept()
