@@ -7,7 +7,6 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QThreadPool
 from PyQt5.QtGui import QFont, QColor, QPalette
 
-# Импорты
 from core.signal_generator import SignalGenerator
 from core.channel import AnalogChannel
 from core.signal_types import SignalType
@@ -16,8 +15,9 @@ from ui.logger_window import LoggerWindow
 from ui.connection_panel import ConnectionPanel
 from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
-from plc.plc_interface import PLCInterface  # ← ДОБАВЛЕН ИМПОРТ
-from plc.plc_register_view import PLCRegisterView  # ← ДОБАВЛЕН ИМПОРТ
+from plc.plc_interface import PLCInterface
+from plc.plc_register_view import PLCRegisterView
+from _version import __full_version__
 
 
 class ChannelWidget(QFrame):
@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Analog Signal Simulator v1.0")
+        self.setWindowTitle(__full_version__)
         self.setGeometry(100, 100, 1200, 800)
         
         # Создаем генератор с 20 каналами

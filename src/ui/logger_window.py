@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QPushButton, QPlainTextEdit, QLabel, QCheckBox,
                              QSpinBox, QGroupBox, QFileDialog, QMessageBox)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont, QColor, QTextCursor
+from PyQt5.QtGui import QFont, QColor, QTextCursor, QTextDocument
 import datetime
 import os
 
@@ -22,6 +22,7 @@ class LoggerWindow(QMainWindow):
         self.max_logs = 10000
         self.auto_scroll = True
         self.log_file = None
+        self.filter_level = None
         
         self.setup_ui()
         self.setup_connections()

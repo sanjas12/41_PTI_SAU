@@ -1,6 +1,7 @@
 import sys
 import os
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtCore import Qt
 import logging
 import os
 import sys
@@ -16,45 +17,20 @@ from ui.styles import app_stylesheet
 
 logger = logging.getLogger(__name__)
 
-
-# Перехват необработанных исключений
-def excepthook(exc_type, exc_value, exc_tb):
-    """Перехват исключений, не пойманных try-except."""
-    # KeyboardInterrupt не считаем крашем
-    if issubclass(exc_type, KeyboardInterrupt):
-        sys.__excepthook__(exc_type, exc_value, exc_tb)
-        return
-
-    error_text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
-
-    # Пишем в тот же каталог, что и основной лог
-    log_dir = os.path.dirname(os.path.abspath(cfg.LOG_FILE))
-    crash_path = os.path.join(log_dir, "crash.log")
-
-    try:
-        with open(crash_path, "w", encoding="utf-8") as f:
-            f.write(error_text)
-    except OSError:
-        pass  # если не можем записать — не падаем повторно
-
-    # Логируем через стандартный логгер (попадёт в основной лог)
-    logger.critical("Необработанное исключение:\n%s", error_text)
-
-    # Показываем пользователю — только если есть QApplication
-    app = QApplication.instance()
-    if app is not None:
-        QMessageBox.critical(
-            None,
-            "Критическая ошибка",
-            f"Приложение завершилось с ошибкой.\n\nПодробности: {crash_path}",
-        )
-    else:
-        print(error_text, file=sys.stderr)
-
-    sys.exit(1)
-
-
-sys.excepthook = excepthook
+def excepthook(exc_type, exc_value, exc_traceback):
+    """Обработчик непойманных исключений"""
+    import traceback
+    error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    
+    # Показываем сообщение об ошибке
+    QMessageBox.critical(
+        None,
+        "Критическая ошибка",
+        f"Произошла непредвиденная ошибка:\n\n{error_msg[:500]}..."
+    )
+    
+    # Выводим в консоль
+    print(error_msg)
 
 
 def setup_logging() -> None:
@@ -91,7 +67,9 @@ def log_startup_done(elapsed: float) -> None:
     logger.info(sep)
 
 def main():
-
+    # Устанавливаем обработчик исключений
+    sys.excepthook = excepthook
+    
     setup_logging()
 
     log_startup_begin()
