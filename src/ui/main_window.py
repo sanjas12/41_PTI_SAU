@@ -398,6 +398,7 @@ class MainWindow(QMainWindow):
                     self.connection_panel.set_connection_status(True)
                     # Подключаем PLC интерфейс
                     self.plc_interface.connect()
+                    # Убираем дублирующее сообщение - оно будет отправлено из plc_interface
                 else:
                     self.log("Не удалось подключиться", "error")
                     self.connection_panel.set_connection_status(False)

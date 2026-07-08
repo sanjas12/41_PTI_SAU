@@ -43,34 +43,40 @@ class PLCInterface(QObject):
         # Кэш данных для записи
         self.write_cache = {}
         self.last_write_time = 0
-        self.write_interval = 0.1
+        self.write_interval = 0.1  # 100ms
         
         # Поток для фоновой записи
         self.running = False
         self.write_thread = None
         self._lock = threading.Lock()
-        self._connected = False  # ← ДОБАВЛЕНО
+        self._connected = False
+        self._is_configured = False  # Флаг настройки
         
         # Таймер для периодического обновления
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.update_plc_data)
-        # Не запускаем таймер до подключения
         
     def configure(self, host: str, port: int, unit_id: int = 1):
         """Настройка подключения к PLC"""
         try:
             self.modbus.configure(host, port, unit_id)
-            self._connected = True
-            self.connection_status.emit(True)
+            self._is_configured = True
+            self._connected = False
+            self.connection_status.emit(False)
             return True
         except Exception as e:
             self.error_occurred.emit(f"Ошибка настройки PLC: {e}")
+            self._is_configured = False
             self._connected = False
             self.connection_status.emit(False)
             return False
             
     def connect(self) -> bool:
         """Подключиться к PLC"""
+        if not self._is_configured:
+            self.error_occurred.emit("PLC не настроен")
+            return False
+            
         try:
             result = self.modbus.open()
             if result:
@@ -81,10 +87,11 @@ class PLCInterface(QObject):
                 self.start_write_thread()
                 # Запускаем таймер обновления
                 self.update_timer.start(100)
+                return True
             else:
                 self._connected = False
                 self.connection_status.emit(False)
-            return result
+                return False
         except Exception as e:
             self.error_occurred.emit(f"Ошибка подключения к PLC: {e}")
             self._connected = False
@@ -98,12 +105,15 @@ class PLCInterface(QObject):
         self.update_timer.stop()
         if self.write_thread and self.write_thread.is_alive():
             self.write_thread.join(timeout=1.0)
-        self.modbus.close()
+        try:
+            self.modbus.close()
+        except Exception:
+            pass
         self.connection_status.emit(False)
         
     def is_connected(self) -> bool:
         """Проверить статус подключения"""
-        return self._connected and self.modbus.is_connected()
+        return self._connected and self._is_configured
         
     def start_write_thread(self):
         """Запустить поток для фоновой записи"""
@@ -124,12 +134,13 @@ class PLCInterface(QObject):
                     self.last_write_time = current_time
                 time.sleep(0.01)
             except Exception as e:
-                self.error_occurred.emit(f"Ошибка в цикле записи: {e}")
+                if self._connected:  # Только если еще подключены
+                    self.error_occurred.emit(f"Ошибка в цикле записи: {e}")
                 time.sleep(0.1)
                 
     def _write_all_data(self):
         """Записать все данные в PLC"""
-        if not self._connected:
+        if not self._connected or not self._is_configured:
             return
             
         with self._lock:
@@ -137,19 +148,25 @@ class PLCInterface(QObject):
                 # Получаем значения каналов
                 values = self.generator.get_values()
                 
-                # Подготавливаем данные для записи
-                write_data = []
-                
                 # 1. Аналоговые сигналы (каналы 1-20) - REAL
                 start_addr = self.registers['analog_signals']['start_address']
                 for i, value in enumerate(values):
                     if i >= 20:
                         break
-                    # Преобразуем float в 2 регистра (32-bit)
-                    float_bytes = struct.pack('<f', float(value))
-                    reg1, reg2 = struct.unpack('<HH', float_bytes)
-                    write_data.append((start_addr + i * 2, reg1))
-                    write_data.append((start_addr + i * 2 + 1, reg2))
+                    try:
+                        # Преобразуем float в 2 регистра (32-bit)
+                        # Ограничиваем значение
+                        val = max(-1000.0, min(1000.0, float(value)))
+                        float_bytes = struct.pack('<f', val)
+                        reg1, reg2 = struct.unpack('<HH', float_bytes)
+                        
+                        # Проверяем диапазон регистров
+                        if 0 <= reg1 <= 65535 and 0 <= reg2 <= 65535:
+                            addr = start_addr + i * 2
+                            self.modbus.write_single_register(addr, reg1)
+                            self.modbus.write_single_register(addr + 1, reg2)
+                    except Exception as e:
+                        self.error_occurred.emit(f"Ошибка записи канала {i+1}: {e}")
                     
                 # 2. Управляющие параметры
                 ctrl_addr = self.registers['control']['start_address']
@@ -159,23 +176,24 @@ class PLCInterface(QObject):
                         break
                     if channel.enabled:
                         status_word |= (1 << i)
-                write_data.append((ctrl_addr, status_word))
+                
+                # Проверяем диапазон
+                if 0 <= status_word <= 65535:
+                    self.modbus.write_single_register(ctrl_addr, status_word)
                 
                 # 3. Статусная информация
                 status_addr = self.registers['status']['start_address']
                 active_count = sum(1 for ch in self.generator.channels[:20] if ch.enabled)
-                write_data.append((status_addr, active_count))
-                
-                # Выполняем запись
-                for addr, value in write_data:
-                    self.modbus.write_single_register(addr, value)
+                if 0 <= active_count <= 65535:
+                    self.modbus.write_single_register(status_addr, active_count)
                     
             except Exception as e:
-                self.error_occurred.emit(f"Ошибка записи данных: {e}")
+                if self._connected:
+                    self.error_occurred.emit(f"Ошибка записи данных: {e}")
                     
     def update_plc_data(self):
         """Обновить данные в PLC (вызывается по таймеру)"""
-        if not self._connected:
+        if not self._connected or not self._is_configured:
             return
             
         try:
@@ -185,21 +203,23 @@ class PLCInterface(QObject):
                 'channels': self.generator.get_values()
             })
         except Exception as e:
-            self.error_occurred.emit(f"Ошибка обновления данных PLC: {e}")
+            if self._connected:
+                self.error_occurred.emit(f"Ошибка обновления данных PLC: {e}")
             
     def read_plc_data(self, address: int, count: int) -> Optional[List[int]]:
         """Прочитать данные из PLC"""
-        if not self._connected:
+        if not self._connected or not self._is_configured:
             return None
         try:
             return self.modbus.read_holding(address, count)
         except Exception as e:
-            self.error_occurred.emit(f"Ошибка чтения из PLC: {e}")
+            if self._connected:
+                self.error_occurred.emit(f"Ошибка чтения из PLC: {e}")
             return None
             
     def read_float(self, address: int) -> Optional[float]:
         """Прочитать REAL значение из PLC (2 регистра)"""
-        if not self._connected:
+        if not self._connected or not self._is_configured:
             return None
         try:
             data = self.modbus.read_holding(address, 2)
@@ -208,21 +228,29 @@ class PLCInterface(QObject):
                 return struct.unpack('<f', float_bytes)[0]
             return None
         except Exception as e:
-            self.error_occurred.emit(f"Ошибка чтения float из PLC: {e}")
+            if self._connected:
+                self.error_occurred.emit(f"Ошибка чтения float из PLC: {e}")
             return None
             
     def write_float(self, address: int, value: float) -> bool:
         """Записать REAL значение в PLC (2 регистра)"""
-        if not self._connected:
+        if not self._connected or not self._is_configured:
             return False
         try:
-            float_bytes = struct.pack('<f', value)
+            # Ограничиваем значение
+            val = max(-1000.0, min(1000.0, value))
+            float_bytes = struct.pack('<f', val)
             reg1, reg2 = struct.unpack('<HH', float_bytes)
-            result1 = self.modbus.write_single_register(address, reg1)
-            result2 = self.modbus.write_single_register(address + 1, reg2)
-            return result1 and result2
+            
+            # Проверяем диапазон
+            if 0 <= reg1 <= 65535 and 0 <= reg2 <= 65535:
+                result1 = self.modbus.write_single_register(address, reg1)
+                result2 = self.modbus.write_single_register(address + 1, reg2)
+                return result1 and result2
+            return False
         except Exception as e:
-            self.error_occurred.emit(f"Ошибка записи float в PLC: {e}")
+            if self._connected:
+                self.error_occurred.emit(f"Ошибка записи float в PLC: {e}")
             return False
             
     def get_register_map(self) -> dict:
