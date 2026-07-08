@@ -49,3 +49,5 @@ docs/.$db.drawio.dtmp
 uploads/
 backups/
 *.log
+*.txt
+log_20*

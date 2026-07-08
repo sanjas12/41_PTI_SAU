@@ -198,7 +198,13 @@ class LoggerWindow(QMainWindow):
                f'<span style="color: {color};">{message}</span>'
         
         # Добавляем в буфер
-        self.log_buffer.append((html, level, timestamp, prefix, message))
+        self.log_buffer.append({
+            'html': html,
+            'level': level,
+            'timestamp': timestamp,
+            'prefix': prefix,
+            'message': message
+        })
         
         # Ограничиваем буфер
         if len(self.log_buffer) > self.max_logs:
@@ -227,9 +233,9 @@ class LoggerWindow(QMainWindow):
         
         # Фильтруем сообщения
         filtered = []
-        for html, level, _, _, _ in self.log_buffer:
-            if filter_level is None or level == filter_level:
-                filtered.append(html)
+        for entry in self.log_buffer:
+            if filter_level is None or entry['level'] == filter_level:
+                filtered.append(entry['html'])
         
         # Собираем HTML
         if filtered:
@@ -268,7 +274,7 @@ class LoggerWindow(QMainWindow):
         filename, _ = QFileDialog.getSaveFileName(
             self,
             "Сохранить журнал",
-            f"log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+            f"log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
             "HTML Files (*.html);;Text Files (*.txt)"
         )
         
@@ -277,67 +283,106 @@ class LoggerWindow(QMainWindow):
             
         try:
             if filename.endswith('.html'):
-                # Сохраняем как HTML
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write("<!DOCTYPE html>\n")
-                    f.write("<html><head><meta charset='utf-8'>\n")
-                    f.write("""
-                    <style>
-                        body { 
-                            font-family: Consolas, monospace;
-                            background: #1e1e1e; 
-                            color: #d4d4d4; 
-                            padding: 20px;
-                            font-size: 12px;
-                        }
-                        .timestamp { color: #888888; }
-                        .prefix { font-weight: bold; }
-                        .info { color: #d4d4d4; }
-                        .success { color: #4CAF50; }
-                        .error { color: #f44336; }
-                        .warning { color: #FF9800; }
-                        .debug { color: #9C27B0; }
-                        .log-entry { 
-                            padding: 2px 0;
-                            border-bottom: 1px solid #2a2a2a;
-                        }
-                    </style>
-                    </head><body>\n")
-                    
-                    for html, level, timestamp, prefix, message in self.log_buffer:
-                        # Записываем каждое сообщение с правильным форматированием
-                        f.write(f'<div class="log-entry {level}">')
-                        f.write(f'<span class="timestamp">{timestamp}</span> ')
-                        f.write(f'<span class="prefix {level}">{prefix}</span> ')
-                        f.write(f'<span class="{level}">{message}</span>')
-                        f.write('</div>\n')
-                    
-                    f.write("</body></html>"
-                    """)
-                    
+                self._save_as_html(filename)
             else:
-                # Сохраняем как текстовый файл
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write("=" * 80 + "\n")
-                    f.write(f"ЖУРНАЛ СОБЫТИЙ\n")
-                    f.write(f"Дата сохранения: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write(f"Всего сообщений: {len(self.log_buffer)}\n")
-                    f.write("=" * 80 + "\n\n")
-                    
-                    for html, level, timestamp, prefix, message in self.log_buffer:
-                        # Извлекаем текст из HTML
-                        text = re.sub(r'<[^>]+>', '', message)
-                        f.write(f"[{timestamp}] {prefix} {text}\n")
-                    
-                    f.write("\n" + "=" * 80 + "\n")
-                    f.write("Конец журнала\n")
-                        
+                self._save_as_text(filename)
+                
             QMessageBox.information(self, "Успех", f"Журнал сохранен в:\n{filename}")
             self.log(f"Журнал сохранен в файл: {os.path.basename(filename)}", "success")
             
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить журнал:\n{str(e)}")
             self.log(f"Ошибка сохранения журнала: {str(e)}", "error")
+            
+    def _save_as_html(self, filename: str):
+        """Сохранить как HTML"""
+        with open(filename, 'w', encoding='utf-8') as f:
+            # Заголовок
+            f.write('<!DOCTYPE html>\n')
+            f.write('<html>\n')
+            f.write('<head>\n')
+            f.write('<meta charset="utf-8">\n')
+            f.write('<title>Журнал событий</title>\n')
+            f.write('''
+            <style>
+                body {
+                    font-family: Consolas, monospace;
+                    background: #1e1e1e;
+                    color: #d4d4d4;
+                    padding: 20px;
+                    font-size: 12px;
+                }
+                .timestamp { color: #888888; }
+                .prefix { font-weight: bold; }
+                .info { color: #d4d4d4; }
+                .success { color: #4CAF50; }
+                .error { color: #f44336; }
+                .warning { color: #FF9800; }
+                .debug { color: #9C27B0; }
+                .log-entry {
+                    padding: 2px 0;
+                    border-bottom: 1px solid #2a2a2a;
+                }
+                .header {
+                    color: #ffffff;
+                    font-size: 16px;
+                    font-weight: bold;
+                    padding: 10px 0;
+                    border-bottom: 2px solid #4CAF50;
+                    margin-bottom: 10px;
+                }
+                .footer {
+                    color: #666666;
+                    font-size: 10px;
+                    padding: 10px 0;
+                    border-top: 1px solid #2a2a2a;
+                    margin-top: 10px;
+                }
+            </style>
+            ''')
+            f.write('</head>\n')
+            f.write('<body>\n')
+            
+            # Заголовок
+            f.write(f'<div class="header">📋 Журнал событий</div>\n')
+            f.write(f'<div style="color: #666666; margin-bottom: 10px;">')
+            f.write(f'Дата: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | ')
+            f.write(f'Сообщений: {len(self.log_buffer)}')
+            f.write('</div>\n')
+            
+            # Сообщения
+            for entry in self.log_buffer:
+                f.write(f'<div class="log-entry {entry["level"]}">')
+                f.write(f'<span class="timestamp">{entry["timestamp"]}</span> ')
+                f.write(f'<span class="prefix {entry["level"]}">{entry["prefix"]}</span> ')
+                f.write(f'<span class="{entry["level"]}">{entry["message"]}</span>')
+                f.write('</div>\n')
+            
+            # Подвал
+            f.write(f'<div class="footer">')
+            f.write(f'Создано: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+            f.write('</div>\n')
+            
+            f.write('</body>\n')
+            f.write('</html>\n')
+            
+    def _save_as_text(self, filename: str):
+        """Сохранить как текстовый файл"""
+        with open(filename, 'w', encoding='utf-8') as f:
+            # Заголовок
+            f.write('=' * 80 + '\n')
+            f.write('ЖУРНАЛ СОБЫТИЙ\n')
+            f.write(f'Дата сохранения: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+            f.write(f'Всего сообщений: {len(self.log_buffer)}\n')
+            f.write('=' * 80 + '\n\n')
+            
+            # Сообщения
+            for entry in self.log_buffer:
+                f.write(f'[{entry["timestamp"]}] {entry["prefix"]} {entry["message"]}\n')
+            
+            # Подвал
+            f.write('\n' + '=' * 80 + '\n')
+            f.write('Конец журнала\n')
             
     def showEvent(self, event):
         """При показе окна обновляем отображение"""
