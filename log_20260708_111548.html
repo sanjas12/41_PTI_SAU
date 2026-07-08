@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html><head><meta charset='utf-8'>
+
+                    <style>
+                        body { 
+                            font-family: Consolas; 
+                            background: #1e1e1e; 
+                            color: #d4d4d4; 
+                            padding: 20px;
+                        }
+                        .timestamp { color: #888888; }
+                        .prefix { font-weight: bold; }
+                        .info { color: #d4d4d4; }
+                        .success { color: #4CAF50; }
+                        .error { color: #f44336; }
+                        .warning { color: #FF9800; }
+                        .debug { color: #9C27B0; }
+                    </style>
+                    </head><body>
+")
+                    for html, _ in self.log_buffer:
+                        f.write(html + "<br>
+")
+                    f.write("</body></html>"
+                    

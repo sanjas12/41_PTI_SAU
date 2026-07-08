@@ -198,7 +198,7 @@ class LoggerWindow(QMainWindow):
                f'<span style="color: {color};">{message}</span>'
         
         # Добавляем в буфер
-        self.log_buffer.append((html, level))
+        self.log_buffer.append((html, level, timestamp, prefix, message))
         
         # Ограничиваем буфер
         if len(self.log_buffer) > self.max_logs:
@@ -227,7 +227,7 @@ class LoggerWindow(QMainWindow):
         
         # Фильтруем сообщения
         filtered = []
-        for html, level in self.log_buffer:
+        for html, level, _, _, _ in self.log_buffer:
             if filter_level is None or level == filter_level:
                 filtered.append(html)
         
@@ -284,10 +284,11 @@ class LoggerWindow(QMainWindow):
                     f.write("""
                     <style>
                         body { 
-                            font-family: Consolas; 
+                            font-family: Consolas, monospace;
                             background: #1e1e1e; 
                             color: #d4d4d4; 
                             padding: 20px;
+                            font-size: 12px;
                         }
                         .timestamp { color: #888888; }
                         .prefix { font-weight: bold; }
@@ -296,25 +297,47 @@ class LoggerWindow(QMainWindow):
                         .error { color: #f44336; }
                         .warning { color: #FF9800; }
                         .debug { color: #9C27B0; }
+                        .log-entry { 
+                            padding: 2px 0;
+                            border-bottom: 1px solid #2a2a2a;
+                        }
                     </style>
                     </head><body>\n")
-                    for html, _ in self.log_buffer:
-                        f.write(html + "<br>\n")
+                    
+                    for html, level, timestamp, prefix, message in self.log_buffer:
+                        # Записываем каждое сообщение с правильным форматированием
+                        f.write(f'<div class="log-entry {level}">')
+                        f.write(f'<span class="timestamp">{timestamp}</span> ')
+                        f.write(f'<span class="prefix {level}">{prefix}</span> ')
+                        f.write(f'<span class="{level}">{message}</span>')
+                        f.write('</div>\n')
+                    
                     f.write("</body></html>"
                     """)
+                    
             else:
                 # Сохраняем как текстовый файл
                 with open(filename, 'w', encoding='utf-8') as f:
-                    for html, level in self.log_buffer:
+                    f.write("=" * 80 + "\n")
+                    f.write(f"ЖУРНАЛ СОБЫТИЙ\n")
+                    f.write(f"Дата сохранения: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"Всего сообщений: {len(self.log_buffer)}\n")
+                    f.write("=" * 80 + "\n\n")
+                    
+                    for html, level, timestamp, prefix, message in self.log_buffer:
                         # Извлекаем текст из HTML
-                        text = re.sub(r'<[^>]+>', '', html)
-                        f.write(f"[{level.upper()}] {text}\n")
+                        text = re.sub(r'<[^>]+>', '', message)
+                        f.write(f"[{timestamp}] {prefix} {text}\n")
+                    
+                    f.write("\n" + "=" * 80 + "\n")
+                    f.write("Конец журнала\n")
                         
-            QMessageBox.information(self, "Успех", f"Журнал сохранен в {filename}")
-            self.log("Журнал сохранен в файл", "success")
+            QMessageBox.information(self, "Успех", f"Журнал сохранен в:\n{filename}")
+            self.log(f"Журнал сохранен в файл: {os.path.basename(filename)}", "success")
             
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить журнал: {e}")
+            QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить журнал:\n{str(e)}")
+            self.log(f"Ошибка сохранения журнала: {str(e)}", "error")
             
     def showEvent(self, event):
         """При показе окна обновляем отображение"""
