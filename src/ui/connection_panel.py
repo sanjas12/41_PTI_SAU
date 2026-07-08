@@ -1,8 +1,10 @@
 from PyQt5.QtWidgets import (QWidget, QGroupBox, QGridLayout, QHBoxLayout,
                              QVBoxLayout, QLabel, QLineEdit, QSpinBox,
-                             QPushButton, QComboBox, QCheckBox, QFrame)
+                             QPushButton, QComboBox, QCheckBox, QFrame,
+                             QApplication)  # Добавлен QApplication для теста
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
+import sys
 
 
 class ConnectionPanel(QGroupBox):
@@ -13,7 +15,7 @@ class ConnectionPanel(QGroupBox):
     connection_changed = pyqtSignal(dict)  # Параметры подключения
     
     def __init__(self, parent=None):
-        super().__init__("🔌 Подключение", parent)
+        super().__init__("Подключение", parent)
         
         # ИНИЦИАЛИЗИРУЕМ АТРИБУТЫ ДО ВЫЗОВА setup_ui()
         self._is_connected = False
@@ -75,7 +77,7 @@ class ConnectionPanel(QGroupBox):
         # Кнопки управления
         button_layout = QHBoxLayout()
         
-        self.connect_btn = QPushButton("🔗 Подключиться")
+        self.connect_btn = QPushButton("Подключиться")
         self.connect_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -99,7 +101,7 @@ class ConnectionPanel(QGroupBox):
         """)
         button_layout.addWidget(self.connect_btn)
         
-        self.disconnect_btn = QPushButton("🔌 Отключиться")
+        self.disconnect_btn = QPushButton("Отключиться")
         self.disconnect_btn.setEnabled(False)
         self.disconnect_btn.setStyleSheet("""
             QPushButton {
@@ -125,7 +127,7 @@ class ConnectionPanel(QGroupBox):
         button_layout.addWidget(self.disconnect_btn)
         
         # Кнопка сохранить настройки
-        self.save_btn = QPushButton("💾 Сохранить")
+        self.save_btn = QPushButton("Сохранить")
         self.save_btn.setMaximumWidth(100)
         self.save_btn.setStyleSheet("""
             QPushButton {
@@ -143,7 +145,7 @@ class ConnectionPanel(QGroupBox):
         button_layout.addWidget(self.save_btn)
         
         # Кнопка удалить настройки
-        self.delete_btn = QPushButton("🗑 Удалить")
+        self.delete_btn = QPushButton("Удалить")
         self.delete_btn.setMaximumWidth(100)
         self.delete_btn.setStyleSheet("""
             QPushButton {
@@ -200,7 +202,7 @@ class ConnectionPanel(QGroupBox):
         # Дополнительная информация
         info_layout = QHBoxLayout()
         
-        self.connection_info = QLabel("🔍 Не подключено")
+        self.connection_info = QLabel("Не подключено")
         self.connection_info.setStyleSheet("color: #999999; font-size: 9px;")
         info_layout.addWidget(self.connection_info)
         
@@ -246,7 +248,7 @@ class ConnectionPanel(QGroupBox):
         """)
         
         # Размеры
-        self.setMaximumWidth(400)
+        self.setMaximumWidth(500)
         
     def setup_connections(self):
         """Настройка сигналов"""
@@ -268,7 +270,7 @@ class ConnectionPanel(QGroupBox):
         unit_id = self.unit_spin.value()
         
         if not host:
-            self.status_label.setText("❌ Введите IP адрес")
+            self.status_label.setText("Введите IP адрес")
             self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
             return
             
@@ -357,7 +359,7 @@ class ConnectionPanel(QGroupBox):
                     border-radius: 8px;
                 }
             """)
-            self.status_label.setText("✅ Подключено")
+            self.status_label.setText("Подключено")
             self.status_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
             
             self.connect_btn.setEnabled(False)
@@ -382,13 +384,13 @@ class ConnectionPanel(QGroupBox):
                     border-radius: 8px;
                 }
             """)
-            self.status_label.setText("❌ Отключено")
+            self.status_label.setText("Отключено")
             self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
             
             self.connect_btn.setEnabled(True)
             self.disconnect_btn.setEnabled(False)
             
-            self.connection_info.setText("🔍 Не подключено")
+            self.connection_info.setText("Не подключено")
             self.connection_info.setStyleSheet("color: #999999; font-size: 9px;")
             
             self.connection_time_label.setText("Время соединения: --")
@@ -417,3 +419,99 @@ class ConnectionPanel(QGroupBox):
         """Логировать событие подключения (будет связано с журналом)"""
         # Этот метод будет вызываться из главного окна
         pass
+
+
+def test_connection_panel():
+    """Тестовая функция для проверки работы ConnectionPanel"""
+    
+    print("=" * 60)
+    print("ТЕСТИРОВАНИЕ ConnectionPanel")
+    print("=" * 60)
+    
+    # Создаем приложение
+    app = QApplication(sys.argv)
+    
+    # Создаем главное окно
+    window = QWidget()
+    window.setWindowTitle("Тест ConnectionPanel")
+    window.setGeometry(200, 200, 450, 350)
+    
+    layout = QVBoxLayout()
+    window.setLayout(layout)
+    
+    # Создаем панель
+    panel = ConnectionPanel()
+    layout.addWidget(panel)
+    
+    # Добавляем информационную метку
+    info_label = QLabel("Нажмите 'Подключиться' для теста")
+    info_label.setAlignment(Qt.AlignCenter)
+    info_label.setStyleSheet("color: #666666; padding: 10px;")
+    layout.addWidget(info_label)
+    
+    # Счетчик событий
+    event_counter = QLabel("Событий: 0")
+    event_counter.setAlignment(Qt.AlignCenter)
+    event_counter.setStyleSheet("color: #999999; font-size: 9px;")
+    layout.addWidget(event_counter)
+    
+    # Переменная для подсчета событий
+    event_count = 0
+    
+    # Подключаем сигналы для теста
+    def on_connected(status):
+        nonlocal event_count
+        event_count += 1
+        event_counter.setText(f"Событий: {event_count}")
+        print(f"[СИГНАЛ] connected({status})")
+        if status:
+            print("  ✅ Подключение установлено")
+        else:
+            print("  ❌ Подключение отключено")
+    
+    def on_connection_changed(params):
+        nonlocal event_count
+        event_count += 1
+        event_counter.setText(f"Событий: {event_count}")
+        print(f"[СИГНАЛ] connection_changed({params})")
+        print(f"  📡 Хост: {params['host']}")
+        print(f"  🔌 Порт: {params['port']}")
+        print(f"  🆔 Unit ID: {params['unit_id']}")
+    
+    panel.connected.connect(on_connected)
+    panel.connection_changed.connect(on_connection_changed)
+    
+    # Добавляем кнопку для ручного теста
+    def manual_test():
+        print("\n" + "=" * 60)
+        print("РУЧНОЙ ТЕСТ")
+        print("=" * 60)
+        params = panel.get_connection_params()
+        print(f"Текущие параметры: {params}")
+        print(f"Сохраненных подключений: {len(panel.saved_connections)}")
+        for i, conn in enumerate(panel.saved_connections):
+            print(f"  {i+1}. {conn['name']}: {conn['host']}:{conn['port']} (Unit: {conn['unit_id']})")
+    
+    test_btn = QPushButton("🧪 Показать параметры")
+    test_btn.clicked.connect(manual_test)
+    layout.addWidget(test_btn)
+    
+    # Показываем окно
+    window.show()
+    
+    print("\n✅ Тестовое окно открыто")
+    print("📋 Инструкция:")
+    print("  1. Нажмите 'Подключиться' - увидите сигналы")
+    print("  2. Нажмите 'Отключиться' - статус изменится")
+    print("  3. Выберите сохраненное подключение")
+    print("  4. Нажмите 'Сохранить' - добавится новое")
+    print("  5. Нажмите '🧪 Показать параметры' - увидите данные")
+    print("\nЗакройте окно для завершения теста")
+    
+    # Запускаем цикл обработки событий
+    sys.exit(app.exec_())
+
+
+if __name__ == "__main__":
+    # Запускаем тест
+    test_connection_panel()
