@@ -17,6 +17,8 @@ from ui.connection_panel import ConnectionPanel  # НОВЫЙ ИМПОРТ
 from modbus.modbus_client import ModbusClientWrapper  # НОВЫЙ ИМПОРТ
 from modbus.worker import Runnable  # НОВЫЙ ИМПОРТ
 
+from plc.plc_interface import PLCInterface
+from plc.plc_register_view import PLCRegisterView
 
 class ChannelWidget(QFrame):
     """Виджет для отображения одного канала"""
@@ -28,6 +30,13 @@ class ChannelWidget(QFrame):
         self.channel = channel
         self.setup_ui()
         self.update_display()
+        
+        # Создаем интерфейс для PLC
+        self.plc_interface = PLCInterface(self.generator)
+        self.plc_interface.connection_status.connect(self.on_plc_connection_status)
+        self.plc_interface.error_occurred.connect(lambda e: self.log(f"PLC Error: {e}", "error"))
+        
+        self.plc_view = None  # Окно просмотра регистров
         
     def setup_ui(self):
         self.setFrameStyle(QFrame.Box | QFrame.Raised)
@@ -115,6 +124,87 @@ class ChannelWidget(QFrame):
         self.enabled_check.setChecked(channel.enabled)
         self.update_display()
 
+    def _create_control_panel(self):
+        """Создать панель управления"""
+        panel = QGroupBox("Управление")
+        layout = QHBoxLayout()
+        panel.setLayout(layout)
+        
+        # Существующие кнопки...
+        
+        # Новая кнопка - просмотр регистров PLC
+        self.plc_btn = QPushButton("📋 PLC Регистры")
+        self.plc_btn.clicked.connect(self.open_plc_view)
+        self.plc_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #795548;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5D4037;
+            }
+        """)
+        layout.addWidget(self.plc_btn)
+        
+        # ... остальной код ...
+        return panel
+        
+    def on_connection_changed(self, params):
+        """Изменены параметры подключения"""
+        host = params['host']
+        port = params['port']
+        unit_id = params['unit_id']
+        
+        # Настраиваем Modbus клиент
+        try:
+            self.modbus.configure(host, port, unit_id)
+            self.log(f"Настроено подключение к {host}:{port} (Unit ID: {unit_id})", "info")
+            
+            # Также настраиваем PLC интерфейс
+            self.plc_interface.configure(host, port, unit_id)
+        except Exception as e:
+            self.log(f"Ошибка настройки подключения: {e}", "error")
+            
+    def on_connection_status_changed(self, connected):
+        """Изменен статус подключения"""
+        if connected:
+            # Подключаемся
+            def after_connect(ok):
+                if ok:
+                    self.log("Подключение установлено", "success")
+                    self.connection_panel.set_connection_status(True)
+                    # Подключаем PLC интерфейс
+                    self.plc_interface.connect()
+                else:
+                    self.log("Не удалось подключиться", "error")
+                    self.connection_panel.set_connection_status(False)
+                    
+            self._submit(self.modbus.open, after_connect)
+        else:
+            # Отключаемся
+            self.modbus.close()
+            self.plc_interface.disconnect()
+            self.log("Соединение закрыто", "info")
+            
+    def on_plc_connection_status(self, connected):
+        """Статус подключения к PLC"""
+        if connected:
+            self.log("PLC интерфейс активен", "success")
+        else:
+            self.log("PLC интерфейс отключен", "warning")
+            
+    def open_plc_view(self):
+        """Открыть окно просмотра регистров PLC"""
+        if self.plc_view is None or not self.plc_view.isVisible():
+            self.plc_view = PLCRegisterView(self.plc_interface, self)
+            self.plc_view.show()
+        else:
+            self.plc_view.raise_()
+            self.plc_view.activateWindow()
 
 class MainWindow(QMainWindow):
     """Главное окно приложения"""
