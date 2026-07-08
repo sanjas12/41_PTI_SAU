@@ -1,10 +1,12 @@
 from PyQt5.QtWidgets import (QWidget, QGroupBox, QGridLayout, QHBoxLayout,
                              QVBoxLayout, QLabel, QLineEdit, QSpinBox,
                              QPushButton, QComboBox, QCheckBox, QFrame,
-                             QApplication)  # Добавлен QApplication для теста
+                             QApplication, QMessageBox)  # Добавлен QMessageBox
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 import sys
+import json
+import os
 
 
 class ConnectionPanel(QGroupBox):
@@ -14,8 +16,14 @@ class ConnectionPanel(QGroupBox):
     connected = pyqtSignal(bool)  # True - подключено, False - отключено
     connection_changed = pyqtSignal(dict)  # Параметры подключения
     
+    # Имя файла для сохранения настроек
+    CONFIG_FILE = "connections.json"
+    
     def __init__(self, parent=None):
-        super().__init__("Подключение", parent)
+        super().__init__("🔌 Подключение", parent)
+        
+        # Путь к файлу конфигурации в папке пользователя
+        self.config_path = self._get_config_path()
         
         # ИНИЦИАЛИЗИРУЕМ АТРИБУТЫ ДО ВЫЗОВА setup_ui()
         self._is_connected = False
@@ -25,16 +33,85 @@ class ConnectionPanel(QGroupBox):
             'unit_id': 1
         }
         
-        # Список сохраненных подключений (для быстрого выбора)
-        self.saved_connections = [
+        # Список сохраненных подключений (загружаем из файла)
+        self.saved_connections = []
+        self._load_connections()  # Загружаем сохраненные подключения
+        
+        # Если нет сохраненных, добавляем стандартные
+        if not self.saved_connections:
+            self.saved_connections = [
             {'name': 'Simulator', 'host': '127.0.0.1', 'port': 502, 'unit_id': 1},
             {'name': 'PLC-1', 'host': '192.168.0.20', 'port': 502, 'unit_id': 1},
-        ]
+            ]
+            self._save_connections()  # Сохраняем стандартные
+        
+        # Загружаем последнее использованное подключение
+        self._load_last_connection()
         
         # ТЕПЕРЬ ВЫЗЫВАЕМ setup_ui()
         self.setup_ui()
         self.setup_connections()
         
+        # Применяем загруженные параметры
+        self._apply_last_connection()
+        
+    def _get_config_path(self):
+        """Получить путь к файлу конфигурации"""
+        # Сохраняем в папке пользователя
+        home_dir = os.path.expanduser("~")
+        config_dir = os.path.join(home_dir, ".pti_sau")
+        
+        # Создаем папку если её нет
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
+            
+        return os.path.join(config_dir, self.CONFIG_FILE)
+        
+    def _load_connections(self):
+        """Загрузить сохраненные подключения из файла"""
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.saved_connections = data.get('connections', [])
+                    self._last_connection = data.get('last_connection', None)
+                    return True
+        except Exception as e:
+            print(f"Ошибка загрузки настроек: {e}")
+        return False
+        
+    def _save_connections(self):
+        """Сохранить подключения в файл"""
+        try:
+            data = {
+                'connections': self.saved_connections,
+                'last_connection': self._last_connection if hasattr(self, '_last_connection') else None
+            }
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            print(f"Ошибка сохранения настроек: {e}")
+            return False
+            
+    def _load_last_connection(self):
+        """Загрузить последнее использованное подключение"""
+        self._last_connection = None
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self._last_connection = data.get('last_connection')
+        except Exception:
+            pass
+            
+    def _apply_last_connection(self):
+        """Применить последнее использованное подключение"""
+        if self._last_connection:
+            self.ip_edit.setText(self._last_connection.get('host', '192.168.0.20'))
+            self.port_spin.setValue(self._last_connection.get('port', 502))
+            self.unit_spin.setValue(self._last_connection.get('unit_id', 1))
+            
     def setup_ui(self):
         """Настройка интерфейса"""
         layout = QVBoxLayout()
@@ -212,6 +289,11 @@ class ConnectionPanel(QGroupBox):
         self.retry_count_label.setStyleSheet("color: #999999; font-size: 9px;")
         info_layout.addWidget(self.retry_count_label)
         
+        # Информация о файле настроек
+        config_info = QLabel(f"📁 {os.path.basename(self.config_path)}")
+        config_info.setStyleSheet("color: #999999; font-size: 8px;")
+        info_layout.addWidget(config_info)
+        
         layout.addLayout(info_layout)
         
         # Стили группы
@@ -281,6 +363,10 @@ class ConnectionPanel(QGroupBox):
             'unit_id': unit_id
         }
         
+        # Сохраняем последнее подключение
+        self._last_connection = self._connection_params.copy()
+        self._save_connections()
+        
         # Эмитируем сигнал подключения
         self.connection_changed.emit(self._connection_params)
         self.connected.emit(True)
@@ -302,6 +388,7 @@ class ConnectionPanel(QGroupBox):
         unit_id = self.unit_spin.value()
         
         if not host:
+            QMessageBox.warning(self, "Предупреждение", "Введите IP адрес")
             return
             
         # Проверяем, есть ли уже такое подключение
@@ -309,7 +396,13 @@ class ConnectionPanel(QGroupBox):
             if conn['host'] == host and conn['port'] == port:
                 # Обновляем существующее
                 conn['unit_id'] = unit_id
+                self._save_connections()
                 self.update_preset_combo()
+                QMessageBox.information(
+                    self, 
+                    "Успех", 
+                    f"Подключение '{conn['name']}' обновлено"
+                )
                 return
                 
         # Добавляем новое подключение
@@ -320,17 +413,42 @@ class ConnectionPanel(QGroupBox):
             'port': port,
             'unit_id': unit_id
         })
+        self._save_connections()
         self.update_preset_combo()
+        
+        QMessageBox.information(
+            self, 
+            "Успех", 
+            f"Подключение '{name}' сохранено"
+        )
         
     def on_delete_clicked(self):
         """Удалить выбранное сохраненное подключение"""
         current_index = self.preset_combo.currentIndex()
         if current_index <= 0:  # Пропускаем первый элемент ("-- Выберите сохраненное --")
+            QMessageBox.warning(self, "Предупреждение", "Выберите подключение для удаления")
             return
             
-        # Удаляем из списка
-        del self.saved_connections[current_index - 1]
-        self.update_preset_combo()
+        # Подтверждение удаления
+        conn_name = self.saved_connections[current_index - 1]['name']
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            f"Удалить подключение '{conn_name}'?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Удаляем из списка
+            del self.saved_connections[current_index - 1]
+            self._save_connections()
+            self.update_preset_combo()
+            QMessageBox.information(
+                self, 
+                "Успех", 
+                f"Подключение '{conn_name}' удалено"
+            )
         
     def on_preset_selected(self, index):
         """Выбор сохраненного подключения"""
@@ -341,6 +459,10 @@ class ConnectionPanel(QGroupBox):
         self.ip_edit.setText(conn['host'])
         self.port_spin.setValue(conn['port'])
         self.unit_spin.setValue(conn['unit_id'])
+        
+        # Сохраняем как последнее использованное
+        self._last_connection = conn.copy()
+        self._save_connections()
         
     def on_params_changed(self):
         """Параметры подключения изменены"""
@@ -427,6 +549,8 @@ def test_connection_panel():
     print("=" * 60)
     print("ТЕСТИРОВАНИЕ ConnectionPanel")
     print("=" * 60)
+    print(f"Файл настроек: {ConnectionPanel.CONFIG_FILE}")
+    print("=" * 60)
     
     # Создаем приложение
     app = QApplication(sys.argv)
@@ -434,7 +558,7 @@ def test_connection_panel():
     # Создаем главное окно
     window = QWidget()
     window.setWindowTitle("Тест ConnectionPanel")
-    window.setGeometry(200, 200, 450, 350)
+    window.setGeometry(200, 200, 450, 400)
     
     layout = QVBoxLayout()
     window.setLayout(layout)
@@ -491,7 +615,8 @@ def test_connection_panel():
         print(f"Сохраненных подключений: {len(panel.saved_connections)}")
         for i, conn in enumerate(panel.saved_connections):
             print(f"  {i+1}. {conn['name']}: {conn['host']}:{conn['port']} (Unit: {conn['unit_id']})")
-    
+        print(f"\nФайл настроек: {panel.config_path}")
+        
     test_btn = QPushButton("🧪 Показать параметры")
     test_btn.clicked.connect(manual_test)
     layout.addWidget(test_btn)
@@ -506,6 +631,7 @@ def test_connection_panel():
     print("  3. Выберите сохраненное подключение")
     print("  4. Нажмите 'Сохранить' - добавится новое")
     print("  5. Нажмите '🧪 Показать параметры' - увидите данные")
+    print(f"\n📁 Настройки сохраняются в: {panel.config_path}")
     print("\nЗакройте окно для завершения теста")
     
     # Запускаем цикл обработки событий
