@@ -15,12 +15,15 @@ class PLCInterface(QObject):
     data_updated = pyqtSignal(dict)  # Обновлены данные
     connection_status = pyqtSignal(bool)  # Статус подключения
     error_occurred = pyqtSignal(str)  # Ошибка
-    debug_data = pyqtSignal(dict)  # ← НОВЫЙ СИГНАЛ ДЛЯ ДЕБАГА
+    debug_data = pyqtSignal(dict)  # Дебаг данные
     
     def __init__(self, generator: SignalGenerator, parent=None, debug: bool = False):
-        super().__init__(parent)
+        super().__init__(parent)  # ← ВАЖНО: вызываем конструктор QObject
         self.generator = generator
-        self.debug = debug  # ← ФЛАГ ДЕБАГА
+        self.debug = debug
+        
+        # ИНИЦИАЛИЗИРУЕМ modbus ПЕРВЫМ ДЕЛОМ
+        self.modbus = ModbusClientWrapper()  # ← ОБЯЗАТЕЛЬНО
         
         # Адреса регистров (начиная с %MW0)
         self.registers = {
@@ -61,9 +64,15 @@ class PLCInterface(QObject):
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.update_plc_data)
         
+        if self.debug:
+            print("[PLC_DEBUG] PLCInterface инициализирован")
+        
     def configure(self, host: str, port: int, unit_id: int = 1):
         """Настройка подключения к PLC"""
         try:
+            if not hasattr(self, 'modbus'):
+                self.modbus = ModbusClientWrapper()
+                
             self.modbus.configure(host, port, unit_id)
             self._is_configured = True
             self._connected = False
@@ -74,19 +83,31 @@ class PLCInterface(QObject):
             
             return True
         except Exception as e:
-            self.error_occurred.emit(f"Ошибка настройки PLC: {e}")
+            error_msg = f"Ошибка настройки PLC: {e}"
+            self.error_occurred.emit(error_msg)
             self._is_configured = False
             self._connected = False
             self.connection_status.emit(False)
+            
+            if self.debug:
+                print(f"[PLC_DEBUG] ❌ {error_msg}")
+            
             return False
             
     def connect(self) -> bool:
         """Подключиться к PLC"""
         if not self._is_configured:
             self.error_occurred.emit("PLC не настроен")
+            
+            if self.debug:
+                print("[PLC_DEBUG] ❌ PLC не настроен")
+            
             return False
             
         try:
+            if not hasattr(self, 'modbus'):
+                self.modbus = ModbusClientWrapper()
+                
             result = self.modbus.open()
             if result:
                 self._connected = True
@@ -109,9 +130,14 @@ class PLCInterface(QObject):
                 
                 return False
         except Exception as e:
-            self.error_occurred.emit(f"Ошибка подключения к PLC: {e}")
+            error_msg = f"Ошибка подключения к PLC: {e}"
+            self.error_occurred.emit(error_msg)
             self._connected = False
             self.connection_status.emit(False)
+            
+            if self.debug:
+                print(f"[PLC_DEBUG] ❌ {error_msg}")
+            
             return False
             
     def disconnect(self):
@@ -124,12 +150,14 @@ class PLCInterface(QObject):
             self.write_thread.join(timeout=1.0)
             
         try:
-            self.modbus.close()
-            
+            if hasattr(self, 'modbus') and self.modbus:
+                self.modbus.close()
+                
+                if self.debug:
+                    print("[PLC_DEBUG] 🔌 Отключено от PLC")
+        except Exception as e:
             if self.debug:
-                print("[PLC_DEBUG] 🔌 Отключено от PLC")
-        except Exception:
-            pass
+                print(f"[PLC_DEBUG] Ошибка при отключении: {e}")
             
         self.connection_status.emit(False)
         
@@ -166,6 +194,10 @@ class PLCInterface(QObject):
     def _write_all_data(self):
         """Записать все данные в PLC"""
         if not self._connected or not self._is_configured:
+            return
+            
+        if not hasattr(self, 'modbus') or not self.modbus:
+            self.error_occurred.emit("Modbus клиент не инициализирован")
             return
             
         with self._lock:
@@ -289,29 +321,38 @@ class PLCInterface(QObject):
         print("=" * 80)
         
         # Аналоговые каналы
-        print("\n📈 АНАЛОГОВЫЕ СИГНАЛЫ (REAL):")
-        for ch in debug_info['channels']:
-            print(f"  Канал {ch['index']+1:2d}: {ch['value']:8.2f} → "
-                  f"%MW{ch['address']:3d} (0x{ch['reg1']:04X}) "
-                  f"%MW{ch['address']+1:3d} (0x{ch['reg2']:04X})")
+        if debug_info['channels']:
+            print("\n📈 АНАЛОГОВЫЕ СИГНАЛЫ (REAL):")
+            for ch in debug_info['channels']:
+                print(f"  Канал {ch['index']+1:2d}: {ch['value']:8.2f} → "
+                      f"%MW{ch['address']:3d} (0x{ch['reg1']:04X}) "
+                      f"%MW{ch['address']+1:3d} (0x{ch['reg2']:04X})")
+        else:
+            print("\n📈 Нет аналоговых сигналов")
         
         # Регистры
-        print("\n📝 ЗАПИСАННЫЕ РЕГИСТРЫ:")
-        for reg in debug_info['registers']:
-            if 'binary' in reg:
-                print(f"  %MW{reg['address']:3d} {reg['name']:16s} = "
-                      f"{reg['value']:5d} {reg['hex']:6s} ({reg['binary']})")
-            else:
-                print(f"  %MW{reg['address']:3d} {reg['name']:16s} = "
-                      f"{reg['value']:5d} {reg['hex']:6s}")
+        if debug_info['registers']:
+            print("\n📝 ЗАПИСАННЫЕ РЕГИСТРЫ:")
+            for reg in debug_info['registers']:
+                if 'binary' in reg:
+                    print(f"  %MW{reg['address']:3d} {reg['name']:16s} = "
+                          f"{reg['value']:5d} {reg['hex']:6s} ({reg['binary']})")
+                else:
+                    print(f"  %MW{reg['address']:3d} {reg['name']:16s} = "
+                          f"{reg['value']:5d} {reg['hex']:6s}")
+        else:
+            print("\n📝 Нет записанных регистров")
         
         print("=" * 80)
-        print(f"✅ Всего записей: {len(debug_info['registers'])}")
+        print(f"✅ Всего записей: {len(debug_info.get('registers', []))}")
         print("=" * 80 + "\n")
                     
     def update_plc_data(self):
         """Обновить данные в PLC (вызывается по таймеру)"""
         if not self._connected or not self._is_configured:
+            return
+            
+        if not hasattr(self, 'modbus') or not self.modbus:
             return
             
         try:
@@ -328,6 +369,11 @@ class PLCInterface(QObject):
         """Прочитать данные из PLC"""
         if not self._connected or not self._is_configured:
             return None
+            
+        if not hasattr(self, 'modbus') or not self.modbus:
+            self.error_occurred.emit("Modbus клиент не инициализирован")
+            return None
+            
         try:
             return self.modbus.read_holding(address, count)
         except Exception as e:
@@ -339,6 +385,11 @@ class PLCInterface(QObject):
         """Прочитать REAL значение из PLC (2 регистра)"""
         if not self._connected or not self._is_configured:
             return None
+            
+        if not hasattr(self, 'modbus') or not self.modbus:
+            self.error_occurred.emit("Modbus клиент не инициализирован")
+            return None
+            
         try:
             data = self.modbus.read_holding(address, 2)
             if data and len(data) == 2:
@@ -354,6 +405,11 @@ class PLCInterface(QObject):
         """Записать REAL значение в PLC (2 регистра)"""
         if not self._connected or not self._is_configured:
             return False
+            
+        if not hasattr(self, 'modbus') or not self.modbus:
+            self.error_occurred.emit("Modbus клиент не инициализирован")
+            return False
+            
         try:
             val = max(-1000.0, min(1000.0, value))
             float_bytes = struct.pack('<f', val)
@@ -404,32 +460,3 @@ class PLCInterface(QObject):
             print("[PLC_DEBUG] Режим отладки ВКЛЮЧЕН")
         else:
             print("[PLC_DEBUG] Режим отладки ВЫКЛЮЧЕН")
-
-class PLCDataConverter:
-    """Класс для преобразования данных между Python и PLC"""
-    
-    @staticmethod
-    def float_to_registers(value: float) -> Tuple[int, int]:
-        """Преобразовать float в 2 регистра (16-bit)"""
-        float_bytes = struct.pack('<f', value)
-        reg1, reg2 = struct.unpack('<HH', float_bytes)
-        return reg1, reg2
-        
-    @staticmethod
-    def registers_to_float(reg1: int, reg2: int) -> float:
-        """Преобразовать 2 регистра в float"""
-        float_bytes = struct.pack('<HH', reg1, reg2)
-        return struct.unpack('<f', float_bytes)[0]
-        
-    @staticmethod
-    def int_to_registers(value: int) -> Tuple[int, int]:
-        """Преобразовать int в 2 регистра (32-bit)"""
-        int_bytes = struct.pack('<I', value)
-        reg1, reg2 = struct.unpack('<HH', int_bytes)
-        return reg1, reg2
-        
-    @staticmethod
-    def registers_to_int(reg1: int, reg2: int) -> int:
-        """Преобразовать 2 регистра в int"""
-        int_bytes = struct.pack('<HH', reg1, reg2)
-        return struct.unpack('<I', int_bytes)[0]

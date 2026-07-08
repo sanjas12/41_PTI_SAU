@@ -138,11 +138,16 @@ class MainWindow(QMainWindow):
         # Создаем Modbus клиент
         self.modbus = ModbusClientWrapper()
         
-        # Создаем интерфейс для PLC
-        self.plc_interface = PLCInterface(self.generator)
+        # Создаем интерфейс для PLC - УБЕДИТЕСЬ ЧТО ПЕРЕДАЕТЕ generator
+        self.plc_interface = PLCInterface(
+            self.generator,      # ← ОБЯЗАТЕЛЬНО передаем generator
+            self,                # ← parent
+            debug=True           # ← Включаем дебаг
+        )
         self.plc_interface.connection_status.connect(self.on_plc_connection_status)
         self.plc_interface.error_occurred.connect(lambda e: self.log(f"PLC Error: {e}", "error"))
-        
+        self.plc_interface.debug_data.connect(self.on_plc_debug_data)
+                
         # Настраиваем UI
         self.setup_ui()
         
