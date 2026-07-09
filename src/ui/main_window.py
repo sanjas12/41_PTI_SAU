@@ -3,7 +3,8 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLabel, QGridLayout,
                              QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox,
                              QCheckBox, QSlider, QFrame, QSplitter, QTabWidget,
-                             QScrollArea, QListWidget, QListWidgetItem)
+                             QScrollArea, QListWidget, QListWidgetItem,
+                             QDialog, QDialogButtonBox, QFormLayout)
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QThreadPool
 from PyQt5.QtGui import QFont, QColor, QPalette
 
@@ -18,7 +19,100 @@ from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
 from plc.plc_interface import PLCInterface
 from plc.plc_register_view import PLCRegisterView
-from _version import __full_version__
+
+
+class ChannelSettingsDialog(QDialog):
+    """Диалог настроек канала"""
+    
+    def __init__(self, channel: AnalogChannel, parent=None):
+        super().__init__(parent)
+        self.channel = channel
+        self.setWindowTitle(f"Настройки канала {channel.id+1}: {channel.name}")
+        self.setModal(True)
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        
+        # Форма с параметрами
+        form_layout = QFormLayout()
+        
+        # Имя канала
+        self.name_edit = QLineEdit(self.channel.name)
+        form_layout.addRow("Имя канала:", self.name_edit)
+        
+        # Минимальное значение
+        self.min_spin = QDoubleSpinBox()
+        self.min_spin.setRange(-10000, 10000)
+        self.min_spin.setValue(self.channel.min_value)
+        self.min_spin.setSingleStep(0.1)
+        form_layout.addRow("Минимум:", self.min_spin)
+        
+        # Максимальное значение
+        self.max_spin = QDoubleSpinBox()
+        self.max_spin.setRange(-10000, 10000)
+        self.max_spin.setValue(self.channel.max_value)
+        self.max_spin.setSingleStep(0.1)
+        form_layout.addRow("Максимум:", self.max_spin)
+        
+        # Частота
+        self.freq_spin = QDoubleSpinBox()
+        self.freq_spin.setRange(0.01, 100)
+        self.freq_spin.setValue(self.channel.frequency)
+        self.freq_spin.setSingleStep(0.1)
+        form_layout.addRow("Частота (Гц):", self.freq_spin)
+        
+        # Амплитуда
+        self.amp_spin = QDoubleSpinBox()
+        self.amp_spin.setRange(0, 100)
+        self.amp_spin.setValue(self.channel.amplitude)
+        self.amp_spin.setSingleStep(1)
+        form_layout.addRow("Амплитуда (%):", self.amp_spin)
+        
+        # Смещение
+        self.offset_spin = QDoubleSpinBox()
+        self.offset_spin.setRange(-100, 100)
+        self.offset_spin.setValue(self.channel.offset)
+        self.offset_spin.setSingleStep(1)
+        form_layout.addRow("Смещение (%):", self.offset_spin)
+        
+        # Тип сигнала
+        self.type_combo = QComboBox()
+        self.type_combo.addItems([st.name.capitalize() for st in SignalType])
+        current_type = self.channel.signal_type.name.capitalize()
+        index = self.type_combo.findText(current_type)
+        if index >= 0:
+            self.type_combo.setCurrentIndex(index)
+        form_layout.addRow("Тип сигнала:", self.type_combo)
+        
+        # Включен
+        self.enabled_check = QCheckBox()
+        self.enabled_check.setChecked(self.channel.enabled)
+        form_layout.addRow("Включен:", self.enabled_check)
+        
+        layout.addLayout(form_layout)
+        
+        # Кнопки OK/Cancel
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+        self.setMinimumWidth(350)
+        
+    def get_settings(self) -> dict:
+        """Получить измененные настройки"""
+        return {
+            'name': self.name_edit.text(),
+            'min_value': self.min_spin.value(),
+            'max_value': self.max_spin.value(),
+            'frequency': self.freq_spin.value(),
+            'amplitude': self.amp_spin.value(),
+            'offset': self.offset_spin.value(),
+            'signal_type': self.type_combo.currentText().upper(),
+            'enabled': self.enabled_check.isChecked()
+        }
 
 
 class ChannelWidget(QFrame):
@@ -26,6 +120,7 @@ class ChannelWidget(QFrame):
     
     channel_selected = pyqtSignal(int)
     channel_type_changed = pyqtSignal(int, str)  # channel_id, signal_type
+    channel_settings_changed = pyqtSignal(int)  # channel_id
     
     def __init__(self, channel: AnalogChannel, parent=None):
         super().__init__(parent)
@@ -66,13 +161,33 @@ class ChannelWidget(QFrame):
         self.value_label.setStyleSheet("color: #0066CC;")
         layout.addWidget(self.value_label)
         
-        # Мини-индикатор (полоска)
+        # Мини-индикатор (полоска) с границами
+        self.bar_frame = QFrame()
+        bar_layout = QVBoxLayout()
+        bar_layout.setContentsMargins(0, 0, 0, 0)
         self.bar = QFrame()
         self.bar.setFixedHeight(4)
         self.bar.setStyleSheet("background-color: #4CAF50; border-radius: 2px;")
-        layout.addWidget(self.bar)
+        bar_layout.addWidget(self.bar)
         
-        # НОВЫЙ ВЫПАДАЮЩИЙ СПИСОК ДЛЯ ВЫБОРА ТИПА СИГНАЛА
+        # Границы (мин/макс)
+        bounds_layout = QHBoxLayout()
+        bounds_layout.setContentsMargins(0, 0, 0, 0)
+        self.min_label = QLabel(f"{self.channel.min_value:.0f}")
+        self.min_label.setStyleSheet("color: #999999; font-size: 6px;")
+        self.min_label.setAlignment(Qt.AlignLeft)
+        bounds_layout.addWidget(self.min_label)
+        bounds_layout.addStretch()
+        self.max_label = QLabel(f"{self.channel.max_value:.0f}")
+        self.max_label.setStyleSheet("color: #999999; font-size: 6px;")
+        self.max_label.setAlignment(Qt.AlignRight)
+        bounds_layout.addWidget(self.max_label)
+        
+        bar_layout.addLayout(bounds_layout)
+        self.bar_frame.setLayout(bar_layout)
+        layout.addWidget(self.bar_frame)
+        
+        # Выпадающий список для выбора типа сигнала
         self.type_combo = QComboBox()
         self.type_combo.addItems([st.name.capitalize() for st in SignalType])
         current_type = self.channel.signal_type.name.capitalize()
@@ -97,16 +212,39 @@ class ChannelWidget(QFrame):
         """)
         layout.addWidget(self.type_combo)
         
+        # Кнопка настроек (шестеренка)
+        settings_layout = QHBoxLayout()
+        settings_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.settings_btn = QPushButton("⚙")
+        self.settings_btn.setFixedSize(20, 20)
+        self.settings_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e0e0e0;
+                border: 1px solid #b0b0b0;
+                border-radius: 10px;
+                font-size: 10px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+        """)
+        self.settings_btn.clicked.connect(self.open_settings)
+        settings_layout.addWidget(self.settings_btn, alignment=Qt.AlignCenter)
+        
         # Включен/Выключен
         self.enabled_check = QCheckBox("Вкл")
         self.enabled_check.setChecked(self.channel.enabled)
         self.enabled_check.stateChanged.connect(self.on_enabled_changed)
         self.enabled_check.setStyleSheet("font-size: 8px;")
-        layout.addWidget(self.enabled_check, alignment=Qt.AlignCenter)
+        settings_layout.addWidget(self.enabled_check, alignment=Qt.AlignCenter)
+        
+        layout.addLayout(settings_layout)
         
         self.setLayout(layout)
-        self.setMinimumSize(100, 140)
-        self.setMaximumSize(120, 160)
+        self.setMinimumSize(100, 160)
+        self.setMaximumSize(120, 180)
         
     def on_name_click(self, event):
         self.channel_selected.emit(self.channel.id)
@@ -114,15 +252,44 @@ class ChannelWidget(QFrame):
     def on_type_changed(self, text: str):
         """Изменен тип сигнала"""
         try:
-            # Находим соответствующий SignalType
             signal_type = SignalType[text.upper()]
             self.channel.signal_type = signal_type
-            # УБИРАЕМ СТРОКУ С type_label - его больше нет
-            # self.type_label.setText(str(signal_type))  # ← УДАЛЯЕМ ЭТУ СТРОКУ
-            # Отправляем сигнал об изменении
             self.channel_type_changed.emit(self.channel.id, text)
         except KeyError:
             pass
+        
+    def open_settings(self):
+        """Открыть диалог настроек канала"""
+        dialog = ChannelSettingsDialog(self.channel, self)
+        if dialog.exec_() == QDialog.Accepted:
+            settings = dialog.get_settings()
+            
+            # Применяем настройки
+            self.channel.name = settings['name']
+            self.channel.min_value = settings['min_value']
+            self.channel.max_value = settings['max_value']
+            self.channel.frequency = settings['frequency']
+            self.channel.amplitude = settings['amplitude']
+            self.channel.offset = settings['offset']
+            self.channel.signal_type = SignalType[settings['signal_type']]
+            self.channel.enabled = settings['enabled']
+            
+            # Обновляем отображение
+            self.name_label.setText(f"Ch{self.channel.id+1}: {self.channel.name}")
+            self.min_label.setText(f"{self.channel.min_value:.0f}")
+            self.max_label.setText(f"{self.channel.max_value:.0f}")
+            
+            # Обновляем выпадающий список
+            current_type = self.channel.signal_type.name.capitalize()
+            index = self.type_combo.findText(current_type)
+            if index >= 0:
+                self.type_combo.setCurrentIndex(index)
+                
+            self.enabled_check.setChecked(self.channel.enabled)
+            self.update_display()
+            
+            # Отправляем сигнал об изменении
+            self.channel_settings_changed.emit(self.channel.id)
         
     def on_enabled_changed(self, state):
         self.channel.enabled = bool(state)
@@ -130,19 +297,27 @@ class ChannelWidget(QFrame):
             self.value_label.setStyleSheet("color: #999999;")
             self.bar.setStyleSheet("background-color: #cccccc; border-radius: 2px;")
             self.type_combo.setEnabled(False)
+            self.settings_btn.setEnabled(False)
         else:
             self.value_label.setStyleSheet("color: #0066CC;")
             self.bar.setStyleSheet("background-color: #4CAF50; border-radius: 2px;")
             self.type_combo.setEnabled(True)
+            self.settings_btn.setEnabled(True)
             
     def update_display(self):
         """Обновить отображение значения"""
         if self.channel.enabled:
             value = self.channel.current_value
             self.value_label.setText(f"{value:.1f}")
-            # Обновляем полоску
-            percent = (value - self.channel.min_value) / (self.channel.max_value - self.channel.min_value)
-            bar_width = max(0, min(100, percent * 100))
+            
+            # Обновляем полоску с учетом границ
+            range_val = self.channel.max_value - self.channel.min_value
+            if range_val > 0:
+                percent = (value - self.channel.min_value) / range_val
+                bar_width = max(0, min(100, percent * 100))
+            else:
+                bar_width = 50
+                
             self.bar.setStyleSheet(f"""
                 background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                     stop:0 #4CAF50, stop:{bar_width/100} #4CAF50,
@@ -157,6 +332,8 @@ class ChannelWidget(QFrame):
         """Обновить данные канала"""
         self.channel = channel
         self.name_label.setText(f"Ch{channel.id+1}: {channel.name}")
+        self.min_label.setText(f"{channel.min_value:.0f}")
+        self.max_label.setText(f"{channel.max_value:.0f}")
         
         # Обновляем выпадающий список
         current_type = channel.signal_type.name.capitalize()
@@ -173,7 +350,7 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(__full_version__)
+        self.setWindowTitle("Analog Signal Simulator v1.0")
         self.setGeometry(100, 100, 1200, 800)
         
         # Создаем генератор с 20 каналами
@@ -219,6 +396,9 @@ class MainWindow(QMainWindow):
         
         for i in range(20):
             stype = signal_types[i % len(signal_types)]
+            # Разные границы для разных каналов
+            min_val = (i % 5) * 10
+            max_val = 100 - (i % 3) * 5
             channel = AnalogChannel(
                 id=i,
                 name=f"Ch_{i+1:02d}",
@@ -226,8 +406,8 @@ class MainWindow(QMainWindow):
                 frequency=0.5 + (i % 10) * 0.3,
                 amplitude=30 + (i % 7) * 10,
                 offset=10 + (i % 9) * 5,
-                min_value=0,
-                max_value=100,
+                min_value=min_val,
+                max_value=max_val,
                 enabled=True
             )
             self.generator.add_channel(channel)
@@ -276,6 +456,7 @@ class MainWindow(QMainWindow):
             widget = ChannelWidget(channel)
             widget.channel_selected.connect(self.on_channel_selected)
             widget.channel_type_changed.connect(self.on_channel_type_changed)
+            widget.channel_settings_changed.connect(self.on_channel_settings_changed)
             row = i // cols
             col = i % cols
             grid_layout.addWidget(widget, row, col)
@@ -417,6 +598,12 @@ class MainWindow(QMainWindow):
         self.selected_type_label.setStyleSheet("color: #666666;")
         layout.addWidget(self.selected_type_label)
         
+        # Границы выбранного канала
+        layout.addWidget(QLabel("Границы:"))
+        self.selected_bounds_label = QLabel("0 - 100")
+        self.selected_bounds_label.setStyleSheet("color: #666666;")
+        layout.addWidget(self.selected_bounds_label)
+        
         layout.addSpacing(10)
         
         # Статистика
@@ -428,20 +615,34 @@ class MainWindow(QMainWindow):
         layout.addStretch()
         
         # Версия
-        version_label = QLabel("Версия: 1.3.0")
+        version_label = QLabel("Версия: 1.4.0")
         version_label.setStyleSheet("color: #999999; font-size: 9px;")
         layout.addWidget(version_label)
         
         return panel
         
+    def on_channel_settings_changed(self, channel_id: int):
+        """Изменены настройки канала"""
+        channel = self.generator.get_channel(channel_id)
+        if channel:
+            self.log(
+                f"Канал {channel_id+1}: изменены настройки "
+                f"(границы: {channel.min_value:.1f}-{channel.max_value:.1f}, "
+                f"частота: {channel.frequency:.1f} Гц, "
+                f"амплитуда: {channel.amplitude:.0f}%)",
+                "info"
+            )
+            
+            # Если канал выбран для отображения, обновляем информацию
+            if self.selected_channel_label.text().startswith(f"Канал {channel_id+1}"):
+                self.selected_bounds_label.setText(f"{channel.min_value:.0f} - {channel.max_value:.0f}")
+        
     def on_channel_type_changed(self, channel_id: int, type_name: str):
         """Изменен тип сигнала канала"""
         channel = self.generator.get_channel(channel_id)
         if channel:
-            # Логируем изменение
             self.log(f"Канал {channel_id+1}: тип сигнала изменен на {type_name}", "info")
             
-            # Если канал выбран для отображения, обновляем информацию
             if self.selected_channel_label.text().startswith(f"Канал {channel_id+1}"):
                 self.selected_type_label.setText(type_name)
                 
@@ -451,7 +652,6 @@ class MainWindow(QMainWindow):
         freq = 1.0 / interval if interval > 0 else 0
         self.log(f"Интервал обновления изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
         
-        # Обновляем статус
         self.status_label.setText(f"⏱ Интервал: {interval:.3f} с")
         self.status_label.setStyleSheet("color: #FF9800; font-weight: bold; font-size: 12px;")
         
@@ -509,6 +709,7 @@ class MainWindow(QMainWindow):
         if channel:
             self.selected_channel_label.setText(f"Канал {channel_id+1}: {channel.name}")
             self.selected_type_label.setText(str(channel.signal_type))
+            self.selected_bounds_label.setText(f"{channel.min_value:.0f} - {channel.max_value:.0f}")
             self.status_label.setText(f"📊 Канал {channel_id+1}: {channel.name}")
             self.status_label.setStyleSheet("color: #0066CC; font-weight: bold; font-size: 12px;")
             
