@@ -1,9 +1,10 @@
 import sys
 import pyqtgraph as pg
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                             QPushButton, QLabel, QComboBox, QCheckBox, 
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                             QPushButton, QLabel, QComboBox, QCheckBox,
                              QSplitter, QFrame, QGridLayout, QSpinBox,
-                             QDoubleSpinBox, QGroupBox, QTabWidget)
+                             QDoubleSpinBox, QGroupBox, QTabWidget,
+                             QListWidget, QListWidgetItem, QScrollArea)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont, QColor
 import numpy as np
@@ -23,14 +24,14 @@ class PlotWidget(pg.PlotWidget):
         self.channel_name = ""
         self.is_visible = True
         
-        # Данные для хранения истории
-        self.time_data = deque(maxlen=max_points)
-        self.value_data = deque(maxlen=max_points)
+        # Данные для хранения истории - используем numpy массивы для скорости
+        self.time_data = np.zeros(max_points)
+        self.value_data = np.zeros(max_points)
+        self.data_index = 0
+        self.is_full = False
         
-        # Инициализируем данные нулями
-        for i in range(max_points):
-            self.time_data.append(i * 0.01)
-            self.value_data.append(0)
+        # Время старта для синхронизации
+        self.start_time = 0
         
         self.setup_plot()
         
@@ -45,26 +46,26 @@ class PlotWidget(pg.PlotWidget):
         # Добавляем легенду
         self.addLegend()
         
-        # Основная линия сигнала
+        # Основная линия сигнала - используем более яркий цвет
         self.curve = self.plot(
-            list(self.time_data), 
-            list(self.value_data),
-            pen=pg.mkPen(color=(0, 100, 200), width=2, style=Qt.SolidLine),
+            self.time_data, 
+            self.value_data,
+            pen=pg.mkPen(color=(0, 150, 255), width=2, style=Qt.SolidLine),
             name='Сигнал'
         )
         
         # Линия среднего значения
         self.mean_curve = self.plot(
-            list(self.time_data),
-            [0] * len(self.time_data),
-            pen=pg.mkPen(color=(200, 100, 0), width=1, style=Qt.DashLine),
+            self.time_data,
+            np.zeros(len(self.time_data)),
+            pen=pg.mkPen(color=(255, 150, 0), width=1, style=Qt.DashLine),
             name='Среднее'
         )
         
         # Заполненная область
         self.fill_curve = self.plot(
-            list(self.time_data),
-            list(self.value_data),
+            self.time_data,
+            self.value_data,
             fillLevel=0,
             brush=pg.mkBrush(100, 150, 255, 30),
             pen=None
@@ -80,32 +81,55 @@ class PlotWidget(pg.PlotWidget):
         """Обновить данные графика"""
         if not self.is_visible:
             return
-            
-        # Добавляем новое значение
-        current_time = len(self.time_data) * time_step
-        self.time_data.append(current_time)
-        self.value_data.append(value)
         
+        # Текущее время
+        current_time = self.data_index * time_step if not self.is_full else self.max_points * time_step
+        
+        # Добавляем новое значение
+        if self.data_index < self.max_points:
+            self.time_data[self.data_index] = current_time
+            self.value_data[self.data_index] = value
+            self.data_index += 1
+        else:
+            # Сдвигаем данные для FIFO
+            self.time_data = np.roll(self.time_data, -1)
+            self.value_data = np.roll(self.value_data, -1)
+            self.time_data[-1] = current_time
+            self.value_data[-1] = value
+            self.is_full = True
+            
     def update_plot(self):
         """Обновить отображение графика"""
-        if not self.is_visible or len(self.time_data) == 0:
+        if not self.is_visible:
+            return
+        
+        # Определяем количество точек для отображения
+        if self.is_full:
+            display_count = self.max_points
+        else:
+            display_count = self.data_index
+            
+        if display_count == 0:
             return
             
         # Обновляем основную кривую
-        self.curve.setData(list(self.time_data), list(self.value_data))
+        self.curve.setData(
+            self.time_data[:display_count], 
+            self.value_data[:display_count]
+        )
         
         # Обновляем линию среднего
-        if len(self.value_data) > 0:
-            mean_val = np.mean(list(self.value_data))
+        if display_count > 0:
+            mean_val = np.mean(self.value_data[:display_count])
             self.mean_curve.setData(
-                list(self.time_data), 
-                [mean_val] * len(self.time_data)
+                self.time_data[:display_count], 
+                np.full(display_count, mean_val)
             )
             
             # Обновляем заполненную область
             self.fill_curve.setData(
-                list(self.time_data),
-                list(self.value_data)
+                self.time_data[:display_count],
+                self.value_data[:display_count]
             )
         
     def auto_range(self):
@@ -114,12 +138,10 @@ class PlotWidget(pg.PlotWidget):
         
     def clear_plot(self):
         """Очистить данные графика"""
-        self.time_data.clear()
-        self.value_data.clear()
-        # Заполняем нулями
-        for i in range(self.max_points):
-            self.time_data.append(i * 0.01)
-            self.value_data.append(0)
+        self.time_data = np.zeros(self.max_points)
+        self.value_data = np.zeros(self.max_points)
+        self.data_index = 0
+        self.is_full = False
         self.update_plot()
         
     def showEvent(self, event):
@@ -134,78 +156,134 @@ class PlotWidget(pg.PlotWidget):
 
 
 class PlotWindow(QMainWindow):
-    """Отдельное окно для отображения графиков"""
+    """Окно с графиками"""
     
     def __init__(self, generator: SignalGenerator, parent=None):
         super().__init__(parent)
         self.generator = generator
         self.setWindowTitle("📊 Графики сигналов")
-        self.setGeometry(200, 200, 1000, 700)
+        self.setGeometry(200, 200, 1200, 800)
         
-        # Список выбранных каналов для отображения
         self.selected_channels = []
-        self.max_channels_on_plot = 4  # Максимум 4 канала на одном графике
+        self.max_channels_on_plot = 4
+        
+        # Хранилище данных для каждого канала
+        self.channel_data = {}
         
         self.setup_ui()
         self.setup_plots()
         
-        # Таймер для обновления графиков
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_plots)
-        self.timer.start(50)  # 20 FPS для графиков
-        
+        self.timer.start(50)  # 20 FPS
         self.is_running = True
         
+        # Счетчик времени для обновления
+        self.update_counter = 0
+        
     def setup_ui(self):
-        """Настройка пользовательского интерфейса"""
+        """Настройка интерфейса"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
         main_layout = QVBoxLayout()
         central_widget.setLayout(main_layout)
         
-        # Верхняя панель управления
-        control_layout = self._create_control_panel()
+        # Панель управления
+        control_layout = QHBoxLayout()
+        
+        self.add_btn = QPushButton("➕ Добавить на график")
+        self.add_btn.clicked.connect(self.add_selected_channels)
+        self.add_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #45a049; }
+        """)
+        control_layout.addWidget(self.add_btn)
+        
+        self.clear_btn = QPushButton("🗑 Очистить графики")
+        self.clear_btn.clicked.connect(self.clear_all_plots)
+        self.clear_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #da190b; }
+        """)
+        control_layout.addWidget(self.clear_btn)
+        
+        self.auto_btn = QPushButton("📐 Авто-масштаб")
+        self.auto_btn.clicked.connect(self.auto_range_all)
+        self.auto_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #1976D2; }
+        """)
+        control_layout.addWidget(self.auto_btn)
+        
+        control_layout.addStretch()
+        
+        control_layout.addWidget(QLabel("Каналов на графике:"))
+        self.channels_spin = QSpinBox()
+        self.channels_spin.setRange(1, 10)
+        self.channels_spin.setValue(self.max_channels_on_plot)
+        self.channels_spin.valueChanged.connect(self.set_max_channels)
+        control_layout.addWidget(self.channels_spin)
+        
+        control_layout.addStretch()
+        
+        self.fps_label = QLabel("Обновлений: 0")
+        self.fps_label.setStyleSheet("color: #666666;")
+        control_layout.addWidget(self.fps_label)
+        
+        self.close_btn = QPushButton("✕ Закрыть")
+        self.close_btn.clicked.connect(self.close)
+        self.close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #da190b; }
+        """)
+        control_layout.addWidget(self.close_btn)
+        
         main_layout.addLayout(control_layout)
         
         # Основной разделитель
         splitter = QSplitter(Qt.Horizontal)
         
         # Левая панель - список каналов
-        left_panel = self._create_channels_panel()
-        splitter.addWidget(left_panel)
+        left_widget = QWidget()
+        left_layout = QVBoxLayout()
+        left_widget.setLayout(left_layout)
         
-        # Правая панель - графики
-        right_panel = self._create_plots_panel()
-        splitter.addWidget(right_panel)
+        title = QLabel("📋 Доступные каналы (Ctrl+клик для множественного выбора)")
+        title.setStyleSheet("font-weight: bold; padding: 5px; background-color: #e8e8e8;")
+        left_layout.addWidget(title)
         
-        # Устанавливаем пропорции
-        splitter.setSizes([300, 700])
-        main_layout.addWidget(splitter)
-        
-        # Нижняя информационная панель
-        info_layout = self._create_info_panel()
-        main_layout.addLayout(info_layout)
-        
-        # Применяем стиль
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f5f5f5;
-            }
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:checked {
-                background-color: #f44336;
-            }
+        self.channels_list = QListWidget()
+        self.channels_list.setSelectionMode(QListWidget.MultiSelection)
+        self.channels_list.setStyleSheet("""
             QListWidget {
                 border: 1px solid #d0d0d0;
                 border-radius: 4px;
@@ -220,150 +298,90 @@ class PlotWindow(QMainWindow):
             }
         """)
         
-    def _create_control_panel(self):
-        """Создать панель управления"""
-        layout = QHBoxLayout()
-        
-        # Кнопка добавления канала на график
-        self.add_btn = QPushButton("➕ Добавить на график")
-        self.add_btn.clicked.connect(self.add_selected_channels)
-        layout.addWidget(self.add_btn)
-        
-        # Кнопка очистки графиков
-        self.clear_btn = QPushButton("🗑 Очистить графики")
-        self.clear_btn.clicked.connect(self.clear_all_plots)
-        self.clear_btn.setStyleSheet("background-color: #f44336;")
-        layout.addWidget(self.clear_btn)
-        
-        # Кнопка авто-масштаб
-        self.auto_btn = QPushButton("📐 Авто-масштаб")
-        self.auto_btn.clicked.connect(self.auto_range_all)
-        layout.addWidget(self.auto_btn)
-        
-        layout.addStretch()
-        
-        # Количество каналов на графике
-        layout.addWidget(QLabel("Каналов на графике:"))
-        self.channels_spin = QSpinBox()
-        self.channels_spin.setRange(1, 10)
-        self.channels_spin.setValue(self.max_channels_on_plot)
-        self.channels_spin.valueChanged.connect(self.set_max_channels)
-        layout.addWidget(self.channels_spin)
-        
-        # Кнопка закрытия
-        self.close_btn = QPushButton("✕ Закрыть")
-        self.close_btn.clicked.connect(self.close)
-        self.close_btn.setStyleSheet("background-color: #f44336;")
-        layout.addWidget(self.close_btn)
-        
-        return layout
-        
-    def _create_channels_panel(self):
-        """Создать панель со списком каналов"""
-        from PyQt5.QtWidgets import QListWidget, QListWidgetItem
-        
-        widget = QWidget()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Заголовок
-        title = QLabel("📋 Доступные каналы")
-        title.setStyleSheet("font-weight: bold; padding: 5px; background-color: #e8e8e8;")
-        layout.addWidget(title)
-        
-        # Список каналов
-        self.channels_list = QListWidget()
-        self.channels_list.setSelectionMode(QListWidget.MultiSelection)
-        
-        # Заполняем список
         for channel in self.generator.channels:
             item = QListWidgetItem(
-                f"Ch{channel.id+1:02d}: {channel.name} "
-                f"({str(channel.signal_type)})"
+                f"Ch{channel.id+1:02d}: {channel.name} ({str(channel.signal_type)})"
             )
             item.setData(Qt.UserRole, channel.id)
             self.channels_list.addItem(item)
             
-        layout.addWidget(self.channels_list)
+        left_layout.addWidget(self.channels_list)
         
-        # Информация о выбранных
         self.selection_info = QLabel("Выбрано: 0 каналов")
         self.selection_info.setStyleSheet("color: #666666; padding: 5px;")
         self.channels_list.itemSelectionChanged.connect(self.update_selection_info)
-        layout.addWidget(self.selection_info)
+        left_layout.addWidget(self.selection_info)
         
-        widget.setLayout(layout)
-        return widget
+        splitter.addWidget(left_widget)
         
-    def _create_plots_panel(self):
-        """Создать панель с графиками"""
-        widget = QWidget()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
+        # Правая панель - графики
+        right_widget = QWidget()
+        right_layout = QVBoxLayout()
+        right_widget.setLayout(right_layout)
         
-        # Заголовок
-        title = QLabel("📈 Графики сигналов")
+        title = QLabel("📈 Графики сигналов (в реальном времени)")
         title.setStyleSheet("font-weight: bold; padding: 5px; background-color: #e8e8e8;")
-        layout.addWidget(title)
+        right_layout.addWidget(title)
         
-        # Виджет для графиков
         self.plots_widget = QWidget()
         self.plots_layout = QVBoxLayout()
+        self.plots_layout.setSpacing(5)
         self.plots_widget.setLayout(self.plots_layout)
-        
-        # Добавляем контейнер для графиков
-        from PyQt5.QtWidgets import QScrollArea
         
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background-color: white; }")
         scroll.setWidget(self.plots_widget)
         
-        layout.addWidget(scroll)
+        right_layout.addWidget(scroll)
         
-        widget.setLayout(layout)
-        return widget
+        splitter.addWidget(right_widget)
+        splitter.setSizes([300, 900])
         
-    def _create_info_panel(self):
-        """Создать нижнюю информационную панель"""
-        layout = QHBoxLayout()
+        main_layout.addWidget(splitter)
         
-        info_text = "💡 Кликните на каналы (Ctrl+клик для множественного выбора) и нажмите 'Добавить на график'"
-        info_label = QLabel(info_text)
+        # Информационная панель
+        info_layout = QHBoxLayout()
+        info_label = QLabel("💡 Выберите каналы и нажмите 'Добавить на график'")
         info_label.setStyleSheet("color: #666666; font-size: 10px;")
-        layout.addWidget(info_label)
-        
-        layout.addStretch()
-        
+        info_layout.addWidget(info_label)
+        info_layout.addStretch()
         self.plots_count_label = QLabel("Графиков: 0")
         self.plots_count_label.setStyleSheet("color: #999999; font-size: 9px;")
-        layout.addWidget(self.plots_count_label)
+        info_layout.addWidget(self.plots_count_label)
+        main_layout.addLayout(info_layout)
         
-        return layout
+        self.setStyleSheet("""
+            QMainWindow { background-color: #f5f5f5; }
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #45a049; }
+        """)
         
     def setup_plots(self):
         """Создать начальные графики"""
-        # Создаем один пустой график по умолчанию
         self.plot_widgets = []
         self.plot_channels = []
         self.add_plot()
         
     def add_plot(self):
         """Добавить новый график"""
-        plot_widget = PlotWidget(max_points=500)
+        plot_widget = PlotWidget(max_points=1000)  # Увеличили до 1000 точек
         self.plot_widgets.append(plot_widget)
-        self.plot_channels.append([])  # Список каналов для этого графика
-        
-        # Добавляем в layout
+        self.plot_channels.append([])
         self.plots_layout.addWidget(plot_widget)
-        
-        # Обновляем счетчик
         self.plots_count_label.setText(f"Графиков: {len(self.plot_widgets)}")
         
     def remove_plot(self, index):
         """Удалить график"""
         if len(self.plot_widgets) <= 1:
-            return  # Должен быть хотя бы один график
+            return
             
         plot_widget = self.plot_widgets.pop(index)
         self.plot_channels.pop(index)
@@ -378,13 +396,12 @@ class PlotWindow(QMainWindow):
         if not selected_items:
             return
             
-        # Получаем ID выбранных каналов
         channel_ids = []
         for item in selected_items:
             channel_id = item.data(Qt.UserRole)
             channel_ids.append(channel_id)
             
-        # Находим свободный график или создаем новый
+        # Находим свободный график
         target_plot = None
         for i, channels in enumerate(self.plot_channels):
             if len(channels) < self.max_channels_on_plot:
@@ -392,16 +409,21 @@ class PlotWindow(QMainWindow):
                 break
                 
         if target_plot is None:
-            # Создаем новый график
             self.add_plot()
             target_plot = len(self.plot_widgets) - 1
             
-        # Добавляем каналы на график
+        # Инициализируем данные для каналов
         for channel_id in channel_ids:
             if channel_id not in self.plot_channels[target_plot]:
                 self.plot_channels[target_plot].append(channel_id)
+                # Инициализируем данные для канала
+                if channel_id not in self.channel_data:
+                    self.channel_data[channel_id] = {
+                        'time': deque(maxlen=1000),
+                        'value': deque(maxlen=1000),
+                        'initialized': False
+                    }
                 
-        # Обновляем отображение графика
         self.update_plot_channels(target_plot)
         
     def clear_all_plots(self):
@@ -409,6 +431,7 @@ class PlotWindow(QMainWindow):
         for i in range(len(self.plot_channels)):
             self.plot_channels[i] = []
             self.plot_widgets[i].clear_plot()
+        self.channel_data.clear()
             
     def auto_range_all(self):
         """Автомасштабирование для всех графиков"""
@@ -432,36 +455,52 @@ class PlotWindow(QMainWindow):
         # Очищаем график
         plot.clear_plot()
         
-        # Добавляем линии для каждого канала
-        colors = [(0, 100, 200), (200, 50, 50), (50, 200, 50), (200, 100, 0)]
-        
-        for i, channel_id in enumerate(channel_ids):
-            channel = self.generator.get_channel(channel_id)
-            if channel:
-                # Используем данные из буфера
-                pass  # Данные будут обновляться через update_plots
-        
+        # Используем первый канал для отображения
+        if channel_ids:
+            plot.set_channel(channel_ids[0], f"Канал {channel_ids[0]+1}")
+            
     def update_plots(self):
         """Обновить все графики"""
         if not self.is_running:
             return
             
-        # Для каждого графика
+        self.update_counter += 1
+        
+        # Обновляем данные для каждого графика
         for i, (plot, channel_ids) in enumerate(zip(self.plot_widgets, self.plot_channels)):
             if not channel_ids:
                 continue
                 
-            # Обновляем данные для каждого канала на графике
-            # Берем первый канал для отображения (для простоты)
-            # В реальном проекте нужно хранить данные для каждого канала отдельно
+            # Обновляем данные для первого канала на графике
             channel_id = channel_ids[0]
             channel = self.generator.get_channel(channel_id)
             
             if channel and channel.enabled:
+                # Инициализируем данные для канала если нужно
+                if channel_id not in self.channel_data:
+                    self.channel_data[channel_id] = {
+                        'time': deque(maxlen=1000),
+                        'value': deque(maxlen=1000),
+                        'initialized': False
+                    }
+                
+                data = self.channel_data[channel_id]
+                
+                # Добавляем новое значение
+                current_time = len(data['time']) * 0.01
+                data['time'].append(current_time)
+                data['value'].append(channel.current_value)
+                data['initialized'] = True
+                
+                # Обновляем данные в виджете графика
                 plot.update_data(channel.current_value, 0.01)
                 
-            # Обновляем отображение
+            # Обновляем отображение графика
             plot.update_plot()
+            
+        # Обновляем FPS
+        if self.update_counter % 20 == 0:
+            self.fps_label.setText(f"Обновлений: {self.update_counter}")
             
     def closeEvent(self, event):
         """Обработчик закрытия окна"""
