@@ -520,8 +520,8 @@ class MainWindow(QMainWindow):
         
         # Интервал обновления
         self.interval_control = IntervalControl()
-        self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)
-        self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)  # ← НОВЫЙ СИГНАЛ
+        self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)  # ← ЭТОТ МЕТОД НУЖНО ДОБАВИТЬ
+        self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
         left_layout.addWidget(self.interval_control)
         
         # Сетка каналов
@@ -830,3 +830,24 @@ class MainWindow(QMainWindow):
         self.plc_interface.set_write_interval(interval)
         freq = 1.0 / interval if interval > 0 else 0
         self.log(f"Интервал записи в PLC изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
+
+    def on_signal_interval_changed(self, interval: float):
+        """Изменен интервал обновления сигналов"""
+        self.generator.set_update_interval(interval)
+        freq = 1.0 / interval if interval > 0 else 0
+        self.log(f"Интервал обновления сигналов изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
+        
+        self.status_label.setText(f"⏱ Сигналы: {interval:.3f} с")
+        self.status_label.setStyleSheet("color: #FF9800; font-weight: bold; font-size: 12px;")
+        
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(2000, lambda: self.status_label.setText("● Работает"))
+        QTimer.singleShot(2000, lambda: self.status_label.setStyleSheet("color: #00CC00; font-weight: bold; font-size: 12px;"))
+
+    def on_plc_interval_changed(self, interval: float):
+        """Изменен интервал записи в PLC"""
+        # Обновляем интервал в PLC интерфейсе
+        if hasattr(self, 'plc_interface'):
+            self.plc_interface.set_write_interval(interval)
+            freq = 1.0 / interval if interval > 0 else 0
+            self.log(f"Интервал записи в PLC изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
