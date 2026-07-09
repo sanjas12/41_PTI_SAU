@@ -20,7 +20,7 @@ class ConnectionPanel(QGroupBox):
     CONFIG_FILE = "connections.json"
     
     def __init__(self, parent=None):
-        super().__init__("🔌 Подключение", parent)
+        super().__init__("Подключение", parent)
         
         # Путь к файлу конфигурации в папке пользователя
         self.config_path = self._get_config_path()
@@ -589,9 +589,9 @@ def test_connection_panel():
         event_counter.setText(f"Событий: {event_count}")
         print(f"[СИГНАЛ] connected({status})")
         if status:
-            print("  ✅ Подключение установлено")
+            print("Подключение установлено")
         else:
-            print("  ❌ Подключение отключено")
+            print("Подключение отключено")
     
     def on_connection_changed(params):
         nonlocal event_count

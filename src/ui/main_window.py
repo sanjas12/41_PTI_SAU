@@ -173,7 +173,7 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Analog Signal Simulator v1.0")
+        self.setWindowTitle(__full_version__)
         self.setGeometry(100, 100, 1200, 800)
         
         # Создаем генератор с 20 каналами

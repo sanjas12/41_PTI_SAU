@@ -118,7 +118,7 @@ class PLCInterface(QObject):
                 self.update_timer.start(100)
                 
                 if self.debug:
-                    print("[PLC_DEBUG] ✅ Подключение к PLC установлено")
+                    print("[PLC_DEBUG] Подключение к PLC установлено")
                 
                 return True
             else:
