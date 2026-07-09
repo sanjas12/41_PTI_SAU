@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont, QColor
 import numpy as np
+import time
 from collections import deque
 
 from core.signal_generator import SignalGenerator
@@ -17,21 +18,20 @@ from core.channel import AnalogChannel
 class PlotWidget(pg.PlotWidget):
     """Виджет графика для отображения сигнала"""
     
-    def __init__(self, max_points=500, parent=None):
+    def __init__(self, max_points=1000, time_window=10.0, parent=None):
         super().__init__(parent)
         self.max_points = max_points
+        self.time_window = time_window  # Окно времени в секундах (10 секунд)
         self.channel_id = None
         self.channel_name = ""
         self.is_visible = True
         
-        # Данные для хранения истории - используем numpy массивы для скорости
-        self.time_data = np.zeros(max_points)
-        self.value_data = np.zeros(max_points)
-        self.data_index = 0
-        self.is_full = False
+        # Данные для хранения истории
+        self.time_data = deque(maxlen=max_points)
+        self.value_data = deque(maxlen=max_points)
         
-        # Время старта для синхронизации
-        self.start_time = 0
+        # Время старта
+        self.start_time = time.time()
         
         self.setup_plot()
         
@@ -46,30 +46,30 @@ class PlotWidget(pg.PlotWidget):
         # Добавляем легенду
         self.addLegend()
         
-        # Основная линия сигнала - используем более яркий цвет
+        # Основная линия сигнала
         self.curve = self.plot(
-            self.time_data, 
-            self.value_data,
+            [], [],
             pen=pg.mkPen(color=(0, 150, 255), width=2, style=Qt.SolidLine),
             name='Сигнал'
         )
         
         # Линия среднего значения
         self.mean_curve = self.plot(
-            self.time_data,
-            np.zeros(len(self.time_data)),
+            [], [],
             pen=pg.mkPen(color=(255, 150, 0), width=1, style=Qt.DashLine),
             name='Среднее'
         )
         
         # Заполненная область
         self.fill_curve = self.plot(
-            self.time_data,
-            self.value_data,
+            [], [],
             fillLevel=0,
             brush=pg.mkBrush(100, 150, 255, 30),
             pen=None
         )
+        
+        # Настройка оси X для отображения времени
+        self.getAxis('bottom').setLabel('Время, с')
         
     def set_channel(self, channel_id, channel_name=""):
         """Установить канал для отображения"""
@@ -77,60 +77,51 @@ class PlotWidget(pg.PlotWidget):
         self.channel_name = channel_name
         self.clear_plot()
         
-    def update_data(self, value, time_step=0.01):
-        """Обновить данные графика"""
+    def update_data(self, value):
+        """Обновить данные графика с реальным временем"""
         if not self.is_visible:
             return
         
-        # Текущее время
-        current_time = self.data_index * time_step if not self.is_full else self.max_points * time_step
+        # Текущее реальное время
+        current_time = time.time() - self.start_time
         
-        # Добавляем новое значение
-        if self.data_index < self.max_points:
-            self.time_data[self.data_index] = current_time
-            self.value_data[self.data_index] = value
-            self.data_index += 1
-        else:
-            # Сдвигаем данные для FIFO
-            self.time_data = np.roll(self.time_data, -1)
-            self.value_data = np.roll(self.value_data, -1)
-            self.time_data[-1] = current_time
-            self.value_data[-1] = value
-            self.is_full = True
+        # Добавляем новое значение с реальным временем
+        self.time_data.append(current_time)
+        self.value_data.append(value)
+        
+        # Ограничиваем количество точек
+        if len(self.time_data) > self.max_points:
+            self.time_data.popleft()
+            self.value_data.popleft()
             
+        # Автоматическое масштабирование оси X по времени
+        if len(self.time_data) > 1:
+            # Если данных больше 2, показываем последние time_window секунд
+            min_time = max(0, current_time - self.time_window)
+            self.setXRange(min_time, current_time, padding=0.05)
+        
     def update_plot(self):
         """Обновить отображение графика"""
-        if not self.is_visible:
+        if not self.is_visible or len(self.time_data) == 0:
             return
         
-        # Определяем количество точек для отображения
-        if self.is_full:
-            display_count = self.max_points
-        else:
-            display_count = self.data_index
-            
-        if display_count == 0:
-            return
-            
+        # Преобразуем в списки для отображения
+        time_list = list(self.time_data)
+        value_list = list(self.value_data)
+        
         # Обновляем основную кривую
-        self.curve.setData(
-            self.time_data[:display_count], 
-            self.value_data[:display_count]
-        )
+        self.curve.setData(time_list, value_list)
         
         # Обновляем линию среднего
-        if display_count > 0:
-            mean_val = np.mean(self.value_data[:display_count])
+        if len(value_list) > 0:
+            mean_val = np.mean(value_list)
             self.mean_curve.setData(
-                self.time_data[:display_count], 
-                np.full(display_count, mean_val)
+                [time_list[0], time_list[-1]], 
+                [mean_val, mean_val]
             )
             
             # Обновляем заполненную область
-            self.fill_curve.setData(
-                self.time_data[:display_count],
-                self.value_data[:display_count]
-            )
+            self.fill_curve.setData(time_list, value_list)
         
     def auto_range(self):
         """Автоматическое масштабирование"""
@@ -138,10 +129,9 @@ class PlotWidget(pg.PlotWidget):
         
     def clear_plot(self):
         """Очистить данные графика"""
-        self.time_data = np.zeros(self.max_points)
-        self.value_data = np.zeros(self.max_points)
-        self.data_index = 0
-        self.is_full = False
+        self.time_data.clear()
+        self.value_data.clear()
+        self.start_time = time.time()
         self.update_plot()
         
     def showEvent(self, event):
@@ -175,10 +165,10 @@ class PlotWindow(QMainWindow):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_plots)
-        self.timer.start(50)  # 20 FPS
+        self.timer.start(50)  # 20 FPS для плавности
         self.is_running = True
         
-        # Счетчик времени для обновления
+        # Счетчик для статистики
         self.update_counter = 0
         
     def setup_ui(self):
@@ -236,6 +226,17 @@ class PlotWindow(QMainWindow):
             QPushButton:hover { background-color: #1976D2; }
         """)
         control_layout.addWidget(self.auto_btn)
+        
+        control_layout.addStretch()
+        
+        # Настройка временного окна
+        control_layout.addWidget(QLabel("Окно времени (с):"))
+        self.time_window_spin = QDoubleSpinBox()
+        self.time_window_spin.setRange(1, 60)
+        self.time_window_spin.setValue(10)
+        self.time_window_spin.setSingleStep(1)
+        self.time_window_spin.valueChanged.connect(self.on_time_window_changed)
+        control_layout.addWidget(self.time_window_spin)
         
         control_layout.addStretch()
         
@@ -372,12 +373,18 @@ class PlotWindow(QMainWindow):
         
     def add_plot(self):
         """Добавить новый график"""
-        plot_widget = PlotWidget(max_points=1000)  # Увеличили до 1000 точек
+        time_window = self.time_window_spin.value()
+        plot_widget = PlotWidget(max_points=2000, time_window=time_window)
         self.plot_widgets.append(plot_widget)
         self.plot_channels.append([])
         self.plots_layout.addWidget(plot_widget)
         self.plots_count_label.setText(f"Графиков: {len(self.plot_widgets)}")
         
+    def on_time_window_changed(self, value):
+        """Изменено временное окно"""
+        for plot in self.plot_widgets:
+            plot.time_window = value
+            
     def remove_plot(self, index):
         """Удалить график"""
         if len(self.plot_widgets) <= 1:
@@ -419,8 +426,8 @@ class PlotWindow(QMainWindow):
                 # Инициализируем данные для канала
                 if channel_id not in self.channel_data:
                     self.channel_data[channel_id] = {
-                        'time': deque(maxlen=1000),
-                        'value': deque(maxlen=1000),
+                        'time': deque(maxlen=2000),
+                        'value': deque(maxlen=2000),
                         'initialized': False
                     }
                 
@@ -475,25 +482,9 @@ class PlotWindow(QMainWindow):
             channel_id = channel_ids[0]
             channel = self.generator.get_channel(channel_id)
             
-            if channel and channel.enabled:
-                # Инициализируем данные для канала если нужно
-                if channel_id not in self.channel_data:
-                    self.channel_data[channel_id] = {
-                        'time': deque(maxlen=1000),
-                        'value': deque(maxlen=1000),
-                        'initialized': False
-                    }
-                
-                data = self.channel_data[channel_id]
-                
-                # Добавляем новое значение
-                current_time = len(data['time']) * 0.01
-                data['time'].append(current_time)
-                data['value'].append(channel.current_value)
-                data['initialized'] = True
-                
-                # Обновляем данные в виджете графика
-                plot.update_data(channel.current_value, 0.01)
+            if channel:
+                # Обновляем данные в виджете графика с реальным временем
+                plot.update_data(channel.current_value)
                 
             # Обновляем отображение графика
             plot.update_plot()
