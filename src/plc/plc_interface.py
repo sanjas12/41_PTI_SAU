@@ -49,7 +49,7 @@ class PLCInterface(QObject):
         # Кэш данных для записи
         self.write_cache = {}
         self.last_write_time = 0
-        self.write_interval = 0.2  # 200ms (увеличил для снижения нагрузки)
+        self.write_interval = 0.2  # 200ms
         
         # Состояние
         self._lock = threading.Lock()
@@ -109,8 +109,8 @@ class PLCInterface(QObject):
                 self.write_count = 0
                 self._write_pending = False
                 
-                # Запускаем таймер обновления (с меньшей частотой)
-                self.update_timer.start(200)  # 200ms
+                # Запускаем таймер обновления
+                self.update_timer.start(200)
                 
                 if self.debug:
                     print("[PLC_DEBUG] ✅ Подключение к PLC установлено")
@@ -246,7 +246,7 @@ class PLCInterface(QObject):
             # Отправляем сигнал об успешной записи
             self.write_completed.emit(True)
             
-            # Отправляем дебаг данные (упрощенно)
+            # Отправляем дебаг данные ТОЛЬКО через сигнал (убрали прямой вывод)
             if self.debug and self.write_count % 10 == 0:  # Каждые 10 записей
                 debug_info = {
                     'write_count': self.write_count,
@@ -255,17 +255,12 @@ class PLCInterface(QObject):
                     'registers': write_data.get('registers', [])
                 }
                 self.debug_data.emit(debug_info)
-                self._print_debug_info(debug_info)
+                # УБРАЛИ self._print_debug_info(debug_info) ← дублирование
                 
         except Exception as e:
             if self._connected:
                 self.error_occurred.emit(f"Ошибка записи данных: {e}")
                 self.write_completed.emit(False)
-                
-    def _print_debug_info(self, debug_info: dict):
-        """Вывести отладочную информацию в консоль (упрощенно)"""
-        print(f"\n[PLC_DEBUG] Запись #{debug_info['write_count']} - "
-              f"{len(debug_info.get('registers', []))} регистров записано")
                     
     def update_plc_data(self):
         """Обновить данные в PLC (вызывается по таймеру)"""
