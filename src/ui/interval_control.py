@@ -3,6 +3,8 @@ from PyQt5.QtWidgets import (QWidget, QGroupBox, QHBoxLayout, QVBoxLayout,
                              QSpinBox, QFrame, QTabWidget)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
+import json
+import os
 
 from .collapsible_groupbox import CollapsibleGroupBox
 
@@ -14,10 +16,19 @@ class IntervalControl(CollapsibleGroupBox):
     signal_interval_changed = pyqtSignal(float)  # Интервал обновления сигналов
     plc_interval_changed = pyqtSignal(float)     # Интервал записи в PLC
     
+    # Имя файла для сохранения настроек
+    CONFIG_FILE = "intervals_config.json"
+    
     def __init__(self, parent=None):
         super().__init__("⏱ Интервалы обновления", parent, collapsed=False)
         self._current_interval = 0.01  # 10ms по умолчанию
         self._current_plc_interval = 0.2  # 200ms по умолчанию
+        
+        # Путь к файлу конфигурации
+        self.config_path = self._get_config_path()
+        
+        # Загружаем сохраненные настройки
+        self._load_config()
         
         # Создаем контейнер для содержимого
         content_widget = QWidget()
@@ -35,6 +46,72 @@ class IntervalControl(CollapsibleGroupBox):
         self._content_widgets.append(content_widget)
         
         self.setup_connections()
+        
+        # Применяем загруженные настройки
+        self._apply_config()
+        
+    def _get_config_path(self):
+        """Получить путь к файлу конфигурации интервалов"""
+        home_dir = os.path.expanduser("~")
+        config_dir = os.path.join(home_dir, ".analog_simulator")
+        
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
+            
+        return os.path.join(config_dir, self.CONFIG_FILE)
+        
+    def _load_config(self):
+        """Загрузить настройки интервалов из файла"""
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    self._current_interval = config.get('signal_interval', 0.01)
+                    self._current_plc_interval = config.get('plc_interval', 0.2)
+                    return True
+        except Exception as e:
+            print(f"Ошибка загрузки настроек интервалов: {e}")
+        return False
+        
+    def _save_config(self):
+        """Сохранить настройки интервалов в файл"""
+        try:
+            config = {
+                'signal_interval': self._current_interval,
+                'plc_interval': self._current_plc_interval
+            }
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            print(f"Ошибка сохранения настроек интервалов: {e}")
+            return False
+            
+    def _apply_config(self):
+        """Применить загруженные настройки"""
+        # Применяем интервал сигналов
+        self.interval_spin.blockSignals(True)
+        self.interval_spin.setValue(self._current_interval)
+        self.interval_spin.blockSignals(False)
+        
+        slider_value = int(self._current_interval * 1000)
+        self.interval_slider.blockSignals(True)
+        self.interval_slider.setValue(max(1, min(1000, slider_value)))
+        self.interval_slider.blockSignals(False)
+        
+        # Применяем интервал PLC
+        self.plc_interval_spin.blockSignals(True)
+        self.plc_interval_spin.setValue(self._current_plc_interval)
+        self.plc_interval_spin.blockSignals(False)
+        
+        plc_slider_value = int(self._current_plc_interval * 1000)
+        self.plc_interval_slider.blockSignals(True)
+        self.plc_interval_slider.setValue(max(10, min(2000, plc_slider_value)))
+        self.plc_interval_slider.blockSignals(False)
+        
+        # Обновляем информацию
+        self.update_signal_info(self._current_interval)
+        self.update_plc_info(self._current_plc_interval)
         
     def setup_ui(self, container):
         """Настройка интерфейса"""
@@ -96,8 +173,36 @@ class IntervalControl(CollapsibleGroupBox):
         self.update_count_label.setStyleSheet("color: #666666; font-size: 9px;")
         info_layout.addWidget(self.update_count_label)
         
+        # Кнопка сохранения
+        self.save_btn = QPushButton("💾 Сохранить настройки")
+        self.save_btn.clicked.connect(self.save_settings)
+        self.save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 4px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+                font-size: 9px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        info_layout.addWidget(self.save_btn)
+        
         layout.addLayout(info_layout)
         
+    def save_settings(self):
+        """Сохранить текущие настройки"""
+        if self._save_config():
+            self.status_label.setText("✅ Настройки сохранены!")
+            self.status_label.setStyleSheet("color: #4CAF50; font-size: 9px;")
+            
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(2000, lambda: self._update_status())
+            
     def _setup_signal_interval_ui(self, layout):
         """Настройка интерфейса для интервала сигналов"""
         # Основная панель
@@ -317,6 +422,9 @@ class IntervalControl(CollapsibleGroupBox):
         # Обновляем информацию
         self.update_signal_info(value)
         
+        # Автосохранение
+        self._save_config()
+        
         # Отправляем сигнал
         self.signal_interval_changed.emit(value)
         
@@ -333,6 +441,9 @@ class IntervalControl(CollapsibleGroupBox):
         # Обновляем информацию
         self.update_signal_info(interval)
         
+        # Автосохранение
+        self._save_config()
+        
         # Отправляем сигнал
         self.signal_interval_changed.emit(interval)
         
@@ -347,6 +458,9 @@ class IntervalControl(CollapsibleGroupBox):
         
         # Обновляем информацию
         self.update_plc_info(value)
+        
+        # Автосохранение
+        self._save_config()
         
         # Отправляем сигнал
         self.plc_interval_changed.emit(value)
@@ -363,6 +477,9 @@ class IntervalControl(CollapsibleGroupBox):
         
         # Обновляем информацию
         self.update_plc_info(interval)
+        
+        # Автосохранение
+        self._save_config()
         
         # Отправляем сигнал
         self.plc_interval_changed.emit(interval)
@@ -381,6 +498,7 @@ class IntervalControl(CollapsibleGroupBox):
         self.interval_slider.blockSignals(False)
         
         self.update_signal_info(interval)
+        self._save_config()
         self.signal_interval_changed.emit(interval)
         
     def set_plc_interval(self, interval: float):
@@ -397,6 +515,7 @@ class IntervalControl(CollapsibleGroupBox):
         self.plc_interval_slider.blockSignals(False)
         
         self.update_plc_info(interval)
+        self._save_config()
         self.plc_interval_changed.emit(interval)
         
     def update_signal_info(self, interval: float):
@@ -435,6 +554,7 @@ class IntervalControl(CollapsibleGroupBox):
             f"✅ Сигналы: {self._current_interval:.3f} с ({signal_freq:.0f} Гц) | "
             f"PLC: {self._current_plc_interval:.3f} с ({plc_freq:.1f} Гц)"
         )
+        self.status_label.setStyleSheet("color: #666666; font-size: 9px;")
         
     def get_signal_interval(self) -> float:
         """Получить текущий интервал сигналов"""
