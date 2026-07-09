@@ -1077,3 +1077,36 @@ json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
 2026-07-09 10:28:51,603:INFO:__main__:  Приложение запущено  (1.50 с)
 2026-07-09 10:28:51,603:INFO:__main__:=======================================================
 2026-07-09 10:29:42,527:INFO:__main__:Приложение завершено штатно (код 0)
+2026-07-09 13:46:38,839:INFO:__main__:=======================================================
+2026-07-09 13:46:38,839:INFO:__main__:PTI_SAU-0.0.1+rev36 — запуск
+2026-07-09 13:46:38,839:INFO:__main__:=======================================================
+2026-07-09 13:46:38,839:INFO:__main__:PID:        25892
+2026-07-09 13:46:38,839:INFO:__main__:Python:     3.8.10
+2026-07-09 13:46:38,839:INFO:__main__:Платформа:  win32
+2026-07-09 13:46:38,839:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-09 13:46:38,839:INFO:__main__:Уровень лога: INFO
+2026-07-09 13:46:38,839:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-09 13:46:38,840:ERROR:config.config:Ошибка парсинга settings.json (некорректный JSON)
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\config\config.py", line 102, in _load_settings
+    user_settings: Dict[str, Any] = json.load(file)
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\__init__.py", line 357, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+2026-07-09 13:46:38,841:WARNING:config.config:Используются настройки по умолчанию
+2026-07-09 13:46:39,203:CRITICAL:__main__:Критическая ошибка при запуске
+Traceback (most recent call last):
+  File "d:/sanja/My_Work/Python/41_PTI_SAU/src/main.py", line 87, in main
+    window = MainWindow()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\main_window.py", line 387, in __init__
+    self.setup_ui()
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\ui\main_window.py", line 523, in setup_ui
+    self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)
+AttributeError: 'MainWindow' object has no attribute 'on_signal_interval_changed'
+2026-07-09 13:46:39,204:WARNING:__main__:Приложение завершено с ошибкой (код 1)

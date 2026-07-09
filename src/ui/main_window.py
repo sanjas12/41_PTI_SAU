@@ -520,7 +520,8 @@ class MainWindow(QMainWindow):
         
         # Интервал обновления
         self.interval_control = IntervalControl()
-        self.interval_control.interval_changed.connect(self.on_interval_changed)
+        self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)
+        self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)  # ← НОВЫЙ СИГНАЛ
         left_layout.addWidget(self.interval_control)
         
         # Сетка каналов
@@ -822,3 +823,10 @@ class MainWindow(QMainWindow):
         self.plc_interface.disconnect()
         self.modbus.close()
         event.accept()
+
+    def on_plc_interval_changed(self, interval: float):
+        """Изменен интервал записи в PLC"""
+        # Обновляем интервал в PLC интерфейсе
+        self.plc_interface.set_write_interval(interval)
+        freq = 1.0 / interval if interval > 0 else 0
+        self.log(f"Интервал записи в PLC изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")

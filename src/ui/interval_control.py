@@ -1,27 +1,29 @@
 from PyQt5.QtWidgets import (QWidget, QGroupBox, QHBoxLayout, QVBoxLayout,
                              QLabel, QDoubleSpinBox, QSlider, QPushButton,
-                             QSpinBox, QFrame)
+                             QSpinBox, QFrame, QTabWidget)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 
-from .collapsible_groupbox import CollapsibleGroupBox  # Импортируем из общего модуля
+from .collapsible_groupbox import CollapsibleGroupBox
 
 
 class IntervalControl(CollapsibleGroupBox):
-    """Виджет для управления интервалом обновления сигналов"""
+    """Виджет для управления интервалами обновления"""
     
-    # Сигнал при изменении интервала
-    interval_changed = pyqtSignal(float)  # Новый интервал в секундах
+    # Сигналы при изменении интервалов
+    signal_interval_changed = pyqtSignal(float)  # Интервал обновления сигналов
+    plc_interval_changed = pyqtSignal(float)     # Интервал записи в PLC
     
     def __init__(self, parent=None):
-        super().__init__("Интервал обновления", parent, collapsed=False)
+        super().__init__("⏱ Интервалы обновления", parent, collapsed=False)
         self._current_interval = 0.01  # 10ms по умолчанию
+        self._current_plc_interval = 0.2  # 200ms по умолчанию
         
         # Создаем контейнер для содержимого
         content_widget = QWidget()
         self.setup_ui(content_widget)
         
-        # Устанавливаем layout
+        # Устанавливаем layout для GroupBox
         layout = QVBoxLayout()
         layout.addWidget(content_widget)
         self.setLayout(layout)
@@ -39,12 +41,71 @@ class IntervalControl(CollapsibleGroupBox):
         layout = QVBoxLayout()
         container.setLayout(layout)
         
+        # Создаем вкладки для разных интервалов
+        tabs = QTabWidget()
+        tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+                background-color: white;
+            }
+            QTabBar::tab {
+                background-color: #e8e8e8;
+                border: 1px solid #d0d0d0;
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                padding: 6px 12px;
+                margin-right: 2px;
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                border-bottom: 2px solid #4CAF50;
+            }
+            QTabBar::tab:hover {
+                background-color: #d0d0d0;
+            }
+        """)
+        
+        # Вкладка 1: Интервал обновления сигналов
+        signal_tab = QWidget()
+        signal_layout = QVBoxLayout()
+        signal_tab.setLayout(signal_layout)
+        self._setup_signal_interval_ui(signal_layout)
+        tabs.addTab(signal_tab, "📊 Сигналы")
+        
+        # Вкладка 2: Интервал записи в PLC
+        plc_tab = QWidget()
+        plc_layout = QVBoxLayout()
+        plc_tab.setLayout(plc_layout)
+        self._setup_plc_interval_ui(plc_layout)
+        tabs.addTab(plc_tab, "🔌 PLC")
+        
+        layout.addWidget(tabs)
+        
+        # Информационная строка (общая)
+        info_layout = QHBoxLayout()
+        
+        self.status_label = QLabel("✅ Сигналы: 0.010 с (100 Гц) | PLC: 0.200 с (5 Гц)")
+        self.status_label.setStyleSheet("color: #666666; font-size: 9px;")
+        info_layout.addWidget(self.status_label)
+        
+        info_layout.addStretch()
+        
+        self.update_count_label = QLabel("Обновлений/сек: 100")
+        self.update_count_label.setStyleSheet("color: #666666; font-size: 9px;")
+        info_layout.addWidget(self.update_count_label)
+        
+        layout.addLayout(info_layout)
+        
+    def _setup_signal_interval_ui(self, layout):
+        """Настройка интерфейса для интервала сигналов"""
         # Основная панель
         main_layout = QHBoxLayout()
         
         # Значение в секундах
         value_layout = QVBoxLayout()
-        value_layout.addWidget(QLabel("Интервал (сек):"))
+        value_layout.addWidget(QLabel("Интервал обновления сигналов:"))
         
         # DoubleSpinBox для точной настройки
         self.interval_spin = QDoubleSpinBox()
@@ -119,7 +180,7 @@ class IntervalControl(CollapsibleGroupBox):
                     color: white;
                 }
             """)
-            btn.clicked.connect(lambda checked, v=value: self.set_interval(v))
+            btn.clicked.connect(lambda checked, v=value: self.set_signal_interval(v))
             quick_buttons_layout.addWidget(btn)
             self.preset_buttons.append(btn)
             
@@ -128,34 +189,124 @@ class IntervalControl(CollapsibleGroupBox):
         
         layout.addLayout(main_layout)
         
-        # Информационная строка
+    def _setup_plc_interval_ui(self, layout):
+        """Настройка интерфейса для интервала записи в PLC"""
+        # Основная панель
+        main_layout = QHBoxLayout()
+        
+        # Значение в секундах
+        value_layout = QVBoxLayout()
+        value_layout.addWidget(QLabel("Интервал записи в PLC:"))
+        
+        # DoubleSpinBox для точной настройки
+        self.plc_interval_spin = QDoubleSpinBox()
+        self.plc_interval_spin.setRange(0.01, 10.0)
+        self.plc_interval_spin.setSingleStep(0.01)
+        self.plc_interval_spin.setDecimals(3)
+        self.plc_interval_spin.setValue(0.2)
+        self.plc_interval_spin.setSuffix(" с")
+        self.plc_interval_spin.setMaximumWidth(120)
+        value_layout.addWidget(self.plc_interval_spin)
+        
+        main_layout.addLayout(value_layout)
+        
+        # Слайдер для быстрой настройки
+        slider_layout = QVBoxLayout()
+        slider_layout.addWidget(QLabel("Быстрая настройка:"))
+        
+        self.plc_interval_slider = QSlider(Qt.Horizontal)
+        self.plc_interval_slider.setRange(10, 2000)  # 10ms до 2000ms
+        self.plc_interval_slider.setValue(200)  # 200ms
+        self.plc_interval_slider.setTickPosition(QSlider.TicksBelow)
+        self.plc_interval_slider.setTickInterval(200)
+        self.plc_interval_slider.setMinimumWidth(200)
+        slider_layout.addWidget(self.plc_interval_slider)
+        
+        main_layout.addLayout(slider_layout)
+        
+        # Информация о частоте записи
+        freq_layout = QVBoxLayout()
+        freq_layout.addWidget(QLabel("Частота записи:"))
+        
+        self.plc_freq_label = QLabel("5.0 Гц")
+        self.plc_freq_label.setFont(QFont("Arial", 12, QFont.Bold))
+        self.plc_freq_label.setStyleSheet("color: #FF6F00;")
+        freq_layout.addWidget(self.plc_freq_label)
+        
+        main_layout.addLayout(freq_layout)
+        
+        # Кнопки быстрых установок для PLC
+        quick_layout = QVBoxLayout()
+        quick_layout.addWidget(QLabel("Быстрые установки:"))
+        
+        quick_buttons_layout = QHBoxLayout()
+        
+        plc_presets = [
+            ("50ms", 0.05),
+            ("100ms", 0.1),
+            ("200ms", 0.2),
+            ("500ms", 0.5),
+            ("1s", 1.0),
+            ("2s", 2.0)
+        ]
+        
+        self.plc_preset_buttons = []
+        for label, value in plc_presets:
+            btn = QPushButton(label)
+            btn.setMaximumWidth(50)
+            btn.setMaximumHeight(25)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #e0e0e0;
+                    border: 1px solid #b0b0b0;
+                    border-radius: 3px;
+                    font-size: 8px;
+                    padding: 2px;
+                }
+                QPushButton:hover {
+                    background-color: #d0d0d0;
+                }
+                QPushButton:pressed {
+                    background-color: #FF6F00;
+                    color: white;
+                }
+            """)
+            btn.clicked.connect(lambda checked, v=value: self.set_plc_interval(v))
+            quick_buttons_layout.addWidget(btn)
+            self.plc_preset_buttons.append(btn)
+            
+        quick_layout.addLayout(quick_buttons_layout)
+        main_layout.addLayout(quick_layout)
+        
+        layout.addLayout(main_layout)
+        
+        # Информационная строка для PLC
         info_layout = QHBoxLayout()
         
-        self.status_label = QLabel("✅ Интервал: 0.010 с (100.0 Гц)")
-        self.status_label.setStyleSheet("color: #666666; font-size: 9px;")
-        info_layout.addWidget(self.status_label)
+        self.plc_status_label = QLabel("💡 Рекомендуемый интервал: 100-500 мс")
+        self.plc_status_label.setStyleSheet("color: #666666; font-size: 9px;")
+        info_layout.addWidget(self.plc_status_label)
         
         info_layout.addStretch()
         
-        self.update_count_label = QLabel("Обновлений/сек: 100")
-        self.update_count_label.setStyleSheet("color: #666666; font-size: 9px;")
-        info_layout.addWidget(self.update_count_label)
+        self.plc_write_count_label = QLabel("Записей: 0")
+        self.plc_write_count_label.setStyleSheet("color: #666666; font-size: 9px;")
+        info_layout.addWidget(self.plc_write_count_label)
         
         layout.addLayout(info_layout)
         
-        # СОБИРАЕМ ВСЕ ВИДЖЕТЫ ДЛЯ СВОРАЧИВАНИЯ
-        self._content_widgets = []
-        for child in container.findChildren(QWidget):
-            self._content_widgets.append(child)
-        self._content_widgets.append(container)
-        
     def setup_connections(self):
         """Настройка сигналов"""
-        self.interval_spin.valueChanged.connect(self.on_interval_changed)
-        self.interval_slider.valueChanged.connect(self.on_slider_changed)
+        # Сигналы для интервала сигналов
+        self.interval_spin.valueChanged.connect(self.on_signal_interval_changed)
+        self.interval_slider.valueChanged.connect(self.on_signal_slider_changed)
         
-    def on_interval_changed(self, value: float):
-        """Изменение интервала через SpinBox"""
+        # Сигналы для интервала PLC
+        self.plc_interval_spin.valueChanged.connect(self.on_plc_interval_changed)
+        self.plc_interval_slider.valueChanged.connect(self.on_plc_slider_changed)
+        
+    def on_signal_interval_changed(self, value: float):
+        """Изменение интервала сигналов через SpinBox"""
         self._current_interval = value
         # Обновляем слайдер
         slider_value = int(value * 1000)
@@ -164,13 +315,13 @@ class IntervalControl(CollapsibleGroupBox):
         self.interval_slider.blockSignals(False)
         
         # Обновляем информацию
-        self.update_info(value)
+        self.update_signal_info(value)
         
         # Отправляем сигнал
-        self.interval_changed.emit(value)
+        self.signal_interval_changed.emit(value)
         
-    def on_slider_changed(self, value: int):
-        """Изменение интервала через Slider"""
+    def on_signal_slider_changed(self, value: int):
+        """Изменение интервала сигналов через Slider"""
         interval = value / 1000.0
         self._current_interval = interval
         
@@ -180,16 +331,46 @@ class IntervalControl(CollapsibleGroupBox):
         self.interval_spin.blockSignals(False)
         
         # Обновляем информацию
-        self.update_info(interval)
+        self.update_signal_info(interval)
         
         # Отправляем сигнал
-        self.interval_changed.emit(interval)
+        self.signal_interval_changed.emit(interval)
         
-    def set_interval(self, interval: float):
-        """Установить интервал программно"""
+    def on_plc_interval_changed(self, value: float):
+        """Изменение интервала PLC через SpinBox"""
+        self._current_plc_interval = value
+        # Обновляем слайдер
+        slider_value = int(value * 1000)
+        self.plc_interval_slider.blockSignals(True)
+        self.plc_interval_slider.setValue(max(10, min(2000, slider_value)))
+        self.plc_interval_slider.blockSignals(False)
+        
+        # Обновляем информацию
+        self.update_plc_info(value)
+        
+        # Отправляем сигнал
+        self.plc_interval_changed.emit(value)
+        
+    def on_plc_slider_changed(self, value: int):
+        """Изменение интервала PLC через Slider"""
+        interval = value / 1000.0
+        self._current_plc_interval = interval
+        
+        # Обновляем SpinBox
+        self.plc_interval_spin.blockSignals(True)
+        self.plc_interval_spin.setValue(interval)
+        self.plc_interval_spin.blockSignals(False)
+        
+        # Обновляем информацию
+        self.update_plc_info(interval)
+        
+        # Отправляем сигнал
+        self.plc_interval_changed.emit(interval)
+        
+    def set_signal_interval(self, interval: float):
+        """Установить интервал сигналов программно"""
         self._current_interval = interval
         
-        # Обновляем все элементы управления
         self.interval_spin.blockSignals(True)
         self.interval_spin.setValue(interval)
         self.interval_spin.blockSignals(False)
@@ -199,23 +380,73 @@ class IntervalControl(CollapsibleGroupBox):
         self.interval_slider.setValue(max(1, min(1000, slider_value)))
         self.interval_slider.blockSignals(False)
         
-        # Обновляем информацию
-        self.update_info(interval)
+        self.update_signal_info(interval)
+        self.signal_interval_changed.emit(interval)
         
-        # Отправляем сигнал
-        self.interval_changed.emit(interval)
+    def set_plc_interval(self, interval: float):
+        """Установить интервал PLC программно"""
+        self._current_plc_interval = interval
         
-    def update_info(self, interval: float):
-        """Обновить информационные метки"""
+        self.plc_interval_spin.blockSignals(True)
+        self.plc_interval_spin.setValue(interval)
+        self.plc_interval_spin.blockSignals(False)
+        
+        slider_value = int(interval * 1000)
+        self.plc_interval_slider.blockSignals(True)
+        self.plc_interval_slider.setValue(max(10, min(2000, slider_value)))
+        self.plc_interval_slider.blockSignals(False)
+        
+        self.update_plc_info(interval)
+        self.plc_interval_changed.emit(interval)
+        
+    def update_signal_info(self, interval: float):
+        """Обновить информацию о сигналах"""
         freq = 1.0 / interval if interval > 0 else 0
-        
         self.freq_label.setText(f"{freq:.1f} Гц")
-        self.status_label.setText(f"✅ Интервал: {interval:.3f} с ({freq:.1f} Гц)")
         self.update_count_label.setText(f"Обновлений/сек: {int(freq)}")
+        self._update_status()
         
-    def get_interval(self) -> float:
-        """Получить текущий интервал"""
+    def update_plc_info(self, interval: float):
+        """Обновить информацию о PLC"""
+        freq = 1.0 / interval if interval > 0 else 0
+        self.plc_freq_label.setText(f"{freq:.1f} Гц")
+        
+        # Рекомендации по интервалу
+        if interval < 0.05:
+            self.plc_status_label.setText("⚠️ Слишком часто! Рекомендуется 100-500 мс")
+            self.plc_status_label.setStyleSheet("color: #f44336; font-size: 9px;")
+        elif interval < 0.1:
+            self.plc_status_label.setText("⚡ Очень часто! Рекомендуется 100-500 мс")
+            self.plc_status_label.setStyleSheet("color: #FF9800; font-size: 9px;")
+        elif interval <= 0.5:
+            self.plc_status_label.setText("✅ Оптимальный интервал")
+            self.plc_status_label.setStyleSheet("color: #4CAF50; font-size: 9px;")
+        else:
+            self.plc_status_label.setText("🐢 Медленный интервал, возможно задержки")
+            self.plc_status_label.setStyleSheet("color: #666666; font-size: 9px;")
+            
+        self._update_status()
+        
+    def _update_status(self):
+        """Обновить общий статус"""
+        signal_freq = 1.0 / self._current_interval if self._current_interval > 0 else 0
+        plc_freq = 1.0 / self._current_plc_interval if self._current_plc_interval > 0 else 0
+        self.status_label.setText(
+            f"✅ Сигналы: {self._current_interval:.3f} с ({signal_freq:.0f} Гц) | "
+            f"PLC: {self._current_plc_interval:.3f} с ({plc_freq:.1f} Гц)"
+        )
+        
+    def get_signal_interval(self) -> float:
+        """Получить текущий интервал сигналов"""
         return self._current_interval
+        
+    def get_plc_interval(self) -> float:
+        """Получить текущий интервал PLC"""
+        return self._current_plc_interval
+        
+    def update_plc_write_count(self, count: int):
+        """Обновить счетчик записей в PLC"""
+        self.plc_write_count_label.setText(f"Записей: {count}")
 
 
 # ============================================================

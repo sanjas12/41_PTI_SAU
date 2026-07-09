@@ -360,3 +360,16 @@ class PLCInterface(QObject):
             print("[PLC_DEBUG] Режим отладки ВКЛЮЧЕН")
         else:
             print("[PLC_DEBUG] Режим отладки ВЫКЛЮЧЕН")
+
+    def set_write_interval(self, interval: float):
+        """Установить интервал записи в PLC"""
+        self.write_interval = max(0.01, min(10.0, interval))
+        
+        # Перезапускаем таймер с новым интервалом
+        self.update_timer.stop()
+        interval_ms = int(self.write_interval * 1000)
+        self.update_timer.start(max(10, interval_ms))
+        
+        if self.debug:
+            print(f"[PLC_DEBUG] Интервал записи изменен: {self.write_interval:.3f} с "
+                f"({1.0/self.write_interval:.1f} Гц)")
