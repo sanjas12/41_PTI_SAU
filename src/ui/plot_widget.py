@@ -5,9 +5,10 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QSplitter, QFrame, QGridLayout, QSpinBox,
                              QDoubleSpinBox, QGroupBox, QTabWidget,
                              QListWidget, QListWidgetItem, QScrollArea,
-                             QMenu, QAction, QMessageBox, QInputDialog)
+                             QMenu, QAction, QMessageBox, QInputDialog,
+                             QToolButton, QButtonGroup)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QPoint
-from PyQt5.QtGui import QFont, QColor, QContextMenuEvent
+from PyQt5.QtGui import QFont, QColor, QContextMenuEvent, QIcon
 import numpy as np
 import time
 from collections import deque
@@ -61,6 +62,9 @@ class PlotWidget(pg.PlotWidget):
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
         
+        # Заголовок графика
+        self.setTitle(f"График {self.plot_index + 1}")
+        
     def show_context_menu(self, position):
         """Показать контекстное меню графика"""
         menu = QMenu()
@@ -72,6 +76,19 @@ class PlotWidget(pg.PlotWidget):
         add_action = QAction("➕ Добавить канал", self)
         add_action.triggered.connect(lambda: self.add_channel_requested.emit(self.plot_index))
         menu.addAction(add_action)
+        
+        menu.addSeparator()
+        
+        # Показать список каналов на графике
+        if self.channel_ids:
+            channel_menu = QMenu("📊 Каналы на графике")
+            for ch_id in self.channel_ids:
+                channel = self.parent() and hasattr(self.parent(), 'generator') and self.parent().generator.get_channel(ch_id)
+                if channel:
+                    action = QAction(f"Ch{ch_id+1}: {channel.name}", self)
+                    action.setEnabled(False)
+                    channel_menu.addAction(action)
+            menu.addMenu(channel_menu)
         
         menu.addSeparator()
         
@@ -107,6 +124,9 @@ class PlotWidget(pg.PlotWidget):
         # Обновляем легенду
         self.update_legend()
         
+        # Обновляем заголовок
+        self.update_title()
+        
     def remove_channel(self, channel_id):
         """Удалить канал с графика"""
         if channel_id not in self.channel_ids:
@@ -125,6 +145,7 @@ class PlotWidget(pg.PlotWidget):
             
         # Обновляем легенду
         self.update_legend()
+        self.update_title()
         
     def update_legend(self):
         """Обновить легенду"""
@@ -134,7 +155,25 @@ class PlotWidget(pg.PlotWidget):
         
         # Добавляем все кривые в легенду
         for channel_id, curve in self.curves.items():
-            self.plotItem.legend.addItem(curve, f"Канал {channel_id+1}")
+            channel = self.parent() and hasattr(self.parent(), 'generator') and self.parent().generator.get_channel(channel_id)
+            name = f"Канал {channel_id+1}"
+            if channel:
+                name = f"{channel.name}"
+            self.plotItem.legend.addItem(curve, name)
+            
+    def update_title(self):
+        """Обновить заголовок графика"""
+        if self.channel_ids:
+            names = []
+            for ch_id in self.channel_ids:
+                channel = self.parent() and hasattr(self.parent(), 'generator') and self.parent().generator.get_channel(ch_id)
+                if channel:
+                    names.append(channel.name)
+                else:
+                    names.append(f"Ch{ch_id+1}")
+            self.setTitle(f"График {self.plot_index + 1}: {', '.join(names)}")
+        else:
+            self.setTitle(f"График {self.plot_index + 1} (пусто)")
             
     def update_data(self, channel_id, value):
         """Обновить данные для канала"""
@@ -184,6 +223,7 @@ class PlotWidget(pg.PlotWidget):
         
         # Обновляем легенду
         self.update_legend()
+        self.update_title()
         
     def get_channel_count(self):
         """Получить количество каналов на графике"""
@@ -223,6 +263,16 @@ class PlotWindow(QMainWindow):
         self.time_window = 10.0  # секунд
         self.max_points = 2000
         
+        # Инициализируем виджеты
+        self.channels_list = None
+        self.selection_info = None
+        self.plots_container = None
+        self.plots_layout = None
+        self.plots_count_label = None
+        self.fps_label = None
+        self.add_selected_btn = None
+        self.time_window_spin = None
+        
         self.setup_ui()
         self.setup_connections()
         
@@ -237,6 +287,7 @@ class PlotWindow(QMainWindow):
         
         # Добавляем начальный график
         self.add_plot()
+        self._update_channels_list()
         
     def setup_ui(self):
         """Настройка интерфейса"""
@@ -300,6 +351,11 @@ class PlotWindow(QMainWindow):
             QListWidget::item:hover {
                 background-color: #e8f5e9;
             }
+            QLabel#plot_title {
+                font-weight: bold;
+                font-size: 14px;
+                padding: 5px;
+            }
         """)
         
     def _create_control_panel(self):
@@ -356,8 +412,6 @@ class PlotWindow(QMainWindow):
         self.channels_list.setSelectionMode(QListWidget.ExtendedSelection)
         self.channels_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.channels_list.customContextMenuRequested.connect(self.show_channel_menu)
-        
-        self._update_channels_list()
         
         layout.addWidget(self.channels_list)
         
@@ -433,6 +487,9 @@ class PlotWindow(QMainWindow):
         
     def _update_channels_list(self):
         """Обновить список каналов"""
+        if self.channels_list is None:
+            return
+            
         self.channels_list.clear()
         for channel in self.generator.channels:
             # Определяем, на каких графиках уже есть этот канал
@@ -442,9 +499,19 @@ class PlotWindow(QMainWindow):
                     plot_indices.append(str(i + 1))
             
             status = f" [Гр.{', '.join(plot_indices)}]" if plot_indices else ""
+            # Отображаем тип сигнала в цвете
+            type_color = {
+                'Sine': '#2196F3',
+                'Square': '#f44336',
+                'Sawtooth': '#FF9800',
+                'Triangle': '#4CAF50',
+                'Random': '#9C27B0',
+                'Custom': '#795548'
+            }.get(str(channel.signal_type), '#666666')
+            
             item = QListWidgetItem(
                 f"Ch{channel.id+1:02d}: {channel.name} "
-                f"({str(channel.signal_type)}){status}"
+                f"<span style='color:{type_color};'>({str(channel.signal_type)})</span>{status}"
             )
             item.setData(Qt.UserRole, channel.id)
             
@@ -459,6 +526,9 @@ class PlotWindow(QMainWindow):
         
     def show_channel_menu(self, position):
         """Показать контекстное меню для канала"""
+        if self.channels_list is None:
+            return
+            
         item = self.channels_list.itemAt(position)
         if not item:
             return
@@ -490,6 +560,11 @@ class PlotWindow(QMainWindow):
                 remove_menu.addAction(action)
             menu.addMenu(remove_menu)
             
+        # Информация о канале
+        info_action = QAction(f"ℹ️ {channel.name} | {channel.min_value:.0f}-{channel.max_value:.0f} | {channel.frequency:.1f} Гц", self)
+        info_action.setEnabled(False)
+        menu.addAction(info_action)
+            
         menu.exec_(self.channels_list.mapToGlobal(position))
         
     def add_channel_to_plot(self, channel_id, plot_index=None):
@@ -510,7 +585,7 @@ class PlotWindow(QMainWindow):
         # Логируем
         channel = self.generator.get_channel(channel_id)
         if channel:
-            print(f"[ГРАФИК] Канал {channel_id+1} добавлен на график {plot_index + 1}")
+            print(f"[ГРАФИК] Канал {channel_id+1} ({channel.name}) добавлен на график {plot_index + 1}")
             
     def remove_channel_from_plot(self, channel_id, plot_index):
         """Удалить канал с графика"""
@@ -520,12 +595,16 @@ class PlotWindow(QMainWindow):
         
         channel = self.generator.get_channel(channel_id)
         if channel:
-            print(f"[ГРАФИК] Канал {channel_id+1} удален с графика {plot_index + 1}")
+            print(f"[ГРАФИК] Канал {channel_id+1} ({channel.name}) удален с графика {plot_index + 1}")
             
     def add_selected_channels(self):
         """Добавить выбранные каналы на графики"""
+        if self.channels_list is None:
+            return
+            
         selected_items = self.channels_list.selectedItems()
         if not selected_items:
+            QMessageBox.information(self, "Информация", "Выберите каналы для добавления")
             return
             
         # Спрашиваем на какой график добавлять
@@ -552,27 +631,39 @@ class PlotWindow(QMainWindow):
             
         plot = self.plot_widgets[plot_index]
         
+        added_count = 0
         for item in selected_items:
             channel_id = item.data(Qt.UserRole)
-            plot.set_channel(channel_id)
+            # Проверяем, есть ли уже канал на этом графике
+            if channel_id not in plot.get_channel_ids():
+                plot.set_channel(channel_id)
+                added_count += 1
             
         self._update_channels_list()
         
-        self.selection_info.setText(f"✅ Добавлено {len(selected_items)} каналов")
-        self.selection_info.setStyleSheet("color: #4CAF50; padding: 5px;")
+        if added_count > 0:
+            self.selection_info.setText(f"✅ Добавлено {added_count} каналов")
+            self.selection_info.setStyleSheet("color: #4CAF50; padding: 5px;")
+        else:
+            self.selection_info.setText("⚠️ Все каналы уже на этом графике")
+            self.selection_info.setStyleSheet("color: #FF9800; padding: 5px;")
         
         from PyQt5.QtCore import QTimer
         QTimer.singleShot(2000, self.update_selection_info)
         
     def setup_connections(self):
         """Настройка сигналов"""
-        self.channels_list.itemSelectionChanged.connect(self.update_selection_info)
+        if self.channels_list:
+            self.channels_list.itemSelectionChanged.connect(self.update_selection_info)
         
     def update_selection_info(self):
         """Обновить информацию о выбранных каналах"""
+        if self.channels_list is None:
+            return
         count = len(self.channels_list.selectedItems())
-        self.selection_info.setText(f"Выбрано: {count} каналов")
-        self.selection_info.setStyleSheet("color: #666666; padding: 5px;")
+        if self.selection_info:
+            self.selection_info.setText(f"Выбрано: {count} каналов")
+            self.selection_info.setStyleSheet("color: #666666; padding: 5px;")
         
     def add_plot(self):
         """Добавить новый график"""
@@ -589,10 +680,13 @@ class PlotWindow(QMainWindow):
         self.plots_layout.addWidget(plot)
         self.next_plot_index += 1
         
-        self.plots_count_label.setText(f"Графиков: {len(self.plot_widgets)}")
+        if self.plots_count_label:
+            self.plots_count_label.setText(f"Графиков: {len(self.plot_widgets)}")
         
-        # Логируем
         print(f"[ГРАФИК] Добавлен график #{self.next_plot_index}")
+        
+        # Обновляем список каналов для отображения статуса
+        self._update_channels_list()
         
         return plot
         
@@ -623,7 +717,8 @@ class PlotWindow(QMainWindow):
         for i, p in enumerate(self.plot_widgets):
             p.plot_index = i
             
-        self.plots_count_label.setText(f"Графиков: {len(self.plot_widgets)}")
+        if self.plots_count_label:
+            self.plots_count_label.setText(f"Графиков: {len(self.plot_widgets)}")
         self._update_channels_list()
         
     def clear_plot(self, plot_index):
@@ -636,12 +731,12 @@ class PlotWindow(QMainWindow):
         """Запрос на добавление канала на график"""
         # Выбираем канал из списка
         channel_ids = [ch.id for ch in self.generator.channels]
-        channel_names = [f"Ch{ch.id+1}: {ch.name}" for ch in self.generator.channels]
+        channel_names = [f"Ch{ch.id+1}: {ch.name} ({str(ch.signal_type)})" for ch in self.generator.channels]
         
         channel_name, ok = QInputDialog.getItem(
             self,
             "Добавить канал",
-            "Выберите канал для добавления:",
+            "Выберите канал для добавления на график:",
             channel_names,
             0,
             False
@@ -696,7 +791,8 @@ class PlotWindow(QMainWindow):
             
         # Обновляем FPS
         if self.update_counter % 20 == 0:
-            self.fps_label.setText(f"Обновлений: {self.update_counter}")
+            if self.fps_label:
+                self.fps_label.setText(f"Обновлений: {self.update_counter}")
             
     def closeEvent(self, event):
         """Обработчик закрытия окна"""
