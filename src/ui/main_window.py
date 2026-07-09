@@ -1,11 +1,13 @@
 import sys
+import json
+import os
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QLabel, QGridLayout,
                              QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox,
                              QCheckBox, QSlider, QFrame, QSplitter, QTabWidget,
                              QScrollArea, QListWidget, QListWidgetItem,
                              QDialog, QDialogButtonBox, QFormLayout,
-                             QLineEdit)  # ← ДОБАВЛЕН QLineEdit
+                             QLineEdit, QMessageBox)
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QThreadPool
 from PyQt5.QtGui import QFont, QColor, QPalette
 
@@ -350,13 +352,21 @@ class ChannelWidget(QFrame):
 class MainWindow(QMainWindow):
     """Главное окно приложения"""
     
+    # Имя файла для сохранения настроек каналов
+    CHANNELS_CONFIG_FILE = "channels_config.json"
+    
     def __init__(self):
         super().__init__()
-        self.setWindowTitle( __full_version__)
+        self.setWindowTitle(__full_version__)
         self.setGeometry(100, 100, 1200, 800)
+        
+        # Путь к файлу конфигурации
+        self.config_path = self._get_config_path()
         
         # Создаем генератор с 20 каналами
         self.generator = SignalGenerator()
+        
+        # Загружаем настройки каналов или создаем стандартные
         self._setup_channels()
         
         # Создаем Modbus клиент
@@ -390,29 +400,93 @@ class MainWindow(QMainWindow):
         # Потоковый пул для Modbus операций
         self.thread_pool = QThreadPool.globalInstance()
         
+    def _get_config_path(self):
+        """Получить путь к файлу конфигурации каналов"""
+        home_dir = os.path.expanduser("~")
+        config_dir = os.path.join(home_dir, ".analog_simulator")
+        
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
+            
+        return os.path.join(config_dir, self.CHANNELS_CONFIG_FILE)
+        
     def _setup_channels(self):
-        """Создать 20 каналов с разными типами сигналов"""
+        """Создать каналы с загрузкой сохраненных настроек"""
+        # Загружаем сохраненные настройки
+        saved_config = self._load_channels_config()
+        
         signal_types = [SignalType.SINE, SignalType.SQUARE, 
                        SignalType.SAWTOOTH, SignalType.TRIANGLE,
                        SignalType.RANDOM]
         
         for i in range(20):
             stype = signal_types[i % len(signal_types)]
-            # Разные границы для разных каналов
-            min_val = (i % 5) * 10
-            max_val = 100 - (i % 3) * 5
-            channel = AnalogChannel(
-                id=i,
-                name=f"Ch_{i+1:02d}",
-                signal_type=stype,
-                frequency=0.5 + (i % 10) * 0.3,
-                amplitude=30 + (i % 7) * 10,
-                offset=10 + (i % 9) * 5,
-                min_value=min_val,
-                max_value=max_val,
-                enabled=True
-            )
+            
+            # Если есть сохраненные настройки для этого канала
+            if saved_config and str(i) in saved_config:
+                cfg = saved_config[str(i)]
+                channel = AnalogChannel(
+                    id=i,
+                    name=cfg.get('name', f"Ch_{i+1:02d}"),
+                    signal_type=SignalType[cfg.get('signal_type', stype.name)],
+                    frequency=cfg.get('frequency', 0.5 + (i % 10) * 0.3),
+                    amplitude=cfg.get('amplitude', 30 + (i % 7) * 10),
+                    offset=cfg.get('offset', 10 + (i % 9) * 5),
+                    min_value=cfg.get('min_value', (i % 5) * 10),
+                    max_value=cfg.get('max_value', 100 - (i % 3) * 5),
+                    enabled=cfg.get('enabled', True)
+                )
+            else:
+                # Стандартные настройки
+                min_val = (i % 5) * 10
+                max_val = 100 - (i % 3) * 5
+                channel = AnalogChannel(
+                    id=i,
+                    name=f"Ch_{i+1:02d}",
+                    signal_type=stype,
+                    frequency=0.5 + (i % 10) * 0.3,
+                    amplitude=30 + (i % 7) * 10,
+                    offset=10 + (i % 9) * 5,
+                    min_value=min_val,
+                    max_value=max_val,
+                    enabled=True
+                )
+            
             self.generator.add_channel(channel)
+            
+    def _load_channels_config(self) -> dict:
+        """Загрузить конфигурацию каналов из файла"""
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Ошибка загрузки конфигурации каналов: {e}")
+        return {}
+        
+    def _save_channels_config(self):
+        """Сохранить конфигурацию каналов в файл"""
+        try:
+            config = {}
+            for channel in self.generator.channels:
+                config[str(channel.id)] = {
+                    'name': channel.name,
+                    'signal_type': channel.signal_type.name,
+                    'frequency': channel.frequency,
+                    'amplitude': channel.amplitude,
+                    'offset': channel.offset,
+                    'min_value': channel.min_value,
+                    'max_value': channel.max_value,
+                    'enabled': channel.enabled
+                }
+            
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+                
+            return True
+        except Exception as e:
+            self.log(f"Ошибка сохранения конфигурации каналов: {e}", "error")
+            return False
             
     def setup_ui(self):
         """Настройка UI"""
@@ -563,6 +637,22 @@ class MainWindow(QMainWindow):
         """)
         layout.addWidget(self.plc_btn)
         
+        # Кнопка сохранения настроек каналов
+        self.save_channels_btn = QPushButton("💾 Сохранить каналы")
+        self.save_channels_btn.clicked.connect(self.save_channels)
+        self.save_channels_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #388E3C; }
+        """)
+        layout.addWidget(self.save_channels_btn)
+        
         layout.addStretch()
         
         self.fps_label = QLabel("FPS: 0")
@@ -617,11 +707,27 @@ class MainWindow(QMainWindow):
         layout.addStretch()
         
         # Версия
-        version_label = QLabel("Версия: 1.4.0")
+        version_label = QLabel(__full_version__)
         version_label.setStyleSheet("color: #999999; font-size: 9px;")
         layout.addWidget(version_label)
         
         return panel
+        
+    def save_channels(self):
+        """Сохранить настройки каналов"""
+        if self._save_channels_config():
+            self.log("Настройки каналов сохранены", "success")
+            QMessageBox.information(
+                self,
+                "Успех",
+                f"Настройки каналов сохранены в:\n{self.config_path}"
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                "Не удалось сохранить настройки каналов"
+            )
         
     def on_channel_settings_changed(self, channel_id: int):
         """Изменены настройки канала"""
@@ -635,6 +741,9 @@ class MainWindow(QMainWindow):
                 "info"
             )
             
+            # Автоматически сохраняем настройки при изменении
+            self._save_channels_config()
+            
             # Если канал выбран для отображения, обновляем информацию
             if self.selected_channel_label.text().startswith(f"Канал {channel_id+1}"):
                 self.selected_bounds_label.setText(f"{channel.min_value:.0f} - {channel.max_value:.0f}")
@@ -644,6 +753,9 @@ class MainWindow(QMainWindow):
         channel = self.generator.get_channel(channel_id)
         if channel:
             self.log(f"Канал {channel_id+1}: тип сигнала изменен на {type_name}", "info")
+            
+            # Автоматически сохраняем настройки при изменении
+            self._save_channels_config()
             
             if self.selected_channel_label.text().startswith(f"Канал {channel_id+1}"):
                 self.selected_type_label.setText(type_name)
@@ -816,6 +928,10 @@ class MainWindow(QMainWindow):
             self.frame_count = 0
             
     def closeEvent(self, event):
+        # Сохраняем настройки перед закрытием
+        self._save_channels_config()
+        self.log("Настройки каналов сохранены", "info")
+        
         if self.plot_window:
             self.plot_window.close()
         if self.logger_window:
