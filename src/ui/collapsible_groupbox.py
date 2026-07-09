@@ -51,7 +51,11 @@ class CollapsibleGroupBox(QGroupBox):
     def update_content_visibility(self, visible):
         """Обновить видимость содержимого"""
         for widget in self._content_widgets:
-            widget.setVisible(visible)
+            if widget is not None:
+                try:
+                    widget.setVisible(visible)
+                except:
+                    pass
             
     def set_collapsed(self, collapsed):
         """Установить состояние свернуто/развернуто"""

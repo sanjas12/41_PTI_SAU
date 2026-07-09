@@ -558,7 +558,7 @@ class MainWindow(QMainWindow):
         
     def _create_control_panel(self):
         """Создать панель управления"""
-        from ui.connection_panel import CollapsibleGroupBox  # Импортируем базовый класс
+        from ui.collapsible_groupbox import CollapsibleGroupBox
         
         panel = CollapsibleGroupBox("Управление", self, collapsed=False)
         
@@ -666,8 +666,12 @@ class MainWindow(QMainWindow):
         # Устанавливаем layout для GroupBox
         panel.setLayout(layout)
         
-        # Добавляем все виджеты в список для сворачивания
-        panel._content_widgets = content_widget.findChildren(QWidget)
+        # Собираем все дочерние виджеты для сворачивания
+        panel._content_widgets = []
+        for child in content_widget.findChildren(QWidget):
+            panel._content_widgets.append(child)
+        # Добавляем сам content_widget
+        panel._content_widgets.append(content_widget)
         
         return panel
         
