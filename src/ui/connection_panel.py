@@ -1,15 +1,80 @@
 from PyQt5.QtWidgets import (QWidget, QGroupBox, QGridLayout, QHBoxLayout,
                              QVBoxLayout, QLabel, QLineEdit, QSpinBox,
                              QPushButton, QComboBox, QCheckBox, QFrame,
-                             QApplication, QMessageBox)  # Добавлен QMessageBox
-from PyQt5.QtCore import Qt, pyqtSignal
+                             QApplication, QMessageBox, QToolButton)
+from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve, QRect
 from PyQt5.QtGui import QFont
 import sys
 import json
 import os
 
 
-class ConnectionPanel(QGroupBox):
+class CollapsibleGroupBox(QGroupBox):
+    """GroupBox с возможностью сворачивания/разворачивания"""
+    
+    def __init__(self, title, parent=None, collapsed=False):
+        super().__init__(title, parent)
+        self.setCheckable(True)
+        self.setChecked(not collapsed)
+        self.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #d0d0d0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+                background-color: #fafafa;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+                background-color: #fafafa;
+            }
+            QGroupBox::indicator {
+                width: 18px;
+                height: 18px;
+            }
+            QGroupBox::indicator:checked {
+                image: none;
+            }
+            QGroupBox::indicator:unchecked {
+                image: none;
+            }
+        """)
+        self.toggled.connect(self.on_toggled)
+        self._collapsed = collapsed
+        self._animation = None
+        
+        # Сохраняем виджеты для управления видимостью
+        self._content_widgets = []
+        
+    def add_content_widget(self, widget):
+        """Добавить виджет в содержимое GroupBox"""
+        self._content_widgets.append(widget)
+        
+    def on_toggled(self, checked):
+        """Обработчик изменения состояния"""
+        self._collapsed = not checked
+        self.update_content_visibility(checked)
+        
+    def update_content_visibility(self, visible):
+        """Обновить видимость содержимого"""
+        for widget in self._content_widgets:
+            widget.setVisible(visible)
+            
+    def set_collapsed(self, collapsed):
+        """Установить состояние свернуто/развернуто"""
+        self.setChecked(not collapsed)
+        self._collapsed = collapsed
+        self.update_content_visibility(not collapsed)
+        
+    def is_collapsed(self):
+        """Проверить, свернут ли GroupBox"""
+        return self._collapsed
+
+
+class ConnectionPanel(CollapsibleGroupBox):
     """Панель для подключения к ПЛК через Modbus TCP"""
     
     # Сигналы для внешнего использования
@@ -25,7 +90,7 @@ class ConnectionPanel(QGroupBox):
         # Путь к файлу конфигурации в папке пользователя
         self.config_path = self._get_config_path()
         
-        # ИНИЦИАЛИЗИРУЕМ АТРИБУТЫ ДО ВЫЗОВА setup_ui()
+        # ИНИЦИАЛИЗИРУЕМ АТРИБУТЫ
         self._is_connected = False
         self._connection_params = {
             'host': '192.168.0.20',
@@ -35,7 +100,7 @@ class ConnectionPanel(QGroupBox):
         
         # Список сохраненных подключений (загружаем из файла)
         self.saved_connections = []
-        self._load_connections()  # Загружаем сохраненные подключения
+        self._load_connections()
         
         # Если нет сохраненных, добавляем стандартные
         if not self.saved_connections:
@@ -43,25 +108,26 @@ class ConnectionPanel(QGroupBox):
             {'name': 'Simulator', 'host': '127.0.0.1', 'port': 502, 'unit_id': 1},
             {'name': 'PLC-1', 'host': '192.168.0.20', 'port': 502, 'unit_id': 1},
             ]
-            self._save_connections()  # Сохраняем стандартные
+            self._save_connections()
         
         # Загружаем последнее использованное подключение
         self._load_last_connection()
         
-        # ТЕПЕРЬ ВЫЗЫВАЕМ setup_ui()
+        # ТЕПЕРЬ ВЫЗЫВАЕМ setup_ui
         self.setup_ui()
         self.setup_connections()
         
         # Применяем загруженные параметры
         self._apply_last_connection()
         
+        # Сохраняем виджеты содержимого для сворачивания
+        self._content_widgets = self.findChildren(QWidget)
+        
     def _get_config_path(self):
         """Получить путь к файлу конфигурации"""
-        # Сохраняем в папке пользователя
         home_dir = os.path.expanduser("~")
         config_dir = os.path.join(home_dir, ".pti_sau")
         
-        # Создаем папку если её нет
         if not os.path.exists(config_dir):
             os.makedirs(config_dir)
             
@@ -114,8 +180,10 @@ class ConnectionPanel(QGroupBox):
             
     def setup_ui(self):
         """Настройка интерфейса"""
+        # Основной контейнер для содержимого
+        content_widget = QWidget()
         layout = QVBoxLayout()
-        self.setLayout(layout)
+        content_widget.setLayout(layout)
         
         # Основная сетка параметров
         grid = QGridLayout()
@@ -296,6 +364,9 @@ class ConnectionPanel(QGroupBox):
         
         layout.addLayout(info_layout)
         
+        # Добавляем контент в GroupBox
+        self.setLayout(layout)
+        
         # Стили группы
         self.setStyleSheet("""
             QGroupBox {
@@ -311,6 +382,16 @@ class ConnectionPanel(QGroupBox):
                 left: 10px;
                 padding: 0 5px 0 5px;
                 background-color: #fafafa;
+            }
+            QGroupBox::indicator {
+                width: 18px;
+                height: 18px;
+            }
+            QGroupBox::indicator:checked {
+                image: none;
+            }
+            QGroupBox::indicator:unchecked {
+                image: none;
             }
             QLabel {
                 color: #333333;
@@ -425,11 +506,10 @@ class ConnectionPanel(QGroupBox):
     def on_delete_clicked(self):
         """Удалить выбранное сохраненное подключение"""
         current_index = self.preset_combo.currentIndex()
-        if current_index <= 0:  # Пропускаем первый элемент ("-- Выберите сохраненное --")
+        if current_index <= 0:
             QMessageBox.warning(self, "Предупреждение", "Выберите подключение для удаления")
             return
             
-        # Подтверждение удаления
         conn_name = self.saved_connections[current_index - 1]['name']
         reply = QMessageBox.question(
             self,
@@ -440,7 +520,6 @@ class ConnectionPanel(QGroupBox):
         )
         
         if reply == QMessageBox.Yes:
-            # Удаляем из списка
             del self.saved_connections[current_index - 1]
             self._save_connections()
             self.update_preset_combo()
@@ -460,21 +539,18 @@ class ConnectionPanel(QGroupBox):
         self.port_spin.setValue(conn['port'])
         self.unit_spin.setValue(conn['unit_id'])
         
-        # Сохраняем как последнее использованное
         self._last_connection = conn.copy()
         self._save_connections()
         
     def on_params_changed(self):
         """Параметры подключения изменены"""
         if self._is_connected:
-            # Если изменены параметры при подключении, сбрасываем состояние
             self._is_connected = False
             self.update_connection_status()
             
     def update_connection_status(self):
         """Обновить статус подключения"""
         if self._is_connected:
-            # Подключено
             self.status_indicator.setStyleSheet("""
                 QFrame {
                     background-color: #4CAF50;
@@ -493,20 +569,18 @@ class ConnectionPanel(QGroupBox):
             )
             self.connection_info.setStyleSheet("color: #4CAF50; font-size: 9px;")
             
-            # Время подключения
             import datetime
             now = datetime.datetime.now().strftime("%H:%M:%S")
             self.connection_time_label.setText(f"Подключено в: {now}")
             
         else:
-            # Отключено
             self.status_indicator.setStyleSheet("""
                 QFrame {
                     background-color: #f44336;
                     border-radius: 8px;
                 }
             """)
-            self.status_label.setText("Отключено")
+            self.status_label.setText("❌ Отключено")
             self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
             
             self.connect_btn.setEnabled(True)
