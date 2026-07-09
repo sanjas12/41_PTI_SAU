@@ -650,3 +650,30 @@ AttributeError: 'MainWindow' object has no attribute 'on_plc_debug_data'
 2026-07-09 08:47:31,746:INFO:__main__:  Приложение запущено  (1.70 с)
 2026-07-09 08:47:31,746:INFO:__main__:=======================================================
 2026-07-09 08:48:35,731:INFO:__main__:Приложение завершено штатно (код 0)
+2026-07-09 08:52:26,725:INFO:__main__:=======================================================
+2026-07-09 08:52:26,725:INFO:__main__:PTI_SAU-0.0.1+rev27 — запуск
+2026-07-09 08:52:26,725:INFO:__main__:=======================================================
+2026-07-09 08:52:26,725:INFO:__main__:PID:        32464
+2026-07-09 08:52:26,725:INFO:__main__:Python:     3.8.10
+2026-07-09 08:52:26,726:INFO:__main__:Платформа:  win32
+2026-07-09 08:52:26,726:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-09 08:52:26,726:INFO:__main__:Уровень лога: INFO
+2026-07-09 08:52:26,726:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-09 08:52:26,727:ERROR:config.config:Ошибка парсинга settings.json (некорректный JSON)
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\config\config.py", line 102, in _load_settings
+    user_settings: Dict[str, Any] = json.load(file)
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\__init__.py", line 357, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+2026-07-09 08:52:26,747:WARNING:config.config:Используются настройки по умолчанию
+2026-07-09 08:52:28,756:INFO:__main__:=======================================================
+2026-07-09 08:52:28,756:INFO:__main__:  Приложение запущено  (2.01 с)
+2026-07-09 08:52:28,757:INFO:__main__:=======================================================
+2026-07-09 08:52:54,999:INFO:__main__:Приложение завершено штатно (код 0)
