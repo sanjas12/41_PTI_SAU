@@ -303,6 +303,11 @@ class ConnectionPanel(CollapsibleGroupBox):
         # Добавляем контент в GroupBox
         self.setLayout(layout)
         
+        self._content_widgets = []
+        for child in self.findChildren(QWidget):
+            if child != self:  # Не добавляем сам GroupBox
+                self._content_widgets.append(child)
+
         # Стили группы
         self.setStyleSheet("""
             QGroupBox {

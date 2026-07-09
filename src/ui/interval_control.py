@@ -14,7 +14,7 @@ class IntervalControl(CollapsibleGroupBox):
     interval_changed = pyqtSignal(float)  # Новый интервал в секундах
     
     def __init__(self, parent=None):
-        super().__init__("⏱ Интервал обновления", parent, collapsed=False)
+        super().__init__("Интервал обновления", parent, collapsed=False)
         self._current_interval = 0.01  # 10ms по умолчанию
         
         # Создаем контейнер для содержимого
@@ -142,6 +142,12 @@ class IntervalControl(CollapsibleGroupBox):
         info_layout.addWidget(self.update_count_label)
         
         layout.addLayout(info_layout)
+        
+        # СОБИРАЕМ ВСЕ ВИДЖЕТЫ ДЛЯ СВОРАЧИВАНИЯ
+        self._content_widgets = []
+        for child in container.findChildren(QWidget):
+            self._content_widgets.append(child)
+        self._content_widgets.append(container)
         
     def setup_connections(self):
         """Настройка сигналов"""

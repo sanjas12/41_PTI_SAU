@@ -17,6 +17,7 @@ from core.signal_types import SignalType
 from ui.plot_widget import PlotWindow
 from ui.logger_window import LoggerWindow
 from ui.connection_panel import ConnectionPanel
+from ui.control_panel import ControlPanel
 from ui.interval_control import IntervalControl
 from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
@@ -508,8 +509,14 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.connection_panel)
         
         # Панель управления
-        control_panel = self._create_control_panel()
-        left_layout.addWidget(control_panel)
+        self.control_panel = ControlPanel()
+        self.control_panel.start_stop_clicked.connect(self.toggle_generation)
+        self.control_panel.reset_clicked.connect(self.reset_signals)
+        self.control_panel.plot_clicked.connect(self.open_plot_window)
+        self.control_panel.logger_clicked.connect(self.open_logger_window)
+        self.control_panel.plc_clicked.connect(self.open_plc_view)
+        self.control_panel.save_channels_clicked.connect(self.save_channels)
+        left_layout.addWidget(self.control_panel)
         
         # Интервал обновления
         self.interval_control = IntervalControl()
@@ -555,125 +562,6 @@ class MainWindow(QMainWindow):
             QMainWindow { background-color: #f5f5f5; }
             QLabel { color: #333333; }
         """)
-        
-    def _create_control_panel(self):
-        """Создать панель управления"""
-        from ui.collapsible_groupbox import CollapsibleGroupBox
-        
-        panel = CollapsibleGroupBox("Управление", self, collapsed=False)
-        
-        # Создаем контейнер для содержимого
-        content_widget = QWidget()
-        layout = QHBoxLayout()
-        content_widget.setLayout(layout)
-        
-        self.start_btn = QPushButton("⏸ Стоп")
-        self.start_btn.clicked.connect(self.toggle_generation)
-        self.start_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #45a049; }
-        """)
-        layout.addWidget(self.start_btn)
-        
-        self.reset_btn = QPushButton("↺ Сброс")
-        self.reset_btn.clicked.connect(self.reset_signals)
-        self.reset_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FF9800;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #F57C00; }
-        """)
-        layout.addWidget(self.reset_btn)
-        
-        self.plot_btn = QPushButton("📊 Графики")
-        self.plot_btn.clicked.connect(self.open_plot_window)
-        self.plot_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #1976D2; }
-        """)
-        layout.addWidget(self.plot_btn)
-        
-        self.logger_btn = QPushButton("📋 Журнал")
-        self.logger_btn.clicked.connect(self.open_logger_window)
-        self.logger_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #9C27B0;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #7B1FA2; }
-        """)
-        layout.addWidget(self.logger_btn)
-        
-        self.plc_btn = QPushButton("📋 PLC Регистры")
-        self.plc_btn.clicked.connect(self.open_plc_view)
-        self.plc_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #795548;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #5D4037; }
-        """)
-        layout.addWidget(self.plc_btn)
-        
-        self.save_channels_btn = QPushButton("💾 Сохранить каналы")
-        self.save_channels_btn.clicked.connect(self.save_channels)
-        self.save_channels_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #388E3C; }
-        """)
-        layout.addWidget(self.save_channels_btn)
-        
-        layout.addStretch()
-        
-        self.fps_label = QLabel("FPS: 0")
-        self.fps_label.setStyleSheet("color: #666666;")
-        layout.addWidget(self.fps_label)
-        
-        # Устанавливаем layout для GroupBox
-        panel.setLayout(layout)
-        
-        # Собираем все дочерние виджеты для сворачивания
-        panel._content_widgets = []
-        for child in content_widget.findChildren(QWidget):
-            panel._content_widgets.append(child)
-        # Добавляем сам content_widget
-        panel._content_widgets.append(content_widget)
-        
-        return panel
         
     def _create_info_panel(self):
         """Создать информационную панель"""
@@ -882,38 +770,16 @@ class MainWindow(QMainWindow):
     def toggle_generation(self):
         if self.is_running:
             self.timer.stop()
-            self.start_btn.setText("▶ Старт")
-            self.start_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #f44336;
-                    color: white;
-                    border: none;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    font-weight: bold;
-                }
-                QPushButton:hover { background-color: #da190b; }
-            """)
+            self.is_running = False
+            self.control_panel.set_start_button_state(False)
             self.status_label.setText("● Остановлен")
             self.status_label.setStyleSheet("color: #FF4444; font-weight: bold; font-size: 12px;")
-            self.is_running = False
         else:
             self.timer.start(10)
-            self.start_btn.setText("⏸ Стоп")
-            self.start_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    font-weight: bold;
-                }
-                QPushButton:hover { background-color: #45a049; }
-            """)
+            self.is_running = True
+            self.control_panel.set_start_button_state(True)
             self.status_label.setText("● Работает")
             self.status_label.setStyleSheet("color: #00CC00; font-weight: bold; font-size: 12px;")
-            self.is_running = True
             
     def reset_signals(self):
         for channel in self.generator.channels:
@@ -938,7 +804,8 @@ class MainWindow(QMainWindow):
         
         self.frame_count += 1
         if self.frame_count >= 50:
-            self.fps_label.setText(f"FPS: {self.frame_count * 2}")
+            fps = self.frame_count * 2
+            self.control_panel.update_fps(fps)
             self.frame_count = 0
             
     def closeEvent(self, event):
