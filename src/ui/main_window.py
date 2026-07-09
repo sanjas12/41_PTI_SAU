@@ -761,7 +761,7 @@ class MainWindow(QMainWindow):
             self.log("PLC интерфейс отключен", "warning")
             
     def on_plc_debug_data(self, debug_info: dict):
-        print(f"\n[PLC_DEBUG] Запись #{debug_info['write_count']} - "
+        print(f"\n{time.time()} [PLC_DEBUG] Запись #{debug_info['write_count']} - "
               f"{len(debug_info.get('registers', []))} регистров записано")
         
         if self.logger_window and self.logger_window.isVisible():
