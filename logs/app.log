@@ -865,3 +865,53 @@ json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
 2026-07-09 09:20:43,558:INFO:__main__:  Приложение запущено  (1.81 с)
 2026-07-09 09:20:43,558:INFO:__main__:=======================================================
 2026-07-09 09:20:54,494:INFO:__main__:Приложение завершено штатно (код 0)
+2026-07-09 10:08:46,697:INFO:__main__:=======================================================
+2026-07-09 10:08:46,697:INFO:__main__:PTI_SAU-0.0.1+rev31 — запуск
+2026-07-09 10:08:46,697:INFO:__main__:=======================================================
+2026-07-09 10:08:46,697:INFO:__main__:PID:        31168
+2026-07-09 10:08:46,697:INFO:__main__:Python:     3.8.10
+2026-07-09 10:08:46,697:INFO:__main__:Платформа:  win32
+2026-07-09 10:08:46,697:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-09 10:08:46,697:INFO:__main__:Уровень лога: INFO
+2026-07-09 10:08:46,698:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-09 10:08:46,699:ERROR:config.config:Ошибка парсинга settings.json (некорректный JSON)
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\config\config.py", line 102, in _load_settings
+    user_settings: Dict[str, Any] = json.load(file)
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\__init__.py", line 357, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+2026-07-09 10:08:46,730:WARNING:config.config:Используются настройки по умолчанию
+2026-07-09 10:09:34,906:INFO:__main__:=======================================================
+2026-07-09 10:09:34,907:INFO:__main__:PTI_SAU-0.0.1+rev31 — запуск
+2026-07-09 10:09:34,907:INFO:__main__:=======================================================
+2026-07-09 10:09:34,907:INFO:__main__:PID:        24792
+2026-07-09 10:09:34,907:INFO:__main__:Python:     3.8.10
+2026-07-09 10:09:34,907:INFO:__main__:Платформа:  win32
+2026-07-09 10:09:34,907:INFO:__main__:Лог-файл:   D:\sanja\My_Work\Python\41_PTI_SAU\logs\app.log
+2026-07-09 10:09:34,907:INFO:__main__:Уровень лога: INFO
+2026-07-09 10:09:34,907:INFO:config.config:Загрузка settings.json: D:\sanja\My_Work\Python\41_PTI_SAU\settings.json
+2026-07-09 10:09:34,908:ERROR:config.config:Ошибка парсинга settings.json (некорректный JSON)
+Traceback (most recent call last):
+  File "d:\sanja\My_Work\Python\41_PTI_SAU\src\config\config.py", line 102, in _load_settings
+    user_settings: Dict[str, Any] = json.load(file)
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\__init__.py", line 357, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\stovpyaga\AppData\Local\Programs\Python\Python38\lib\json\decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+2026-07-09 10:09:34,909:WARNING:config.config:Используются настройки по умолчанию
+2026-07-09 10:09:42,961:INFO:__main__:=======================================================
+2026-07-09 10:09:42,961:INFO:__main__:  Приложение запущено  (8.05 с)
+2026-07-09 10:09:42,961:INFO:__main__:=======================================================
+2026-07-09 10:09:55,331:INFO:__main__:Приложение завершено штатно (код 0)

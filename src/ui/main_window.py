@@ -558,9 +558,14 @@ class MainWindow(QMainWindow):
         
     def _create_control_panel(self):
         """Создать панель управления"""
-        panel = QGroupBox("Управление")
+        from ui.connection_panel import CollapsibleGroupBox  # Импортируем базовый класс
+        
+        panel = CollapsibleGroupBox("Управление", self, collapsed=False)
+        
+        # Создаем контейнер для содержимого
+        content_widget = QWidget()
         layout = QHBoxLayout()
-        panel.setLayout(layout)
+        content_widget.setLayout(layout)
         
         self.start_btn = QPushButton("⏸ Стоп")
         self.start_btn.clicked.connect(self.toggle_generation)
@@ -637,7 +642,6 @@ class MainWindow(QMainWindow):
         """)
         layout.addWidget(self.plc_btn)
         
-        # Кнопка сохранения настроек каналов
         self.save_channels_btn = QPushButton("💾 Сохранить каналы")
         self.save_channels_btn.clicked.connect(self.save_channels)
         self.save_channels_btn.setStyleSheet("""
@@ -658,6 +662,12 @@ class MainWindow(QMainWindow):
         self.fps_label = QLabel("FPS: 0")
         self.fps_label.setStyleSheet("color: #666666;")
         layout.addWidget(self.fps_label)
+        
+        # Устанавливаем layout для GroupBox
+        panel.setLayout(layout)
+        
+        # Добавляем все виджеты в список для сворачивания
+        panel._content_widgets = content_widget.findChildren(QWidget)
         
         return panel
         
