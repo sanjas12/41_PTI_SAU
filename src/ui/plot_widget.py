@@ -6,7 +6,8 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QDoubleSpinBox, QGroupBox, QTabWidget,
                              QListWidget, QListWidgetItem, QScrollArea,
                              QMenu, QAction, QMessageBox, QInputDialog,
-                             QToolButton, QButtonGroup, QSizePolicy)
+                             QToolButton, QButtonGroup, QSizePolicy,
+                             QApplication)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QPoint, QSize
 from PyQt5.QtGui import QFont, QColor, QContextMenuEvent, QIcon
 import numpy as np
@@ -264,13 +265,16 @@ class PlotWindow(QMainWindow):
         # Увеличиваем размер окна для размещения всех графиков без скролла
         # Получаем размер экрана
         screen = QApplication.primaryScreen()
-        screen_size = screen.availableGeometry()
+        if screen is not None:
+            screen_size = screen.availableGeometry()
+            self._window_width = screen_size.width() - 40
+            self._window_height = screen_size.height() - 60
+        else:
+            self._window_width = 1800
+            self._window_height = 1000
         
         # Устанавливаем окно на весь экран с небольшим отступом
-        width = screen_size.width() - 40
-        height = screen_size.height() - 60
-        
-        self.setGeometry(20, 30, width, height)
+        self.setGeometry(20, 30, self._window_width, self._window_height)
         
         # Список графиков
         self.plot_widgets = []
@@ -279,7 +283,7 @@ class PlotWindow(QMainWindow):
         # Настройки
         self.time_window = 10.0  # секунд
         self.max_points = 2000
-        self.plot_height = 200  # Высота каждого графика (уменьшена для размещения большего количества)
+        self.plot_height = 200  # Высота каждого графика
         
         # Инициализируем виджеты
         self.channels_list = None
@@ -334,7 +338,10 @@ class PlotWindow(QMainWindow):
         right_panel = self._create_plots_panel()
         splitter.addWidget(right_panel)
         
-        splitter.setSizes([250, width - 280])  # Динамический размер
+        # Используем self._window_width для динамического размера
+        left_width = 250
+        right_width = self._window_width - left_width - 50
+        splitter.setSizes([left_width, right_width])
         main_layout.addWidget(splitter)
         
         # Нижняя информационная панель
