@@ -534,6 +534,9 @@ class PlotWindow(QMainWindow):
             return
             
         channel_id = item.data(Qt.UserRole)
+        if channel_id is None:
+            return
+            
         channel = self.generator.get_channel(channel_id)
         if not channel:
             return
@@ -555,13 +558,18 @@ class PlotWindow(QMainWindow):
             remove_menu = QMenu("❌ Удалить с графиков")
             for plot_index in plot_indices:
                 action = QAction(f"С графика {plot_index + 1}", self)
-                action.triggered.connect(lambda checked, pi=plot_index: 
-                                        self.remove_channel_from_plot(channel_id, pi))
+                action.triggered.connect(
+                    lambda checked, pi=plot_index, cid=channel_id: 
+                    self.remove_channel_from_plot(cid, pi)
+                )
                 remove_menu.addAction(action)
             menu.addMenu(remove_menu)
             
         # Информация о канале
-        info_action = QAction(f"ℹ️ {channel.name} | {channel.min_value:.0f}-{channel.max_value:.0f} | {channel.frequency:.1f} Гц", self)
+        info_action = QAction(
+            f"ℹ️ {channel.name} | {channel.min_value:.0f}-{channel.max_value:.0f} | {channel.frequency:.1f} Гц",
+            self
+        )
         info_action.setEnabled(False)
         menu.addAction(info_action)
             
@@ -572,20 +580,31 @@ class PlotWindow(QMainWindow):
         if plot_index is None:
             # Выбираем график с наименьшим количеством каналов
             if self.plot_widgets:
-                plot_index = min(range(len(self.plot_widgets)), 
-                               key=lambda i: self.plot_widgets[i].get_channel_count())
+                plot_index = min(
+                    range(len(self.plot_widgets)), 
+                    key=lambda i: self.plot_widgets[i].get_channel_count()
+                )
             else:
                 self.add_plot()
                 plot_index = 0
                 
+        # Проверяем, что индекс корректен
+        if plot_index >= len(self.plot_widgets):
+            self.add_plot()
+            plot_index = len(self.plot_widgets) - 1
+            
         plot = self.plot_widgets[plot_index]
-        plot.set_channel(channel_id)
-        self._update_channels_list()
         
-        # Логируем
-        channel = self.generator.get_channel(channel_id)
-        if channel:
-            print(f"[ГРАФИК] Канал {channel_id+1} ({channel.name}) добавлен на график {plot_index + 1}")
+        # Проверяем, есть ли уже канал на этом графике
+        if channel_id not in plot.get_channel_ids():
+            plot.set_channel(channel_id)
+            self._update_channels_list()
+            
+            channel = self.generator.get_channel(channel_id)
+            if channel:
+                print(f"[ГРАФИК] Канал {channel_id+1} ({channel.name}) добавлен на график {plot_index + 1}")
+        else:
+            print(f"[ГРАФИК] Канал {channel_id+1} уже есть на графике {plot_index + 1}")
             
     def remove_channel_from_plot(self, channel_id, plot_index):
         """Удалить канал с графика"""
@@ -605,6 +624,16 @@ class PlotWindow(QMainWindow):
         selected_items = self.channels_list.selectedItems()
         if not selected_items:
             QMessageBox.information(self, "Информация", "Выберите каналы для добавления")
+            return
+        
+        # СОХРАНЯЕМ ID каналов ДО обновления списка
+        selected_channel_ids = []
+        for item in selected_items:
+            channel_id = item.data(Qt.UserRole)
+            if channel_id is not None:
+                selected_channel_ids.append(channel_id)
+        
+        if not selected_channel_ids:
             return
             
         # Спрашиваем на какой график добавлять
@@ -632,13 +661,12 @@ class PlotWindow(QMainWindow):
         plot = self.plot_widgets[plot_index]
         
         added_count = 0
-        for item in selected_items:
-            channel_id = item.data(Qt.UserRole)
+        for channel_id in selected_channel_ids:
             # Проверяем, есть ли уже канал на этом графике
             if channel_id not in plot.get_channel_ids():
                 plot.set_channel(channel_id)
                 added_count += 1
-            
+        
         self._update_channels_list()
         
         if added_count > 0:
