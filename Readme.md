@@ -37,6 +37,14 @@ pip install -r requirements.txt
 
 ### 3. Запуск
 
+#### 3.1 C uv
+
+```bash
+uv run python src/main.py     - скрипт для инициализации БД
+```
+
+#### 3.2 Без uv
+
 ```bash
 python src/main.py
 ```
