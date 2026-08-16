@@ -8,7 +8,12 @@ authors = [
     {name = "sanja_s", email = "sanja100v@gmail.com"}
 ]
 
-dependencies = []
+dependencies = [
+    "numpy==1.24.3",
+    "pyqt5==5.15.9",
+    "pyqtgraph==0.13.3",
+    "pyModbusTCP==0.3.0",
+]
 
 [project.urls]
 Repository = ".git"
@@ -23,14 +28,10 @@ build = [
 ]
 dev = [
     "commitizen>=3.27.0",
-    "numpy==1.24.3",
     "pre-commit>= 2.0.0, < 3.0.0",
     "python-semantic-release>=9.3.1",
     "pytest>=8.3.5",
     "pytest-cov>=5.0.0",
-    "pyqt5==5.15.9",
-    "pyqtgraph==0.13.3",
-    "pyModbusTCP",
     
 ]
 
