@@ -423,6 +423,12 @@ wheels = [
 name = "pti-sau"
 version = "0.0.1"
 source = { editable = "." }
+dependencies = [
+    { name = "numpy", marker = "sys_platform == 'win32'" },
+    { name = "pymodbustcp", marker = "sys_platform == 'win32'" },
+    { name = "pyqt5", marker = "sys_platform == 'win32'" },
+    { name = "pyqtgraph", marker = "sys_platform == 'win32'" },
+]
 
 [package.dev-dependencies]
 build = [
@@ -430,27 +436,25 @@ build = [
 ]
 dev = [
     { name = "commitizen", marker = "sys_platform == 'win32'" },
-    { name = "numpy", marker = "sys_platform == 'win32'" },
     { name = "pre-commit", marker = "sys_platform == 'win32'" },
-    { name = "pymodbustcp", marker = "sys_platform == 'win32'" },
-    { name = "pyqt5", marker = "sys_platform == 'win32'" },
-    { name = "pyqtgraph", marker = "sys_platform == 'win32'" },
     { name = "pytest", marker = "sys_platform == 'win32'" },
     { name = "pytest-cov", marker = "sys_platform == 'win32'" },
     { name = "python-semantic-release", marker = "sys_platform == 'win32'" },
 ]
 
 [package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = "==1.24.3" },
+    { name = "pymodbustcp", specifier = "==0.3.0" },
+    { name = "pyqt5", specifier = "==5.15.9" },
+    { name = "pyqtgraph", specifier = "==0.13.3" },
+]
 
 [package.metadata.requires-dev]
 build = [{ name = "cx-freeze", marker = "sys_platform == 'win32'", specifier = "==7.2.10" }]
 dev = [
     { name = "commitizen", specifier = ">=3.27.0" },
-    { name = "numpy", specifier = "==1.24.3" },
     { name = "pre-commit", specifier = ">=2.0.0,<3.0.0" },
-    { name = "pymodbustcp" },
-    { name = "pyqt5", specifier = "==5.15.9" },
-    { name = "pyqtgraph", specifier = "==0.13.3" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
     { name = "python-semantic-release", specifier = ">=9.3.1" },
