@@ -1,19 +1,15 @@
-import sys
-import os
-from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtCore import Qt
 import logging
 import os
 import sys
 import time
-import traceback
 from typing import Any, Dict
+
+from PyQt5.QtWidgets import QApplication, QMessageBox
 
 import config.config as cfg
 from _version import __full_version__
 from ui.main_window import MainWindow
 from ui.styles import app_stylesheet
-
 
 logger = logging.getLogger(__name__)
 
