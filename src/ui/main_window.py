@@ -310,26 +310,40 @@ class ChannelWidget(QFrame):
             self.settings_btn.setEnabled(True)
             
     def update_display(self):
-        if self.channel.enabled:
-            value = self.channel.current_value
-            self.value_label.setText(f"{value:.1f}")
-            
-            range_val = self.channel.max_value - self.channel.min_value
-            if range_val > 0:
-                percent = (value - self.channel.min_value) / range_val
-                bar_width = max(0, min(100, percent * 100))
-            else:
-                bar_width = 50
+        """Обновить отображение значения"""
+        try:
+            # Проверяем существование основных виджетов
+            if not hasattr(self, 'value_label') or not self.value_label:
+                return
                 
-            self.bar.setStyleSheet(f"""
-                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #4CAF50, stop:{bar_width/100} #4CAF50,
-                    stop:{bar_width/100} #e0e0e0, stop:1 #e0e0e0);
-                border-radius: 2px;
-            """)
-        else:
-            self.value_label.setText("Off")
-            self.bar.setStyleSheet("background-color: #cccccc; border-radius: 2px;")
+            if self.channel.enabled:
+                value = self.channel.current_value
+                self.value_label.setText(f"{value:.1f}")
+                
+                range_val = self.channel.max_value - self.channel.min_value
+                if range_val > 0:
+                    percent = (value - self.channel.min_value) / range_val
+                    bar_width = max(0, min(100, percent * 100))
+                else:
+                    bar_width = 50
+                    
+                if hasattr(self, 'bar') and self.bar:
+                    self.bar.setStyleSheet(f"""
+                        background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                            stop:0 #4CAF50, stop:{bar_width/100} #4CAF50,
+                            stop:{bar_width/100} #e0e0e0, stop:1 #e0e0e0);
+                        border-radius: 2px;
+                    """)
+            else:
+                if hasattr(self, 'value_label') and self.value_label:
+                    self.value_label.setText("Off")
+                if hasattr(self, 'bar') and self.bar:
+                    self.bar.setStyleSheet("background-color: #cccccc; border-radius: 2px;")
+                    
+        except (RuntimeError, AttributeError) as e:
+            # Виджет уже удален - просто игнорируем
+            # print(f"[DEBUG] Widget update error: {e}")
+            pass
             
     def update_channel(self, channel: AnalogChannel):
         self.channel = channel
@@ -786,29 +800,60 @@ class MainWindow(QMainWindow):
         self.update_signals()
             
     def update_signals(self):
+        """Обновить сигналы и UI"""
         if not self.is_running:
             return
             
         # Проверяем, не запущен ли сценарий
-        if self.scenario_engine.is_running():
-            # Если сценарий запущен, не обновляем сигналы вручную
+        if hasattr(self, 'scenario_engine') and self.scenario_engine.is_running():
             return
             
         self.generator.update(dt=0.01)
         
         active_count = 0
+        
+        # Обновляем виджеты каналов с защитой от ошибок
         for i, widget in enumerate(self.channel_widgets):
-            if i < len(self.generator.channels):
+            if i >= len(self.generator.channels):
+                break
+                
+            try:
+                # Проверяем, существует ли виджет
+                if widget is None:
+                    continue
+                    
+                # Проверяем, не удален ли виджет
+                try:
+                    widget.isHidden()
+                except RuntimeError:
+                    # Виджет уже удален, пропускаем
+                    continue
+                    
                 widget.update_display()
                 if self.generator.channels[i].enabled:
                     active_count += 1
                     
-        self.stats_label.setText(f"Каналов: 20\nАктивных: {active_count}")
+            except (RuntimeError, AttributeError) as e:
+                # Игнорируем ошибки удаленных виджетов
+                print(f"[WARN] Ошибка обновления виджета {i}: {e}")
+                continue
+                        
+        # Обновляем статистику
+        try:
+            if self.stats_label:
+                self.stats_label.setText(f"Каналов: 20\nАктивных: {active_count}")
+        except (RuntimeError, AttributeError):
+            pass
         
+        # Обновляем FPS
         self.frame_count += 1
         if self.frame_count >= 50:
             fps = self.frame_count * 2
-            self.control_panel.update_fps(fps)
+            try:
+                if self.control_panel:
+                    self.control_panel.update_fps(fps)
+            except (RuntimeError, AttributeError):
+                pass
             self.frame_count = 0
             
     def closeEvent(self, event):
