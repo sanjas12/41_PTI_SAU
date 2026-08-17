@@ -37,8 +37,6 @@ from core.signal_types import SignalType
 from .scenario_engine import ScenarioEngine, ScenarioMode
 from .scenario_model import Scenario, ScenarioStep
 
-print("[SCENARIO_WIDGET] Модуль загружен")
-
 
 class StepWidget(QFrame):
     """Виджет для отображения шага сценария (drag&drop)"""
@@ -182,16 +180,13 @@ class ScenarioWidget(QWidget):
     scenario_saved = pyqtSignal(str)
     
     def __init__(self, generator: SignalGenerator, engine: ScenarioEngine, parent=None):
-        print("[SCENARIO_WIDGET] Начало __init__")
         super().__init__(parent)
-        print("[SCENARIO_WIDGET] super() вызван")
         
         self.generator = generator
         self.engine = engine
         self.scenario = Scenario()
         self.current_file = None
         
-        print("[SCENARIO_WIDGET] Подключение сигналов")
         # Подключаем сигналы двигателя
         self.engine.scenario_started.connect(self.on_scenario_started)
         self.engine.scenario_stopped.connect(self.on_scenario_stopped)
@@ -200,27 +195,19 @@ class ScenarioWidget(QWidget):
         self.engine.progress_changed.connect(self.on_progress_changed)
         self.engine.mode_changed.connect(self.on_mode_changed)
         
-        print("[SCENARIO_WIDGET] setup_ui")
         self.setup_ui()
-        print("[SCENARIO_WIDGET] update_step_list")
         self.update_step_list()
-        
-        print("[SCENARIO_WIDGET] __init__ завершен")
-        print(f"[SCENARIO_WIDGET] isVisible: {self.isVisible()}")
-        print(f"[SCENARIO_WIDGET] geometry: {self.geometry()}")
             
     def setup_ui(self):
         """Настройка интерфейса"""
-        print("[SCENARIO_WIDGET] setup_ui начат")
-        
         layout = QVBoxLayout()
         layout.setContentsMargins(2, 2, 2, 2)
         layout.setSpacing(2)
         self.setLayout(layout)
         
-        # Устанавливаем минимальную высоту
+        # Минимальная высота задаётся, максимальная — нет: реальная высота
+        # теперь управляется вертикальным QSplitter в MainWindow.
         self.setMinimumHeight(150)
-        self.setMaximumHeight(200)
         
         # Заголовок
         title_layout = QHBoxLayout()
@@ -261,8 +248,7 @@ class ScenarioWidget(QWidget):
         
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setMinimumHeight(60)
-        scroll.setMaximumHeight(80)
+        scroll.setMinimumHeight(100)
         scroll.setStyleSheet("""
             QScrollArea { 
                 border: 1px solid #ddd; 
@@ -271,7 +257,7 @@ class ScenarioWidget(QWidget):
             }
         """)
         scroll.setWidget(self.steps_container)
-        layout.addWidget(scroll)
+        layout.addWidget(scroll, stretch=1)
         
         # Нижняя панель
         bottom_layout = QHBoxLayout()
@@ -404,20 +390,6 @@ class ScenarioWidget(QWidget):
         status_layout.addWidget(self.status_label)
         
         layout.addLayout(status_layout)
-        
-        # ЯРКИЙ ФОН ДЛЯ ТЕСТА
-        self.setStyleSheet("background-color: #FF6B6B; border: 3px solid #FF0000;")
-        
-        # ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ
-        self.setVisible(True)
-        self.show()
-        self.raise_()
-        
-        print("[SCENARIO_WIDGET] setup_ui завершен")
-        print(f"[SCENARIO_WIDGET] isVisible после setup: {self.isVisible()}")
-        print(f"[SCENARIO_WIDGET] geometry после setup: {self.geometry()}")
-        print(f"[SCENARIO_WIDGET] size: {self.size()}")
-        print(f"[SCENARIO_WIDGET] parent: {self.parent()}")
         
     def update_step_list(self):
         """Обновить список шагов"""

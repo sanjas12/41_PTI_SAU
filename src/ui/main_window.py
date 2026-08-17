@@ -502,18 +502,31 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Horizontal)
         main_layout.addWidget(splitter)
         
-        left_panel = QWidget()
-        left_panel.setMinimumHeight(800)  # Убеждаемся, что есть место
-        left_layout = QVBoxLayout()
-        left_panel.setLayout(left_layout)
+        # Левая колонка: сверху — обычный (не сплиттер!) блок с тремя
+        # сворачиваемыми панелями управления, снизу — вертикальный сплиттер
+        # между "Сценарии" и сеткой каналов.
+        #
+        # top_widget намеренно НЕ секция QSplitter: ConnectionPanel/ControlPanel/
+        # IntervalControl умеют сворачиваться сами (CollapsibleGroupBox), а
+        # QSplitter не подстраивает размер секции под sizeHint() содержимого —
+        # он держит фиксированный размер, пока пользователь не потянет границу
+        # руками. В обычном QVBoxLayout сворачивание работает "из коробки".
+        left_container = QWidget()
+        left_container_layout = QVBoxLayout()
+        left_container_layout.setContentsMargins(0, 0, 0, 0)
+        left_container.setLayout(left_container_layout)
         
-        # Панель подключения
+        # --- Верхний блок: подключение + управление + интервалы ---
+        top_widget = QWidget()
+        top_layout = QVBoxLayout()
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_widget.setLayout(top_layout)
+        
         self.connection_panel = ConnectionPanel()
         self.connection_panel.connection_changed.connect(self.on_connection_changed)
         self.connection_panel.connected.connect(self.on_connection_status_changed)
-        left_layout.addWidget(self.connection_panel)
+        top_layout.addWidget(self.connection_panel)
         
-        # Панель управления
         self.control_panel = ControlPanel()
         self.control_panel.start_stop_clicked.connect(self.toggle_generation)
         self.control_panel.reset_clicked.connect(self.reset_signals)
@@ -521,20 +534,20 @@ class MainWindow(QMainWindow):
         self.control_panel.logger_clicked.connect(self.open_logger_window)
         self.control_panel.plc_clicked.connect(self.open_plc_view)
         self.control_panel.save_channels_clicked.connect(self.save_channels)
-        left_layout.addWidget(self.control_panel)
+        top_layout.addWidget(self.control_panel)
         
-        # Интервал обновления
         self.interval_control = IntervalControl()
         self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)
         self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
-        left_layout.addWidget(self.interval_control)
+        top_layout.addWidget(self.interval_control)
         
-        # ============================================================
-        # КОНСТРУКТОР СЦЕНАРИЕВ - ВСТАВЛЯЕМ ПРЯМО СЕЙЧАС
-        # ============================================================
+        left_container_layout.addWidget(top_widget)
+        
+        # --- Сплиттер: "Сценарии" / сетка каналов ---
+        left_splitter = QSplitter(Qt.Vertical)
+        
         from scenario.scenario_widget import ScenarioWidget
         
-        # Создаем GroupBox для сценария
         scenario_group = QGroupBox("🎬 Сценарии")
         scenario_group.setStyleSheet("""
             QGroupBox {
@@ -544,8 +557,6 @@ class MainWindow(QMainWindow):
                 margin-top: 8px;
                 padding-top: 8px;
                 background-color: #f0f8f0;
-                min-height: 160px;
-                max-height: 200px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -560,30 +571,12 @@ class MainWindow(QMainWindow):
         scenario_layout.setSpacing(3)
         scenario_group.setLayout(scenario_layout)
         
-        # Создаем виджет
         self.scenario_widget = ScenarioWidget(self.generator, self.scenario_engine, self)
-        self.scenario_widget.setMinimumHeight(140)
-        self.scenario_widget.setMaximumHeight(180)
-        
-        # Добавляем в GroupBox
         scenario_layout.addWidget(self.scenario_widget)
         
-        # ДОБАВЛЯЕМ GROUPBOX В ЛЕВУЮ ПАНЕЛЬ
-        left_layout.addWidget(scenario_group)
+        left_splitter.addWidget(scenario_group)
         
-        # ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ
-        scenario_group.setVisible(True)
-        self.scenario_widget.setVisible(True)
-        scenario_group.show()
-        self.scenario_widget.show()
-        
-        print(f"[MAIN] scenario_group добавлен в layout")
-        print(f"[MAIN] scenario_group visible: {scenario_group.isVisible()}")
-        print(f"[MAIN] scenario_widget visible: {self.scenario_widget.isVisible()}")
-        
-        # ============================================================
-        
-        # Сетка каналов
+        # --- Сетка каналов ---
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background-color: #f5f5f5; }")
@@ -606,9 +599,15 @@ class MainWindow(QMainWindow):
             self.channel_widgets.append(widget)
             
         scroll.setWidget(grid_widget)
-        left_layout.addWidget(scroll)
+        left_splitter.addWidget(scroll)
         
-        splitter.addWidget(left_panel)
+        left_splitter.setStretchFactor(0, 1)
+        left_splitter.setStretchFactor(1, 2)
+        left_splitter.setSizes([280, 500])
+        
+        left_container_layout.addWidget(left_splitter, 1)  # stretch=1: забирает всё оставшееся место
+        
+        splitter.addWidget(left_container)
         
         right_panel = self._create_info_panel()
         splitter.addWidget(right_panel)
@@ -621,12 +620,6 @@ class MainWindow(QMainWindow):
             QMainWindow { background-color: #f5f5f5; }
             QLabel { color: #333333; }
         """)
-        
-        # Принудительное обновление
-        left_panel.update()
-        self.update()
-        
-        print(f"[MAIN] setup_ui завершен")
         
     def _create_info_panel(self):
         """Создать информационную панель"""

@@ -1,6 +1,12 @@
-from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QLabel,
-                             QGroupBox, QVBoxLayout)
 from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import (
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .collapsible_groupbox import CollapsibleGroupBox
 
@@ -136,16 +142,17 @@ class ControlPanel(CollapsibleGroupBox):
         self.fps_label.setStyleSheet("color: #666666;")
         layout.addWidget(self.fps_label)
         
-        # СОХРАНЯЕМ ВСЕ ВИДЖЕТЫ ДЛЯ СВОРАЧИВАНИЯ
-        # Собираем все дочерние виджеты из content_widget
-        self._content_widgets = []
-        for child in content_widget.findChildren(QWidget):
-            self._content_widgets.append(child)
-        # Добавляем сам content_widget
-        self._content_widgets.append(content_widget)
-        
         # Устанавливаем layout для GroupBox (содержимое content_widget)
         self.setLayout(layout)
+        
+        # СОХРАНЯЕМ ВСЕ ВИДЖЕТЫ ДЛЯ СВОРАЧИВАНИЯ
+        # ВАЖНО: собираем детей self, а не content_widget — после
+        # self.setLayout(layout) Qt переносит все виджеты layout'а на self
+        # (см. QWidget::setLayout -> reparentChildWidgets), и content_widget
+        # остаётся пустым, отсоединённым от иерархии виджетом.
+        self._content_widgets = [
+            child for child in self.findChildren(QWidget) if child is not self
+        ]
         
         # Стили
         self.setStyleSheet("""
