@@ -1,55 +1,35 @@
+import sys
 import json
 import os
-import sys
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+                             QHBoxLayout, QPushButton, QLabel, QGridLayout,
+                             QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox,
+                             QCheckBox, QSlider, QFrame, QSplitter, QTabWidget,
+                             QScrollArea, QListWidget, QListWidgetItem,
+                             QDialog, QDialogButtonBox, QFormLayout,
+                             QLineEdit, QMessageBox)
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QThreadPool
+from PyQt5.QtGui import QFont, QColor, QPalette
 
-from PyQt5.QtCore import Qt, QThread, QThreadPool, QTimer, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QPalette
-from PyQt5.QtWidgets import (
-    QApplication,
-    QCheckBox,
-    QComboBox,
-    QDialog,
-    QDialogButtonBox,
-    QDoubleSpinBox,
-    QFormLayout,
-    QFrame,
-    QGridLayout,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
-    QMainWindow,
-    QMessageBox,
-    QPushButton,
-    QScrollArea,
-    QSlider,
-    QSpinBox,
-    QSplitter,
-    QTabWidget,
-    QVBoxLayout,
-    QWidget,
-)
-
-from _version import __full_version__
-from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
+from core.channel import AnalogChannel
 from core.signal_types import SignalType
+from ui.plot_widget import PlotWindow
+from ui.logger_window import LoggerWindow
+from ui.connection_panel import ConnectionPanel
+from ui.control_panel import ControlPanel
+from ui.interval_control import IntervalControl
+from ui.collapsible_groupbox import CollapsibleGroupBox
 from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
 from plc.plc_interface import PLCInterface
 from plc.plc_register_view import PLCRegisterView
+
+# Импорты для сценариев - ВЫНОСИМ В КОНЕЦ ФАЙЛА
+from scenario.scenario_model import Scenario, ScenarioStep
 from scenario.scenario_engine import ScenarioEngine, ScenarioMode
 
-# НОВЫЕ ИМПОРТЫ ДЛЯ СЦЕНАРИЕВ
-from scenario.scenario_model import Scenario, ScenarioStep
-from scenario.scenario_widget import ScenarioWidget
-from ui.connection_panel import ConnectionPanel
-from ui.control_panel import ControlPanel
-from ui.interval_control import IntervalControl
-from ui.logger_window import LoggerWindow
-from ui.plot_widget import PlotWindow
+from _version import __full_version__
 
 
 class ChannelSettingsDialog(QDialog):
@@ -66,49 +46,41 @@ class ChannelSettingsDialog(QDialog):
         layout = QVBoxLayout()
         self.setLayout(layout)
         
-        # Форма с параметрами
         form_layout = QFormLayout()
         
-        # Имя канала
         self.name_edit = QLineEdit(self.channel.name)
         form_layout.addRow("Имя канала:", self.name_edit)
         
-        # Минимальное значение
         self.min_spin = QDoubleSpinBox()
         self.min_spin.setRange(-10000, 10000)
         self.min_spin.setValue(self.channel.min_value)
         self.min_spin.setSingleStep(0.1)
         form_layout.addRow("Минимум:", self.min_spin)
         
-        # Максимальное значение
         self.max_spin = QDoubleSpinBox()
         self.max_spin.setRange(-10000, 10000)
         self.max_spin.setValue(self.channel.max_value)
         self.max_spin.setSingleStep(0.1)
         form_layout.addRow("Максимум:", self.max_spin)
         
-        # Частота
         self.freq_spin = QDoubleSpinBox()
         self.freq_spin.setRange(0.01, 100)
         self.freq_spin.setValue(self.channel.frequency)
         self.freq_spin.setSingleStep(0.1)
         form_layout.addRow("Частота (Гц):", self.freq_spin)
         
-        # Амплитуда
         self.amp_spin = QDoubleSpinBox()
         self.amp_spin.setRange(0, 100)
         self.amp_spin.setValue(self.channel.amplitude)
         self.amp_spin.setSingleStep(1)
         form_layout.addRow("Амплитуда (%):", self.amp_spin)
         
-        # Смещение
         self.offset_spin = QDoubleSpinBox()
         self.offset_spin.setRange(-100, 100)
         self.offset_spin.setValue(self.channel.offset)
         self.offset_spin.setSingleStep(1)
         form_layout.addRow("Смещение (%):", self.offset_spin)
         
-        # Тип сигнала
         self.type_combo = QComboBox()
         self.type_combo.addItems([st.name.capitalize() for st in SignalType])
         current_type = self.channel.signal_type.name.capitalize()
@@ -117,14 +89,12 @@ class ChannelSettingsDialog(QDialog):
             self.type_combo.setCurrentIndex(index)
         form_layout.addRow("Тип сигнала:", self.type_combo)
         
-        # Включен
         self.enabled_check = QCheckBox()
         self.enabled_check.setChecked(self.channel.enabled)
         form_layout.addRow("Включен:", self.enabled_check)
         
         layout.addLayout(form_layout)
         
-        # Кнопки OK/Cancel
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
@@ -177,7 +147,6 @@ class ChannelWidget(QFrame):
         layout.setSpacing(2)
         layout.setContentsMargins(5, 5, 5, 5)
         
-        # Имя канала
         self.name_label = QLabel(f"Ch{self.channel.id+1}: {self.channel.name}")
         self.name_label.setAlignment(Qt.AlignCenter)
         self.name_label.setFont(QFont("Arial", 8, QFont.Bold))
@@ -185,14 +154,12 @@ class ChannelWidget(QFrame):
         self.name_label.mousePressEvent = self.on_name_click
         layout.addWidget(self.name_label)
         
-        # Значение
         self.value_label = QLabel("0.00")
         self.value_label.setAlignment(Qt.AlignCenter)
         self.value_label.setFont(QFont("Arial", 14, QFont.Bold))
         self.value_label.setStyleSheet("color: #0066CC;")
         layout.addWidget(self.value_label)
         
-        # Мини-индикатор
         self.bar_frame = QFrame()
         bar_layout = QVBoxLayout()
         bar_layout.setContentsMargins(0, 0, 0, 0)
@@ -201,7 +168,6 @@ class ChannelWidget(QFrame):
         self.bar.setStyleSheet("background-color: #4CAF50; border-radius: 2px;")
         bar_layout.addWidget(self.bar)
         
-        # Границы
         bounds_layout = QHBoxLayout()
         bounds_layout.setContentsMargins(0, 0, 0, 0)
         self.min_label = QLabel(f"{self.channel.min_value:.0f}")
@@ -218,7 +184,6 @@ class ChannelWidget(QFrame):
         self.bar_frame.setLayout(bar_layout)
         layout.addWidget(self.bar_frame)
         
-        # Выбор типа сигнала
         self.type_combo = QComboBox()
         self.type_combo.addItems([st.name.capitalize() for st in SignalType])
         current_type = self.channel.signal_type.name.capitalize()
@@ -243,7 +208,6 @@ class ChannelWidget(QFrame):
         """)
         layout.addWidget(self.type_combo)
         
-        # Кнопка настроек
         settings_layout = QHBoxLayout()
         settings_layout.setContentsMargins(0, 0, 0, 0)
         
@@ -264,7 +228,6 @@ class ChannelWidget(QFrame):
         self.settings_btn.clicked.connect(self.open_settings)
         settings_layout.addWidget(self.settings_btn, alignment=Qt.AlignCenter)
         
-        # Включен/Выключен
         self.enabled_check = QCheckBox("Вкл")
         self.enabled_check.setChecked(self.channel.enabled)
         self.enabled_check.stateChanged.connect(self.on_enabled_changed)
@@ -347,7 +310,7 @@ class ChannelWidget(QFrame):
                 else:
                     bar_width = 50
                     
-                if hasattr(self, 'bar') and self.bar:
+                if self.bar:
                     self.bar.setStyleSheet(f"""
                         background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                             stop:0 #4CAF50, stop:{bar_width/100} #4CAF50,
@@ -355,9 +318,9 @@ class ChannelWidget(QFrame):
                         border-radius: 2px;
                     """)
             else:
-                if hasattr(self, 'value_label') and self.value_label:
+                if self.value_label:
                     self.value_label.setText("Off")
-                if hasattr(self, 'bar') and self.bar:
+                if self.bar:
                     self.bar.setStyleSheet("background-color: #cccccc; border-radius: 2px;")
                     
         except (RuntimeError, AttributeError) as e:
@@ -436,10 +399,8 @@ class MainWindow(QMainWindow):
         """Получить путь к файлу конфигурации каналов"""
         home_dir = os.path.expanduser("~")
         config_dir = os.path.join(home_dir, ".analog_simulator")
-        
         if not os.path.exists(config_dir):
             os.makedirs(config_dir)
-            
         return os.path.join(config_dir, self.CHANNELS_CONFIG_FILE)
         
     def _setup_channels(self):
@@ -555,7 +516,6 @@ class MainWindow(QMainWindow):
         
         # КОНСТРУКТОР СЦЕНАРИЕВ (сворачиваемый, с ограничением высоты)
         from scenario.scenario_widget import ScenarioWidget
-        from ui.collapsible_groupbox import CollapsibleGroupBox
         
         # Оборачиваем сценарий в сворачиваемый GroupBox
         scenario_group = CollapsibleGroupBox("🎬 Сценарии", self, collapsed=True)  # По умолчанию свернут
