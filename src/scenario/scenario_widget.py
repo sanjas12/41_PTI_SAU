@@ -1,19 +1,41 @@
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                             QLabel, QListWidget, QListWidgetItem, QGroupBox,
-                             QSpinBox, QDoubleSpinBox, QComboBox, QCheckBox,
-                             QFileDialog, QMessageBox, QSplitter, QFrame,
-                             QProgressBar, QScrollArea, QMenu, QAction,
-                             QInputDialog, QLineEdit, QFormLayout, QDialog,
-                             QDialogButtonBox)
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QMimeData, QPoint
-from PyQt5.QtGui import QDrag, QPixmap, QColor, QFont
 import json
 import os
 
+from PyQt5.QtCore import QMimeData, QPoint, Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QColor, QDrag, QFont, QPixmap
+from PyQt5.QtWidgets import (
+    QAction,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMenu,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
+
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
-from .scenario_model import Scenario, ScenarioStep
+
 from .scenario_engine import ScenarioEngine, ScenarioMode
+from .scenario_model import Scenario, ScenarioStep
 
 
 class StepWidget(QFrame):
@@ -200,36 +222,192 @@ class ScenarioWidget(QWidget):
     def setup_ui(self):
         """Настройка интерфейса"""
         layout = QVBoxLayout()
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
+        layout.setContentsMargins(3, 3, 3, 3)
+        layout.setSpacing(3)
         self.setLayout(layout)
+        
+        # Устанавливаем максимальную высоту для компактности
+        self.setMaximumHeight(250)
         
         # Заголовок
         title_layout = QHBoxLayout()
         title = QLabel("🎬 Конструктор сценариев")
-        title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        title.setStyleSheet("font-size: 11px; font-weight: bold;")
         title_layout.addWidget(title)
         title_layout.addStretch()
+        
+        # Кнопка добавления шага (компактная)
+        self.add_step_btn = QPushButton("➕")
+        self.add_step_btn.setFixedSize(25, 25)
+        self.add_step_btn.setToolTip("Добавить шаг")
+        self.add_step_btn.clicked.connect(self.add_step)
+        self.add_step_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #45a049; }
+        """)
+        title_layout.addWidget(self.add_step_btn)
+        
         layout.addLayout(title_layout)
         
-        # Основной разделитель
-        splitter = QSplitter(Qt.Horizontal)
+        # Список шагов (компактный)
+        self.steps_container = QWidget()
+        self.steps_layout = QVBoxLayout()
+        self.steps_layout.setSpacing(2)
+        self.steps_layout.setContentsMargins(0, 0, 0, 0)
+        self.steps_container.setLayout(self.steps_layout)
         
-        # Левая панель - список шагов
-        left_panel = self._create_steps_panel()
-        splitter.addWidget(left_panel)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(120)
+        scroll.setStyleSheet("""
+            QScrollArea { 
+                border: 1px solid #ddd; 
+                border-radius: 3px; 
+                background-color: white;
+            }
+        """)
+        scroll.setWidget(self.steps_container)
+        layout.addWidget(scroll)
         
-        # Правая панель - управление
-        right_panel = self._create_control_panel()
-        splitter.addWidget(right_panel)
+        # Нижняя панель управления (компактная)
+        bottom_layout = QHBoxLayout()
+        bottom_layout.setSpacing(3)
         
-        splitter.setSizes([500, 300])
-        layout.addWidget(splitter)
+        # Кнопки управления сценарием (компактные)
+        self.play_btn = QPushButton("▶")
+        self.play_btn.setFixedSize(30, 25)
+        self.play_btn.setToolTip("Запустить сценарий")
+        self.play_btn.clicked.connect(self.play_scenario)
+        self.play_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #45a049; }
+        """)
+        bottom_layout.addWidget(self.play_btn)
         
-        # Нижняя панель - управление сценарием
-        control_layout = self._create_scenario_controls()
-        layout.addLayout(control_layout)
+        self.stop_btn = QPushButton("⏹")
+        self.stop_btn.setFixedSize(30, 25)
+        self.stop_btn.setToolTip("Остановить сценарий")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(self.stop_scenario)
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #da190b; }
+        """)
+        bottom_layout.addWidget(self.stop_btn)
         
+        self.pause_btn = QPushButton("⏸")
+        self.pause_btn.setFixedSize(30, 25)
+        self.pause_btn.setToolTip("Пауза/Возобновить")
+        self.pause_btn.setEnabled(False)
+        self.pause_btn.clicked.connect(self.pause_scenario)
+        self.pause_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #F57C00; }
+        """)
+        bottom_layout.addWidget(self.pause_btn)
+        
+        bottom_layout.addStretch()
+        
+        # Прогресс (компактный)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMaximumWidth(100)
+        self.progress_bar.setMaximumHeight(15)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #ddd;
+                border-radius: 3px;
+                height: 15px;
+            }
+            QProgressBar::chunk {
+                background-color: #4CAF50;
+                border-radius: 3px;
+            }
+        """)
+        bottom_layout.addWidget(self.progress_bar)
+        
+        # Кнопки сохранения/загрузки (компактные)
+        self.save_btn = QPushButton("💾")
+        self.save_btn.setFixedSize(25, 25)
+        self.save_btn.setToolTip("Сохранить сценарий")
+        self.save_btn.clicked.connect(self.save_scenario)
+        self.save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #1976D2; }
+        """)
+        bottom_layout.addWidget(self.save_btn)
+        
+        self.load_btn = QPushButton("📂")
+        self.load_btn.setFixedSize(25, 25)
+        self.load_btn.setToolTip("Загрузить сценарий")
+        self.load_btn.clicked.connect(self.load_scenario)
+        self.load_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #F57C00; }
+        """)
+        bottom_layout.addWidget(self.load_btn)
+        
+        layout.addLayout(bottom_layout)
+        
+        # Статус (компактный)
+        status_layout = QHBoxLayout()
+        status_layout.setSpacing(5)
+        
+        self.steps_count_label = QLabel("0 шагов")
+        self.steps_count_label.setStyleSheet("color: #666; font-size: 8px;")
+        status_layout.addWidget(self.steps_count_label)
+        
+        status_layout.addStretch()
+        
+        self.status_label = QLabel("Режим: Ручной")
+        self.status_label.setStyleSheet("color: #4CAF50; font-size: 8px;")
+        status_layout.addWidget(self.status_label)
+        
+        layout.addLayout(status_layout)
+            
     def _create_steps_panel(self):
         """Создать панель со списком шагов"""
         widget = QWidget()

@@ -1,35 +1,55 @@
-import sys
 import json
 import os
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QPushButton, QLabel, QGridLayout,
-                             QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox,
-                             QCheckBox, QSlider, QFrame, QSplitter, QTabWidget,
-                             QScrollArea, QListWidget, QListWidgetItem,
-                             QDialog, QDialogButtonBox, QFormLayout,
-                             QLineEdit, QMessageBox)
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QThreadPool
-from PyQt5.QtGui import QFont, QColor, QPalette
+import sys
 
-from core.signal_generator import SignalGenerator
+from PyQt5.QtCore import Qt, QThread, QThreadPool, QTimer, pyqtSignal
+from PyQt5.QtGui import QColor, QFont, QPalette
+from PyQt5.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSlider,
+    QSpinBox,
+    QSplitter,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from _version import __full_version__
 from core.channel import AnalogChannel
+from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
-from ui.plot_widget import PlotWindow
-from ui.logger_window import LoggerWindow
-from ui.connection_panel import ConnectionPanel
-from ui.control_panel import ControlPanel
-from ui.interval_control import IntervalControl
 from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
 from plc.plc_interface import PLCInterface
 from plc.plc_register_view import PLCRegisterView
+from scenario.scenario_engine import ScenarioEngine, ScenarioMode
 
 # НОВЫЕ ИМПОРТЫ ДЛЯ СЦЕНАРИЕВ
 from scenario.scenario_model import Scenario, ScenarioStep
-from scenario.scenario_engine import ScenarioEngine, ScenarioMode
 from scenario.scenario_widget import ScenarioWidget
-
-from _version import __full_version__
+from ui.connection_panel import ConnectionPanel
+from ui.control_panel import ControlPanel
+from ui.interval_control import IntervalControl
+from ui.logger_window import LoggerWindow
+from ui.plot_widget import PlotWindow
 
 
 class ChannelSettingsDialog(QDialog):
@@ -511,13 +531,13 @@ class MainWindow(QMainWindow):
         left_layout = QVBoxLayout()
         left_panel.setLayout(left_layout)
         
-        # Панель подключения
+        # Панель подключения (сворачиваемая)
         self.connection_panel = ConnectionPanel()
         self.connection_panel.connection_changed.connect(self.on_connection_changed)
         self.connection_panel.connected.connect(self.on_connection_status_changed)
         left_layout.addWidget(self.connection_panel)
         
-        # Панель управления
+        # Панель управления (сворачиваемая)
         self.control_panel = ControlPanel()
         self.control_panel.start_stop_clicked.connect(self.toggle_generation)
         self.control_panel.reset_clicked.connect(self.reset_signals)
@@ -527,15 +547,27 @@ class MainWindow(QMainWindow):
         self.control_panel.save_channels_clicked.connect(self.save_channels)
         left_layout.addWidget(self.control_panel)
         
-        # Интервал обновления
+        # Интервал обновления (сворачиваемый)
         self.interval_control = IntervalControl()
         self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)
         self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
         left_layout.addWidget(self.interval_control)
         
-        # НОВЫЙ ВИДЖЕТ - КОНСТРУКТОР СЦЕНАРИЕВ
+        # КОНСТРУКТОР СЦЕНАРИЕВ (сворачиваемый, с ограничением высоты)
+        from scenario.scenario_widget import ScenarioWidget
+        from ui.collapsible_groupbox import CollapsibleGroupBox
+        
+        # Оборачиваем сценарий в сворачиваемый GroupBox
+        scenario_group = CollapsibleGroupBox("🎬 Сценарии", self, collapsed=True)  # По умолчанию свернут
+        scenario_layout = QVBoxLayout()
+        scenario_group.setLayout(scenario_layout)
+        
         self.scenario_widget = ScenarioWidget(self.generator, self.scenario_engine, self)
-        left_layout.addWidget(self.scenario_widget)
+        # Ограничиваем высоту виджета сценария
+        self.scenario_widget.setMaximumHeight(250)
+        scenario_layout.addWidget(self.scenario_widget)
+        
+        left_layout.addWidget(scenario_group)
         
         # Сетка каналов
         scroll = QScrollArea()
