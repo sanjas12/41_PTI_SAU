@@ -1,7 +1,6 @@
 import sys
 import json
 import os
-import time
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QLabel, QGridLayout,
                              QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox,
@@ -24,6 +23,12 @@ from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
 from plc.plc_interface import PLCInterface
 from plc.plc_register_view import PLCRegisterView
+
+# НОВЫЕ ИМПОРТЫ ДЛЯ СЦЕНАРИЕВ
+from scenario.scenario_model import Scenario, ScenarioStep
+from scenario.scenario_engine import ScenarioEngine, ScenarioMode
+from scenario.scenario_widget import ScenarioWidget
+
 from _version import __full_version__
 
 
@@ -125,8 +130,8 @@ class ChannelWidget(QFrame):
     """Виджет для отображения и управления одним каналом"""
     
     channel_selected = pyqtSignal(int)
-    channel_type_changed = pyqtSignal(int, str)  # channel_id, signal_type
-    channel_settings_changed = pyqtSignal(int)  # channel_id
+    channel_type_changed = pyqtSignal(int, str)
+    channel_settings_changed = pyqtSignal(int)
     
     def __init__(self, channel: AnalogChannel, parent=None):
         super().__init__(parent)
@@ -152,7 +157,7 @@ class ChannelWidget(QFrame):
         layout.setSpacing(2)
         layout.setContentsMargins(5, 5, 5, 5)
         
-        # Имя канала (кликабельно для выбора графика)
+        # Имя канала
         self.name_label = QLabel(f"Ch{self.channel.id+1}: {self.channel.name}")
         self.name_label.setAlignment(Qt.AlignCenter)
         self.name_label.setFont(QFont("Arial", 8, QFont.Bold))
@@ -167,7 +172,7 @@ class ChannelWidget(QFrame):
         self.value_label.setStyleSheet("color: #0066CC;")
         layout.addWidget(self.value_label)
         
-        # Мини-индикатор (полоска) с границами
+        # Мини-индикатор
         self.bar_frame = QFrame()
         bar_layout = QVBoxLayout()
         bar_layout.setContentsMargins(0, 0, 0, 0)
@@ -176,7 +181,7 @@ class ChannelWidget(QFrame):
         self.bar.setStyleSheet("background-color: #4CAF50; border-radius: 2px;")
         bar_layout.addWidget(self.bar)
         
-        # Границы (мин/макс)
+        # Границы
         bounds_layout = QHBoxLayout()
         bounds_layout.setContentsMargins(0, 0, 0, 0)
         self.min_label = QLabel(f"{self.channel.min_value:.0f}")
@@ -193,7 +198,7 @@ class ChannelWidget(QFrame):
         self.bar_frame.setLayout(bar_layout)
         layout.addWidget(self.bar_frame)
         
-        # Выпадающий список для выбора типа сигнала
+        # Выбор типа сигнала
         self.type_combo = QComboBox()
         self.type_combo.addItems([st.name.capitalize() for st in SignalType])
         current_type = self.channel.signal_type.name.capitalize()
@@ -218,7 +223,7 @@ class ChannelWidget(QFrame):
         """)
         layout.addWidget(self.type_combo)
         
-        # Кнопка настроек (шестеренка)
+        # Кнопка настроек
         settings_layout = QHBoxLayout()
         settings_layout.setContentsMargins(0, 0, 0, 0)
         
@@ -256,7 +261,6 @@ class ChannelWidget(QFrame):
         self.channel_selected.emit(self.channel.id)
         
     def on_type_changed(self, text: str):
-        """Изменен тип сигнала"""
         try:
             signal_type = SignalType[text.upper()]
             self.channel.signal_type = signal_type
@@ -265,12 +269,10 @@ class ChannelWidget(QFrame):
             pass
         
     def open_settings(self):
-        """Открыть диалог настроек канала"""
         dialog = ChannelSettingsDialog(self.channel, self)
         if dialog.exec_() == QDialog.Accepted:
             settings = dialog.get_settings()
             
-            # Применяем настройки
             self.channel.name = settings['name']
             self.channel.min_value = settings['min_value']
             self.channel.max_value = settings['max_value']
@@ -280,12 +282,10 @@ class ChannelWidget(QFrame):
             self.channel.signal_type = SignalType[settings['signal_type']]
             self.channel.enabled = settings['enabled']
             
-            # Обновляем отображение
             self.name_label.setText(f"Ch{self.channel.id+1}: {self.channel.name}")
             self.min_label.setText(f"{self.channel.min_value:.0f}")
             self.max_label.setText(f"{self.channel.max_value:.0f}")
             
-            # Обновляем выпадающий список
             current_type = self.channel.signal_type.name.capitalize()
             index = self.type_combo.findText(current_type)
             if index >= 0:
@@ -294,7 +294,6 @@ class ChannelWidget(QFrame):
             self.enabled_check.setChecked(self.channel.enabled)
             self.update_display()
             
-            # Отправляем сигнал об изменении
             self.channel_settings_changed.emit(self.channel.id)
         
     def on_enabled_changed(self, state):
@@ -311,12 +310,10 @@ class ChannelWidget(QFrame):
             self.settings_btn.setEnabled(True)
             
     def update_display(self):
-        """Обновить отображение значения"""
         if self.channel.enabled:
             value = self.channel.current_value
             self.value_label.setText(f"{value:.1f}")
             
-            # Обновляем полоску с учетом границ
             range_val = self.channel.max_value - self.channel.min_value
             if range_val > 0:
                 percent = (value - self.channel.min_value) / range_val
@@ -335,13 +332,11 @@ class ChannelWidget(QFrame):
             self.bar.setStyleSheet("background-color: #cccccc; border-radius: 2px;")
             
     def update_channel(self, channel: AnalogChannel):
-        """Обновить данные канала"""
         self.channel = channel
         self.name_label.setText(f"Ch{channel.id+1}: {channel.name}")
         self.min_label.setText(f"{channel.min_value:.0f}")
         self.max_label.setText(f"{channel.max_value:.0f}")
         
-        # Обновляем выпадающий список
         current_type = channel.signal_type.name.capitalize()
         index = self.type_combo.findText(current_type)
         if index >= 0:
@@ -354,25 +349,26 @@ class ChannelWidget(QFrame):
 class MainWindow(QMainWindow):
     """Главное окно приложения"""
     
-    # Имя файла для сохранения настроек каналов
     CHANNELS_CONFIG_FILE = "channels_config.json"
     
     def __init__(self):
         super().__init__()
         self.setWindowTitle(__full_version__)
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(100, 100, 1400, 900)
         
         # Путь к файлу конфигурации
         self.config_path = self._get_config_path()
         
         # Создаем генератор с 20 каналами
         self.generator = SignalGenerator()
-        
-        # Загружаем настройки каналов или создаем стандартные
         self._setup_channels()
         
         # Создаем Modbus клиент
         self.modbus = ModbusClientWrapper()
+        
+        # Создаем движок сценариев
+        self.scenario_engine = ScenarioEngine(self.generator, self)
+        self.scenario_engine.log_signal.connect(self.log)
         
         # Создаем интерфейс для PLC
         self.plc_interface = PLCInterface(
@@ -414,7 +410,6 @@ class MainWindow(QMainWindow):
         
     def _setup_channels(self):
         """Создать каналы с загрузкой сохраненных настроек"""
-        # Загружаем сохраненные настройки
         saved_config = self._load_channels_config()
         
         signal_types = [SignalType.SINE, SignalType.SQUARE, 
@@ -424,7 +419,6 @@ class MainWindow(QMainWindow):
         for i in range(20):
             stype = signal_types[i % len(signal_types)]
             
-            # Если есть сохраненные настройки для этого канала
             if saved_config and str(i) in saved_config:
                 cfg = saved_config[str(i)]
                 channel = AnalogChannel(
@@ -439,7 +433,6 @@ class MainWindow(QMainWindow):
                     enabled=cfg.get('enabled', True)
                 )
             else:
-                # Стандартные настройки
                 min_val = (i % 5) * 10
                 max_val = 100 - (i % 3) * 5
                 channel = AnalogChannel(
@@ -495,15 +488,16 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
+        # Горизонтальный разделитель: левая панель и правая панель
         main_layout = QHBoxLayout()
         central_widget.setLayout(main_layout)
         
-        # Левая панель - подключение и каналы
+        # ЛЕВАЯ ПАНЕЛЬ
         left_panel = QWidget()
         left_layout = QVBoxLayout()
         left_panel.setLayout(left_layout)
         
-        # Панель подключения к ПЛК
+        # Панель подключения
         self.connection_panel = ConnectionPanel()
         self.connection_panel.connection_changed.connect(self.on_connection_changed)
         self.connection_panel.connected.connect(self.on_connection_status_changed)
@@ -521,9 +515,13 @@ class MainWindow(QMainWindow):
         
         # Интервал обновления
         self.interval_control = IntervalControl()
-        self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)  # ← ЭТОТ МЕТОД НУЖНО ДОБАВИТЬ
+        self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)
         self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
         left_layout.addWidget(self.interval_control)
+        
+        # НОВЫЙ ВИДЖЕТ - КОНСТРУКТОР СЦЕНАРИЕВ
+        self.scenario_widget = ScenarioWidget(self.generator, self.scenario_engine, self)
+        left_layout.addWidget(self.scenario_widget)
         
         # Сетка каналов
         scroll = QScrollArea()
@@ -550,14 +548,12 @@ class MainWindow(QMainWindow):
         scroll.setWidget(grid_widget)
         left_layout.addWidget(scroll)
         
-        main_layout.addWidget(left_panel)
-        
-        # Правая панель - информационная
+        # ПРАВАЯ ПАНЕЛЬ - информация
         right_panel = self._create_info_panel()
         main_layout.addWidget(right_panel)
         
         # Устанавливаем пропорции
-        main_layout.setStretchFactor(left_panel, 2)
+        main_layout.setStretchFactor(left_panel, 3)
         main_layout.setStretchFactor(right_panel, 1)
         
         self.setStyleSheet("""
@@ -581,6 +577,12 @@ class MainWindow(QMainWindow):
         line.setFrameShape(QFrame.HLine)
         line.setFrameShadow(QFrame.Sunken)
         layout.addWidget(line)
+        
+        # Режим работы
+        layout.addWidget(QLabel("Режим:"))
+        self.mode_label = QLabel("Ручной")
+        self.mode_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+        layout.addWidget(self.mode_label)
         
         # Выбранный канал
         layout.addWidget(QLabel("Выбранный канал:"))
@@ -634,7 +636,6 @@ class MainWindow(QMainWindow):
             )
         
     def on_channel_settings_changed(self, channel_id: int):
-        """Изменены настройки канала"""
         channel = self.generator.get_channel(channel_id)
         if channel:
             self.log(
@@ -644,41 +645,39 @@ class MainWindow(QMainWindow):
                 f"амплитуда: {channel.amplitude:.0f}%)",
                 "info"
             )
-            
-            # Автоматически сохраняем настройки при изменении
             self._save_channels_config()
             
-            # Если канал выбран для отображения, обновляем информацию
             if self.selected_channel_label.text().startswith(f"Канал {channel_id+1}"):
                 self.selected_bounds_label.setText(f"{channel.min_value:.0f} - {channel.max_value:.0f}")
         
     def on_channel_type_changed(self, channel_id: int, type_name: str):
-        """Изменен тип сигнала канала"""
         channel = self.generator.get_channel(channel_id)
         if channel:
             self.log(f"Канал {channel_id+1}: тип сигнала изменен на {type_name}", "info")
-            
-            # Автоматически сохраняем настройки при изменении
             self._save_channels_config()
             
             if self.selected_channel_label.text().startswith(f"Канал {channel_id+1}"):
                 self.selected_type_label.setText(type_name)
                 
-    def on_interval_changed(self, interval: float):
-        """Изменен интервал обновления сигналов"""
+    def on_signal_interval_changed(self, interval: float):
         self.generator.set_update_interval(interval)
         freq = 1.0 / interval if interval > 0 else 0
-        self.log(f"Интервал обновления изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
+        self.log(f"Интервал обновления сигналов изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
         
-        self.status_label.setText(f"⏱ Интервал: {interval:.3f} с")
+        self.status_label.setText(f"⏱ Сигналы: {interval:.3f} с")
         self.status_label.setStyleSheet("color: #FF9800; font-weight: bold; font-size: 12px;")
         
         from PyQt5.QtCore import QTimer
         QTimer.singleShot(2000, lambda: self.status_label.setText("● Работает"))
         QTimer.singleShot(2000, lambda: self.status_label.setStyleSheet("color: #00CC00; font-weight: bold; font-size: 12px;"))
+
+    def on_plc_interval_changed(self, interval: float):
+        if hasattr(self, 'plc_interface'):
+            self.plc_interface.set_write_interval(interval)
+            freq = 1.0 / interval if interval > 0 else 0
+            self.log(f"Интервал записи в PLC изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
         
     def on_connection_changed(self, params):
-        """Изменены параметры подключения"""
         host = params['host']
         port = params['port']
         unit_id = params['unit_id']
@@ -691,7 +690,6 @@ class MainWindow(QMainWindow):
             self.log(f"Ошибка настройки подключения: {e}", "error")
             
     def on_connection_status_changed(self, connected):
-        """Изменен статус подключения"""
         if connected:
             def after_connect(ok):
                 if ok:
@@ -709,14 +707,12 @@ class MainWindow(QMainWindow):
             self.log("Соединение закрыто", "info")
             
     def _submit(self, fn, on_result, *args, **kwargs):
-        """Выполнить асинхронную операцию"""
         job = Runnable(fn, *args, **kwargs)
         job.signals.result.connect(on_result)
         job.signals.error.connect(lambda e: self.log(f"Ошибка: {e}", "error"))
         self.thread_pool.start(job)
         
     def log(self, message: str, level: str = "info"):
-        """Добавить сообщение в журнал"""
         if self.logger_window and self.logger_window.isVisible():
             self.logger_window.log(message, level)
         else:
@@ -762,7 +758,7 @@ class MainWindow(QMainWindow):
             self.log("PLC интерфейс отключен", "warning")
             
     def on_plc_debug_data(self, debug_info: dict):
-        print(f"\n{time.time()} [PLC_DEBUG] Запись #{debug_info['write_count']} - "
+        print(f"\n[PLC_DEBUG] Запись #{debug_info['write_count']} - "
               f"{len(debug_info.get('registers', []))} регистров записано")
         
         if self.logger_window and self.logger_window.isVisible():
@@ -793,6 +789,11 @@ class MainWindow(QMainWindow):
         if not self.is_running:
             return
             
+        # Проверяем, не запущен ли сценарий
+        if self.scenario_engine.is_running():
+            # Если сценарий запущен, не обновляем сигналы вручную
+            return
+            
         self.generator.update(dt=0.01)
         
         active_count = 0
@@ -811,7 +812,6 @@ class MainWindow(QMainWindow):
             self.frame_count = 0
             
     def closeEvent(self, event):
-        # Сохраняем настройки перед закрытием
         self._save_channels_config()
         self.log("Настройки каналов сохранены", "info")
         
@@ -824,31 +824,3 @@ class MainWindow(QMainWindow):
         self.plc_interface.disconnect()
         self.modbus.close()
         event.accept()
-
-    def on_plc_interval_changed(self, interval: float):
-        """Изменен интервал записи в PLC"""
-        # Обновляем интервал в PLC интерфейсе
-        self.plc_interface.set_write_interval(interval)
-        freq = 1.0 / interval if interval > 0 else 0
-        self.log(f"Интервал записи в PLC изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
-
-    def on_signal_interval_changed(self, interval: float):
-        """Изменен интервал обновления сигналов"""
-        self.generator.set_update_interval(interval)
-        freq = 1.0 / interval if interval > 0 else 0
-        self.log(f"Интервал обновления сигналов изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
-        
-        self.status_label.setText(f"⏱ Сигналы: {interval:.3f} с")
-        self.status_label.setStyleSheet("color: #FF9800; font-weight: bold; font-size: 12px;")
-        
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(2000, lambda: self.status_label.setText("● Работает"))
-        QTimer.singleShot(2000, lambda: self.status_label.setStyleSheet("color: #00CC00; font-weight: bold; font-size: 12px;"))
-
-    def on_plc_interval_changed(self, interval: float):
-        """Изменен интервал записи в PLC"""
-        # Обновляем интервал в PLC интерфейсе
-        if hasattr(self, 'plc_interface'):
-            self.plc_interface.set_write_interval(interval)
-            freq = 1.0 / interval if interval > 0 else 0
-            self.log(f"Интервал записи в PLC изменен: {interval:.3f} с ({freq:.1f} Гц)", "info")
