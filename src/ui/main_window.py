@@ -535,19 +535,37 @@ class MainWindow(QMainWindow):
         self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
         left_layout.addWidget(self.interval_control)
         
-        # КОНСТРУКТОР СЦЕНАРИЕВ (сворачиваемый, с ограничением высоты)
+        # КОНСТРУКТОР СЦЕНАРИЕВ
         from scenario.scenario_widget import ScenarioWidget
         
-        # Оборачиваем сценарий в сворачиваемый GroupBox
-        scenario_group = CollapsibleGroupBox("🎬 Сценарии", self, collapsed=False)  # ← РАЗВЕРНУТ ПО УМОЛЧАНИЮ
+        scenario_group = QGroupBox("🎬 Сценарии")
+        scenario_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #d0d0d0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+                background-color: #fafafa;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+                background-color: #fafafa;
+            }
+        """)
+        
         scenario_layout = QVBoxLayout()
         scenario_group.setLayout(scenario_layout)
-
+        
         self.scenario_widget = ScenarioWidget(self.generator, self.scenario_engine, self)
-        # Ограничиваем высоту виджета сценария
-        self.scenario_widget.setMaximumHeight(200)  # ← УМЕНЬШИЛИ ВЫСОТУ
+        self.scenario_widget.setMinimumHeight(150)
+        self.scenario_widget.setMaximumHeight(200)
+        self.scenario_widget.show()
         scenario_layout.addWidget(self.scenario_widget)
-
+        
+        scenario_group.show()
         left_layout.addWidget(scenario_group)
         
         # Сетка каналов

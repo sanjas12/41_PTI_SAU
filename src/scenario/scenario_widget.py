@@ -204,8 +204,9 @@ class ScenarioWidget(QWidget):
         layout.setSpacing(2)
         self.setLayout(layout)
         
-        # Устанавливаем максимальную высоту для компактности
-        self.setMaximumHeight(180)
+        # Устанавливаем минимальную высоту, чтобы виджет был виден
+        self.setMinimumHeight(150)  # ← ДОБАВЛЕНО
+        self.setMaximumHeight(200)
         
         # Заголовок
         title_layout = QHBoxLayout()
@@ -246,6 +247,7 @@ class ScenarioWidget(QWidget):
         
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setMinimumHeight(60)  # ← ДОБАВЛЕНО
         scroll.setMaximumHeight(100)
         scroll.setStyleSheet("""
             QScrollArea { 
@@ -388,6 +390,10 @@ class ScenarioWidget(QWidget):
         status_layout.addWidget(self.status_label)
         
         layout.addLayout(status_layout)
+        
+        # ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ ВИДЖЕТ
+        self.show()
+        self.setVisible(True)
         
     def update_step_list(self):
         """Обновить список шагов"""
