@@ -806,46 +806,41 @@ class MainWindow(QMainWindow):
             
         # Проверяем, не запущен ли сценарий
         if hasattr(self, 'scenario_engine') and self.scenario_engine.is_running():
+            # Если сценарий запущен, не обновляем сигналы вручную
             return
             
         self.generator.update(dt=0.01)
         
         active_count = 0
         
-        # Обновляем виджеты каналов с защитой от ошибок
+        # Обновляем виджеты каналов
         for i, widget in enumerate(self.channel_widgets):
             if i >= len(self.generator.channels):
                 break
                 
             try:
-                # Проверяем, существует ли виджет
                 if widget is None:
                     continue
                     
-                # Проверяем, не удален ли виджет
                 try:
                     widget.isHidden()
                 except RuntimeError:
-                    # Виджет уже удален, пропускаем
                     continue
                     
                 widget.update_display()
                 if self.generator.channels[i].enabled:
                     active_count += 1
                     
-            except (RuntimeError, AttributeError) as e:
-                # Игнорируем ошибки удаленных виджетов
-                print(f"[WARN] Ошибка обновления виджета {i}: {e}")
+            except (RuntimeError, AttributeError):
                 continue
                         
         # Обновляем статистику
         try:
             if self.stats_label:
-                self.stats_label.setText(f"Каналов: 20\nАктивных: {active_count}")
+                self.stats_label.setText(f"Каналов: {len(self.generator.channels)}\nАктивных: {active_count}")
         except (RuntimeError, AttributeError):
             pass
         
-        # Обновляем FPS
         self.frame_count += 1
         if self.frame_count >= 50:
             fps = self.frame_count * 2

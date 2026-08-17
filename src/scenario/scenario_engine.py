@@ -1,12 +1,14 @@
-from typing import List, Optional, Dict, Tuple
-from PyQt5.QtCore import QObject, pyqtSignal, QTimer, QMutex, QMutexLocker
-import numpy as np
 import time
 from enum import Enum
+from typing import Dict, List, Optional, Tuple
 
-from core.signal_generator import SignalGenerator
+import numpy as np
+from PyQt5.QtCore import QMutex, QMutexLocker, QObject, QTimer, pyqtSignal
+
 from core.channel import AnalogChannel
+from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
+
 from .scenario_model import Scenario, ScenarioStep
 
 
@@ -106,11 +108,17 @@ class ScenarioEngine(QObject):
             # Восстанавливаем настройки каналов
             self._restore_channel_configs()
             
+            # Включаем все каналы обратно
+            for channel in self.generator.channels:
+                channel.enabled = True
+                # Сбрасываем время для корректной генерации
+                channel.time = 0
+            
             self.mode = ScenarioMode.MANUAL
             self.mode_changed.emit("manual")
             self.scenario_stopped.emit()
-            self.log_signal.emit("Сценарий остановлен", "info")
-            
+            self.log_signal.emit("Сценарий остановлен, каналы восстановлены", "info")
+                
     def pause_scenario(self):
         """Приостановить сценарий"""
         if self._is_running and self.mode == ScenarioMode.SCENARIO:
@@ -153,6 +161,8 @@ class ScenarioEngine(QObject):
                 channel.offset = config['offset']
                 channel.min_value = config['min_value']
                 channel.max_value = config['max_value']
+                # Сбрасываем время для корректной генерации
+                channel.time = 0
         self._original_channel_configs.clear()
         
     def _apply_step(self, step_index: int):
@@ -249,15 +259,26 @@ class ScenarioEngine(QObject):
         # Восстанавливаем настройки каналов
         self._restore_channel_configs()
         
+        # Включаем все каналы
+        for channel in self.generator.channels:
+            channel.enabled = True
+            channel.time = 0
+        
         self.mode = ScenarioMode.MANUAL
         self.mode_changed.emit("manual")
         self.scenario_finished.emit()
-        self.log_signal.emit("Сценарий завершен", "success")
+        self.log_signal.emit("Сценарий завершен, каналы восстановлены", "success")
         
     def set_manual_mode(self):
         """Переключиться в ручной режим"""
         if self.mode == ScenarioMode.SCENARIO or self.mode == ScenarioMode.PAUSED:
             self.stop_scenario()
+        
+        # Убеждаемся, что все каналы включены
+        for channel in self.generator.channels:
+            channel.enabled = True
+            channel.time = 0
+        
         self.mode = ScenarioMode.MANUAL
         self.mode_changed.emit("manual")
         
@@ -277,3 +298,10 @@ class ScenarioEngine(QObject):
         if total <= 0:
             return 0.0
         return min(100, (self._scenario_time / total) * 100)
+
+    def enable_all_channels(self, enabled: bool = True):
+        """Включить/выключить все каналы"""
+        for channel in self.generator.channels:
+            channel.enabled = enabled
+            if enabled:
+                channel.time = 0
