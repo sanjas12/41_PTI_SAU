@@ -494,22 +494,21 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        # Горизонтальный разделитель: левая панель и правая панель
         main_layout = QHBoxLayout()
         central_widget.setLayout(main_layout)
         
-        # ЛЕВАЯ ПАНЕЛЬ
         left_panel = QWidget()
+        left_panel.setMinimumHeight(700)
         left_layout = QVBoxLayout()
         left_panel.setLayout(left_layout)
         
-        # Панель подключения (сворачиваемая)
+        # Панель подключения
         self.connection_panel = ConnectionPanel()
         self.connection_panel.connection_changed.connect(self.on_connection_changed)
         self.connection_panel.connected.connect(self.on_connection_status_changed)
         left_layout.addWidget(self.connection_panel)
         
-        # Панель управления (сворачиваемая)
+        # Панель управления
         self.control_panel = ControlPanel()
         self.control_panel.start_stop_clicked.connect(self.toggle_generation)
         self.control_panel.reset_clicked.connect(self.reset_signals)
@@ -519,65 +518,45 @@ class MainWindow(QMainWindow):
         self.control_panel.save_channels_clicked.connect(self.save_channels)
         left_layout.addWidget(self.control_panel)
         
-        # Интервал обновления (сворачиваемый)
+        # Интервал обновления
         self.interval_control = IntervalControl()
         self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)
         self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
         left_layout.addWidget(self.interval_control)
         
+        # ============================================================
+        # КОНСТРУКТОР СЦЕНАРИЕВ - БЕЗ GROUPBOX (прямое добавление)
+        # ============================================================
         
-        # КОНСТРУКТОР СЦЕНАРИЕВ
-        # Создаем GroupBox с ярким фоном для проверки
-        scenario_group = QGroupBox("🎬 Сценарии")
-        scenario_group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
+        # Создаем виджет сценария напрямую
+        self.scenario_widget = ScenarioWidget(self.generator, self.scenario_engine, self)
+        self.scenario_widget.setMinimumHeight(160)
+        self.scenario_widget.setMaximumHeight(200)
+        self.scenario_widget.setStyleSheet("""
+            ScenarioWidget {
+                background-color: #E8F5E9;
                 border: 3px solid #4CAF50;
                 border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-                background-color: #E8F5E9;
-                min-height: 180px;
-                max-height: 220px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-                background-color: #E8F5E9;
+                padding: 5px;
             }
         """)
-
-        scenario_layout = QVBoxLayout()
-        scenario_layout.setContentsMargins(5, 5, 5, 5)
-        scenario_group.setLayout(scenario_layout)
-
-        # Создаем виджет сценария
-        self.scenario_widget = ScenarioWidget(self.generator, self.scenario_engine, self)
-        self.scenario_widget.setMinimumHeight(150)
-        self.scenario_widget.setMaximumHeight(180)
-        self.scenario_widget.setStyleSheet("background-color: #FFF3E0; border: 2px solid #FF9800; border-radius: 4px;")
+        
+        # ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ
+        self.scenario_widget.setVisible(True)
         self.scenario_widget.show()
-        scenario_layout.addWidget(self.scenario_widget)
-
-        # ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ GROUPBOX
-        scenario_group.setVisible(True)
-        scenario_group.show()
-        scenario_group.raise_()
-
+        self.scenario_widget.raise_()
+        
         # Добавляем в левую панель
-        left_layout.addWidget(scenario_group)
-
-        # ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ ВСЕ
-        scenario_group.update()
-        self.scenario_widget.update()
-        left_panel.update()
-        self.update()
-
-        print(f"[MAIN] scenario_group visible после show: {scenario_group.isVisible()}")
-        print(f"[MAIN] scenario_widget visible после show: {self.scenario_widget.isVisible()}")
-        print(f"[MAIN] scenario_widget geometry после show: {self.scenario_widget.geometry()}")
-
+        left_layout.addWidget(self.scenario_widget)
+        
+        # Добавляем разделитель для наглядности
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        left_layout.addWidget(line)
+        
+        # ============================================================
+        
         # Сетка каналов
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -615,6 +594,14 @@ class MainWindow(QMainWindow):
             QMainWindow { background-color: #f5f5f5; }
             QLabel { color: #333333; }
         """)
+        
+        # Принудительное обновление
+        left_panel.update()
+        self.update()
+        
+        print(f"[MAIN] setup_ui завершен")
+        print(f"[MAIN] scenario_widget visible: {self.scenario_widget.isVisible()}")
+        print(f"[MAIN] scenario_widget geometry: {self.scenario_widget.geometry()}")
         
     def _create_info_panel(self):
         """Создать информационную панель"""
