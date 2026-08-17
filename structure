@@ -13,7 +13,12 @@
 │   │   ├── resources/          # .qrc, иконки, стили
 │   │   ├── logger_window.py    # ← НОВЫЙ ФАЙЛ (окно журнала)    
 │       └── connection_panel.py     # ← НОВЫЙ ФАЙЛ
-│   │
+│   ├── scenario/
+│   ├── __init__.py
+│   ├── scenario_model.py      # Модели данных
+│   ├── scenario_engine.py     # Движок воспроизведения
+│   └── scenario_widget.py     # Виджет конструктора
+
 │   ├── core/                   # Бизнес-логика
 │   │   ├── __init__.py
 │   │   ├── signal_generator.py # Генерация сигналов
