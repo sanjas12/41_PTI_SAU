@@ -1,19 +1,41 @@
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                             QLabel, QListWidget, QListWidgetItem, QGroupBox,
-                             QSpinBox, QDoubleSpinBox, QComboBox, QCheckBox,
-                             QFileDialog, QMessageBox, QSplitter, QFrame,
-                             QProgressBar, QScrollArea, QMenu, QAction,
-                             QInputDialog, QLineEdit, QFormLayout, QDialog,
-                             QDialogButtonBox)
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QMimeData, QPoint
-from PyQt5.QtGui import QDrag, QPixmap, QColor, QFont
 import json
 import os
 
+from PyQt5.QtCore import QMimeData, QPoint, Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QColor, QDrag, QFont, QPixmap
+from PyQt5.QtWidgets import (
+    QAction,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMenu,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
+
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
-from .scenario_model import Scenario, ScenarioStep
+
 from .scenario_engine import ScenarioEngine, ScenarioMode
+from .scenario_model import Scenario, ScenarioStep
 
 
 class StepWidget(QFrame):
@@ -183,7 +205,7 @@ class ScenarioWidget(QWidget):
         self.setLayout(layout)
         
         # Устанавливаем максимальную высоту для компактности
-        self.setMaximumHeight(220)
+        self.setMaximumHeight(180)
         
         # Заголовок
         title_layout = QHBoxLayout()
