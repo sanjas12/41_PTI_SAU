@@ -409,8 +409,8 @@ class ScenarioWidget(QWidget):
         self.setStyleSheet("background-color: #FF6B6B; border: 3px solid #FF0000;")
         
         # ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ
-        self.show()
         self.setVisible(True)
+        self.show()
         self.raise_()
         
         print("[SCENARIO_WIDGET] setup_ui завершен")
