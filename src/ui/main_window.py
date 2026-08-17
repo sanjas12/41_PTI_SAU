@@ -1,11 +1,9 @@
 import json
 import os
-import sys
 
-from PyQt5.QtCore import Qt, QThread, QThreadPool, QTimer, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QPalette
+from PyQt5.QtCore import Qt, QThreadPool, QTimer, pyqtSignal
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -18,16 +16,10 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSlider,
-    QSpinBox,
-    QSplitter,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -40,12 +32,10 @@ from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
 from plc.plc_interface import PLCInterface
 from plc.plc_register_view import PLCRegisterView
-from scenario.scenario_engine import ScenarioEngine, ScenarioMode
+from scenario.scenario_engine import ScenarioEngine
+from scenario.scenario_widget import ScenarioWidget
 
 # Импорты для сценариев - ВЫНОСИМ В КОНЕЦ ФАЙЛА
-from scenario.scenario_model import Scenario, ScenarioStep
-from scenario.scenario_widget import ScenarioWidget
-from ui.collapsible_groupbox import CollapsibleGroupBox
 from ui.connection_panel import ConnectionPanel
 from ui.control_panel import ControlPanel
 from ui.interval_control import IntervalControl
@@ -535,39 +525,59 @@ class MainWindow(QMainWindow):
         self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
         left_layout.addWidget(self.interval_control)
         
-        # КОНСТРУКТОР СЦЕНАРИЕВ
-        from scenario.scenario_widget import ScenarioWidget
         
+        # КОНСТРУКТОР СЦЕНАРИЕВ
+        # Создаем GroupBox с ярким фоном для проверки
         scenario_group = QGroupBox("🎬 Сценарии")
         scenario_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
-                border: 2px solid #d0d0d0;
+                border: 3px solid #4CAF50;
                 border-radius: 8px;
                 margin-top: 10px;
                 padding-top: 10px;
-                background-color: #fafafa;
+                background-color: #E8F5E9;
+                min-height: 180px;
+                max-height: 220px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 5px 0 5px;
-                background-color: #fafafa;
+                background-color: #E8F5E9;
             }
         """)
-        
+
         scenario_layout = QVBoxLayout()
+        scenario_layout.setContentsMargins(5, 5, 5, 5)
         scenario_group.setLayout(scenario_layout)
-        
+
+        # Создаем виджет сценария
         self.scenario_widget = ScenarioWidget(self.generator, self.scenario_engine, self)
         self.scenario_widget.setMinimumHeight(150)
-        self.scenario_widget.setMaximumHeight(200)
+        self.scenario_widget.setMaximumHeight(180)
+        self.scenario_widget.setStyleSheet("background-color: #FFF3E0; border: 2px solid #FF9800; border-radius: 4px;")
         self.scenario_widget.show()
         scenario_layout.addWidget(self.scenario_widget)
-        
+
+        # ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ GROUPBOX
+        scenario_group.setVisible(True)
         scenario_group.show()
+        scenario_group.raise_()
+
+        # Добавляем в левую панель
         left_layout.addWidget(scenario_group)
-        
+
+        # ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ ВСЕ
+        scenario_group.update()
+        self.scenario_widget.update()
+        left_panel.update()
+        self.update()
+
+        print(f"[MAIN] scenario_group visible после show: {scenario_group.isVisible()}")
+        print(f"[MAIN] scenario_widget visible после show: {self.scenario_widget.isVisible()}")
+        print(f"[MAIN] scenario_widget geometry после show: {self.scenario_widget.geometry()}")
+
         # Сетка каналов
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
