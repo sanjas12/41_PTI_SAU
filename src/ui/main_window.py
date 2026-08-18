@@ -4,6 +4,7 @@ import os
 from PyQt5.QtCore import Qt, QThreadPool, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -21,6 +22,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSplitter,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -378,6 +380,7 @@ class MainWindow(QMainWindow):
         # Создаем движок сценариев
         self.scenario_engine = ScenarioEngine(self.generator, self)
         self.scenario_engine.log_signal.connect(self.log)
+        self.scenario_engine.mode_changed.connect(self.on_scenario_mode_changed)
         
         # Создаем интерфейс для PLC
         self.plc_interface = PLCInterface(
@@ -502,30 +505,107 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Horizontal)
         main_layout.addWidget(splitter)
         
-        # Левая колонка: сверху — обычный (не сплиттер!) блок с тремя
-        # сворачиваемыми панелями управления, снизу — вертикальный сплиттер
-        # между "Сценарии" и сеткой каналов.
-        #
-        # top_widget намеренно НЕ секция QSplitter: ConnectionPanel/ControlPanel/
-        # IntervalControl умеют сворачиваться сами (CollapsibleGroupBox), а
-        # QSplitter не подстраивает размер секции под sizeHint() содержимого —
-        # он держит фиксированный размер, пока пользователь не потянет границу
-        # руками. В обычном QVBoxLayout сворачивание работает "из коробки".
         left_container = QWidget()
         left_container_layout = QVBoxLayout()
         left_container_layout.setContentsMargins(0, 0, 0, 0)
         left_container.setLayout(left_container_layout)
         
-        # --- Верхний блок: подключение + управление + интервалы ---
-        top_widget = QWidget()
-        top_layout = QVBoxLayout()
-        top_layout.setContentsMargins(0, 0, 0, 0)
-        top_widget.setLayout(top_layout)
-        
+        # --- Общие настройки, не зависящие от режима работы ---
         self.connection_panel = ConnectionPanel()
         self.connection_panel.connection_changed.connect(self.on_connection_changed)
         self.connection_panel.connected.connect(self.on_connection_status_changed)
-        top_layout.addWidget(self.connection_panel)
+        left_container_layout.addWidget(self.connection_panel)
+        
+        self.interval_control = IntervalControl()
+        self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)
+        self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
+        left_container_layout.addWidget(self.interval_control)
+        
+        # ============================================================
+        # СЕКЦИЯ "УПРАВЛЕНИЕ КАНАЛАМИ": режим + панель режима + сетка
+        # ============================================================
+        # ControlPanel управляет именно каналами (Старт/Стоп генерации,
+        # Сброс), поэтому идеологически живёт в одной секции с сеткой
+        # каналов, а не отдельным блоком наверху. Второй режим работы тех
+        # же каналов — Сценарий. Сегментированный тумблер переключает,
+        # какая панель управления показана (ControlPanel/ScenarioWidget).
+        # Сетка каналов — часть ручного режима: видна только когда
+        # выбран "Ручной", в режиме "Сценарий" скрыта целиком.
+        from scenario.scenario_widget import ScenarioWidget
+        
+        channels_group = QGroupBox("📡 Управление каналами")
+        channels_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #d0d0d0;
+                border-radius: 8px;
+                margin-top: 8px;
+                padding-top: 8px;
+                background-color: #fafafa;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+                background-color: #fafafa;
+            }
+        """)
+        channels_group_layout = QVBoxLayout()
+        channels_group_layout.setContentsMargins(6, 10, 6, 6)
+        channels_group.setLayout(channels_group_layout)
+        
+        # --- Сегментированный тумблер: Ручной ⇄ Сценарий ---
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(0)
+        
+        self.manual_mode_btn = QPushButton("🖐 Ручной")
+        self.scenario_mode_btn = QPushButton("🎬 Сценарий")
+        for btn in (self.manual_mode_btn, self.scenario_mode_btn):
+            btn.setCheckable(True)
+            btn.setMinimumHeight(30)
+        self.manual_mode_btn.setStyleSheet("""
+            QPushButton {
+                border: 2px solid #4CAF50;
+                border-right: 1px solid #4CAF50;
+                border-top-left-radius: 6px;
+                border-bottom-left-radius: 6px;
+                background-color: white;
+                color: #4CAF50;
+                font-weight: bold;
+                padding: 4px 14px;
+            }
+            QPushButton:checked { background-color: #4CAF50; color: white; }
+        """)
+        self.scenario_mode_btn.setStyleSheet("""
+            QPushButton {
+                border: 2px solid #4CAF50;
+                border-left: 1px solid #4CAF50;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+                background-color: white;
+                color: #4CAF50;
+                font-weight: bold;
+                padding: 4px 14px;
+            }
+            QPushButton:checked { background-color: #4CAF50; color: white; }
+        """)
+        
+        self.mode_button_group = QButtonGroup(self)
+        self.mode_button_group.setExclusive(True)
+        self.mode_button_group.addButton(self.manual_mode_btn)
+        self.mode_button_group.addButton(self.scenario_mode_btn)
+        self.manual_mode_btn.setChecked(True)
+        
+        self.manual_mode_btn.clicked.connect(lambda: self.request_channel_mode("manual"))
+        self.scenario_mode_btn.clicked.connect(lambda: self.request_channel_mode("scenario"))
+        
+        mode_row.addWidget(self.manual_mode_btn)
+        mode_row.addWidget(self.scenario_mode_btn)
+        mode_row.addStretch()
+        channels_group_layout.addLayout(mode_row)
+        
+        # --- Сплиттер: [ControlPanel/ScenarioWidget] сверху, сетка каналов снизу ---
+        mode_content_splitter = QSplitter(Qt.Vertical)
         
         self.control_panel = ControlPanel()
         self.control_panel.start_stop_clicked.connect(self.toggle_generation)
@@ -534,19 +614,6 @@ class MainWindow(QMainWindow):
         self.control_panel.logger_clicked.connect(self.open_logger_window)
         self.control_panel.plc_clicked.connect(self.open_plc_view)
         self.control_panel.save_channels_clicked.connect(self.save_channels)
-        top_layout.addWidget(self.control_panel)
-        
-        self.interval_control = IntervalControl()
-        self.interval_control.signal_interval_changed.connect(self.on_signal_interval_changed)
-        self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
-        top_layout.addWidget(self.interval_control)
-        
-        left_container_layout.addWidget(top_widget)
-        
-        # --- Сплиттер: "Сценарии" / сетка каналов ---
-        left_splitter = QSplitter(Qt.Vertical)
-        
-        from scenario.scenario_widget import ScenarioWidget
         
         scenario_group = QGroupBox("🎬 Сценарии")
         scenario_group.setStyleSheet("""
@@ -565,7 +632,6 @@ class MainWindow(QMainWindow):
                 background-color: #f0f8f0;
             }
         """)
-        
         scenario_layout = QVBoxLayout()
         scenario_layout.setContentsMargins(5, 5, 5, 5)
         scenario_layout.setSpacing(3)
@@ -574,17 +640,20 @@ class MainWindow(QMainWindow):
         self.scenario_widget = ScenarioWidget(self.generator, self.scenario_engine, self)
         scenario_layout.addWidget(self.scenario_widget)
         
-        left_splitter.addWidget(scenario_group)
+        self.mode_stack = QStackedWidget()
+        self.mode_stack.addWidget(self.control_panel)   # index 0 — "manual"
+        self.mode_stack.addWidget(scenario_group)         # index 1 — "scenario"
+        mode_content_splitter.addWidget(self.mode_stack)
         
-        # --- Сетка каналов ---
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background-color: #f5f5f5; }")
+        # --- Сетка каналов: часть ручного режима, видна только в нём ---
+        self.channel_grid_scroll = QScrollArea()
+        self.channel_grid_scroll.setWidgetResizable(True)
+        self.channel_grid_scroll.setStyleSheet("QScrollArea { border: none; background-color: #f5f5f5; }")
         
-        grid_widget = QWidget()
+        self.channel_grid_widget = QWidget()
         grid_layout = QGridLayout()
         grid_layout.setSpacing(3)
-        grid_widget.setLayout(grid_layout)
+        self.channel_grid_widget.setLayout(grid_layout)
         
         self.channel_widgets = []
         cols = 4
@@ -598,14 +667,15 @@ class MainWindow(QMainWindow):
             grid_layout.addWidget(widget, row, col)
             self.channel_widgets.append(widget)
             
-        scroll.setWidget(grid_widget)
-        left_splitter.addWidget(scroll)
+        self.channel_grid_scroll.setWidget(self.channel_grid_widget)
+        mode_content_splitter.addWidget(self.channel_grid_scroll)
         
-        left_splitter.setStretchFactor(0, 1)
-        left_splitter.setStretchFactor(1, 2)
-        left_splitter.setSizes([280, 500])
+        mode_content_splitter.setStretchFactor(0, 1)
+        mode_content_splitter.setStretchFactor(1, 2)
+        mode_content_splitter.setSizes([200, 500])
         
-        left_container_layout.addWidget(left_splitter, 1)  # stretch=1: забирает всё оставшееся место
+        channels_group_layout.addWidget(mode_content_splitter, 1)
+        left_container_layout.addWidget(channels_group, 1)
         
         splitter.addWidget(left_container)
         
@@ -817,6 +887,75 @@ class MainWindow(QMainWindow):
         else:
             self.log("PLC интерфейс отключен", "warning")
             
+    def on_scenario_mode_changed(self, mode: str):
+        """Синхронизирует UI с фактическим режимом движка сценариев.
+        
+        Пока сценарий реально выполняется или стоит на паузе, ручная
+        кнопка Старт/Стоп заблокирована — иначе получилось бы два
+        источника управления одними и теми же каналами одновременно.
+        Также подтягиваем видимую панель под факт: если сценарий начал
+        выполняться, показываем именно её (и наоборот, когда он
+        останавливается — возвращаемся на ручной режим).
+        """
+        self._engine_mode = mode
+        scenario_active = mode in ("scenario", "paused")
+        
+        if hasattr(self, 'control_panel') and self.control_panel:
+            self.control_panel.start_btn.setEnabled(not scenario_active)
+            
+        self._show_channel_mode_view("scenario" if scenario_active else "manual")
+        
+    def _show_channel_mode_view(self, view: str):
+        """Переключить ВИДИМУЮ панель (ControlPanel+сетка каналов ИЛИ
+        конструктор сценария) — чисто UI-действие, движок не трогает.
+        
+        Используется и явным кликом по тумблеру, и синхронизацией с
+        фактическим режимом движка (on_scenario_mode_changed).
+        """
+        is_scenario_view = view == "scenario"
+        
+        if hasattr(self, 'mode_stack') and self.mode_stack:
+            self.mode_stack.setCurrentIndex(1 if is_scenario_view else 0)
+            
+        if hasattr(self, 'channel_grid_scroll') and self.channel_grid_scroll:
+            # Сетка каналов — часть ручного режима, показываем только там.
+            self.channel_grid_scroll.setVisible(not is_scenario_view)
+            
+        if hasattr(self, 'manual_mode_btn') and hasattr(self, 'scenario_mode_btn'):
+            self.manual_mode_btn.blockSignals(True)
+            self.scenario_mode_btn.blockSignals(True)
+            self.manual_mode_btn.setChecked(not is_scenario_view)
+            self.scenario_mode_btn.setChecked(is_scenario_view)
+            self.manual_mode_btn.blockSignals(False)
+            self.scenario_mode_btn.blockSignals(False)
+            
+    def request_channel_mode(self, target_mode: str):
+        """Обработчик клика по тумблеру Ручной/Сценарий.
+        
+        Важно: переход к виду "Сценарий" — это просто открыть конструктор
+        шагов, а НЕ запустить сценарий. Раньше клик сразу просил движок
+        перейти в режим "Сценарий", а тот отказывался, если сценарий
+        пуст — получался тупик: увидеть конструктор (чтобы добавить
+        первый шаг) можно было только после перехода, а перейти —
+        только если шаги уже есть.
+        
+        Реальный запуск — по кнопке Play внутри ScenarioWidget, она уже
+        сама проверяет, что сценарий не пуст.
+        
+        Единственный случай, когда тумблер обращается к движку: уход
+        из работающего/приостановленного сценария обратно в "Ручной" —
+        это явная просьба остановить его.
+        """
+        if target_mode == "scenario":
+            self._show_channel_mode_view("scenario")
+            return
+            
+        # target_mode == "manual"
+        if getattr(self, '_engine_mode', 'manual') in ("scenario", "paused"):
+            self.scenario_widget.set_engine_mode("manual")
+        else:
+            self._show_channel_mode_view("manual")
+            
     def on_plc_debug_data(self, debug_info: dict):
         print(f"\n[PLC_DEBUG] Запись #{debug_info['write_count']} - "
               f"{len(debug_info.get('registers', []))} регистров записано")
@@ -850,12 +989,15 @@ class MainWindow(QMainWindow):
         if not self.is_running:
             return
             
-        # Проверяем, не запущен ли сценарий
-        if hasattr(self, 'scenario_engine') and self.scenario_engine.is_running():
-            # Если сценарий запущен, не обновляем сигналы вручную
-            return
-            
-        self.generator.update(dt=0.01)
+        # Пока выполняется сценарий, значения каналов пишет ScenarioEngine —
+        # ручной генератор не должен их одновременно перезаписывать.
+        # НО отображение (виджеты, статистика) обновлять нужно всегда:
+        # иначе сетка каналов замирает на вкладке "Ручной режим", пока
+        # где-то работает сценарий.
+        scenario_running = hasattr(self, 'scenario_engine') and self.scenario_engine.is_running()
+        
+        if not scenario_running:
+            self.generator.update(dt=0.01)
         
         active_count = 0
         

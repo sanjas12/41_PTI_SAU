@@ -509,6 +509,37 @@ class ScenarioWidget(QWidget):
         else:
             self.engine.set_manual_mode()
             
+    def set_engine_mode(self, target_mode: str) -> bool:
+        """Явно перевести движок в нужный режим (используется внешним
+        переключателем режима в MainWindow — сегментированным тумблером
+        Ручной/Сценарий).
+        
+        В отличие от switch_mode() (просто переключает на противоположный),
+        этот метод идемпотентен и проверяет осмысленность перехода:
+        нельзя войти в режим сценария, если сценарий пуст.
+        
+        Возвращает True, если переход выполнен (или уже был в нужном
+        состоянии), False — если переход отклонён.
+        """
+        if target_mode == "scenario":
+            if self.engine.mode == ScenarioMode.SCENARIO:
+                return True
+            if not self.scenario.steps:
+                QMessageBox.warning(
+                    self, "Предупреждение",
+                    "Сценарий пуст — добавьте хотя бы один шаг, прежде чем переключаться в этот режим."
+                )
+                return False
+            self.play_scenario()
+            return True
+        elif target_mode == "manual":
+            if self.engine.mode == ScenarioMode.MANUAL:
+                return True
+            self.stop_scenario()
+            self.engine.set_manual_mode()
+            return True
+        return False
+            
     def on_scenario_started(self, name: str):
         self.status_label.setText(f"Выполняется: {name[:15]}")
         self.status_label.setStyleSheet("color: #4CAF50; font-weight: bold; font-size: 8px;")
