@@ -74,7 +74,9 @@ mdurl==0.1.2 ; sys_platform == 'win32'
 nodeenv==1.10.0 ; sys_platform == 'win32'
     # via pre-commit
 numpy==1.24.3 ; sys_platform == 'win32'
-    # via pyqtgraph
+    # via
+    #   pti-sau
+    #   pyqtgraph
 packaging==26.2 ; sys_platform == 'win32'
     # via
     #   commitizen
@@ -94,12 +96,15 @@ pydantic-core==2.27.2 ; sys_platform == 'win32'
 pygments==2.19.2 ; sys_platform == 'win32'
     # via rich
 pymodbustcp==0.3.0 ; sys_platform == 'win32'
+    # via pti-sau
 pyqt5==5.15.9 ; sys_platform == 'win32'
+    # via pti-sau
 pyqt5-qt5==5.15.2 ; sys_platform == 'win32'
     # via pyqt5
 pyqt5-sip==12.15.0 ; sys_platform == 'win32'
     # via pyqt5
 pyqtgraph==0.13.3 ; sys_platform == 'win32'
+    # via pti-sau
 pytest==8.3.5 ; sys_platform == 'win32'
     # via pytest-cov
 pytest-cov==5.0.0 ; sys_platform == 'win32'
@@ -123,6 +128,7 @@ requests-toolbelt==1.0.0 ; sys_platform == 'win32'
     # via python-gitlab
 rich==14.3.4 ; sys_platform == 'win32'
     # via python-semantic-release
+ruff==0.16.3 ; sys_platform == 'win32'
 setuptools==75.3.4 ; sys_platform == 'win32'
     # via cx-freeze
 shellingham==1.5.4 ; sys_platform == 'win32'
