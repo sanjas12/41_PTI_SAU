@@ -1,7 +1,6 @@
-from dataclasses import dataclass, field
-from typing import List, Optional
 import json
-from core.signal_types import SignalType
+from dataclasses import dataclass, field
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -16,7 +15,7 @@ class ScenarioStep:
     ramp_up: float = 0.0    # Время нарастания (сек)
     ramp_down: float = 0.0  # Время затухания (сек)
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'channel_id': self.channel_id,
             'signal_type': self.signal_type,
@@ -29,7 +28,7 @@ class ScenarioStep:
         }
     
     @classmethod
-    def from_dict(cls, data: dict) -> 'ScenarioStep':
+    def from_dict(cls, data: Dict[Any, Any]) -> 'ScenarioStep':
         return cls(
             channel_id=data['channel_id'],
             signal_type=data['signal_type'],
@@ -50,7 +49,7 @@ class Scenario:
     loop: bool = False
     version: str = "1.0"
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'name': self.name,
             'version': self.version,
@@ -59,7 +58,7 @@ class Scenario:
         }
     
     @classmethod
-    def from_dict(cls, data: dict) -> 'Scenario':
+    def from_dict(cls, data: Dict[Any, Any]) -> 'Scenario':
         steps = [ScenarioStep.from_dict(s) for s in data.get('steps', [])]
         return cls(
             name=data.get('name', 'Новый сценарий'),

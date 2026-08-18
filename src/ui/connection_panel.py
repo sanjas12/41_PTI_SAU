@@ -1,12 +1,24 @@
-from PyQt5.QtWidgets import (QWidget, QGroupBox, QGridLayout, QHBoxLayout,
-                             QVBoxLayout, QLabel, QLineEdit, QSpinBox,
-                             QPushButton, QComboBox, QCheckBox, QFrame,
-                             QApplication, QMessageBox, QToolButton)
-from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve, QRect
-from PyQt5.QtGui import QFont
-import sys
 import json
 import os
+import sys
+from typing import Any, Dict
+
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
+
 from .collapsible_groupbox import CollapsibleGroupBox
 
 
@@ -539,7 +551,7 @@ class ConnectionPanel(CollapsibleGroupBox):
         for conn in self.saved_connections:
             self.preset_combo.addItem(f"{conn['name']} ({conn['host']}:{conn['port']})")
             
-    def get_connection_params(self):
+    def get_connection_params(self) -> Dict[str, Any]:
         """Получить текущие параметры подключения"""
         return {
             'host': self.ip_edit.text().strip(),

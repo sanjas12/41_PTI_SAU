@@ -1,11 +1,8 @@
-import json
-import os
 
-from PyQt5.QtCore import QMimeData, QPoint, Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QColor, QDrag, QFont, QPixmap
+from PyQt5.QtCore import QMimeData, Qt, pyqtSignal
+from PyQt5.QtGui import QDrag, QPixmap
 from PyQt5.QtWidgets import (
     QAction,
-    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -13,20 +10,13 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSpinBox,
-    QSplitter,
     QVBoxLayout,
     QWidget,
 )

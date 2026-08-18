@@ -1,15 +1,12 @@
-import time
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
-import numpy as np
 from PyQt5.QtCore import QMutex, QMutexLocker, QObject, QTimer, pyqtSignal
 
-from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 
-from .scenario_model import Scenario, ScenarioStep
+from .scenario_model import Scenario
 
 
 class ScenarioMode(Enum):

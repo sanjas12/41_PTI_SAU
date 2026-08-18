@@ -1,5 +1,6 @@
-from PyQt5.QtWidgets import QGroupBox
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QGroupBox
+import contextlib
 
 
 class CollapsibleGroupBox(QGroupBox):
@@ -52,10 +53,8 @@ class CollapsibleGroupBox(QGroupBox):
         """Обновить видимость содержимого"""
         for widget in self._content_widgets:
             if widget is not None:
-                try:
+                with contextlib.suppress(BaseException):
                     widget.setVisible(visible)
-                except:
-                    pass
             
     def set_collapsed(self, collapsed):
         """Установить состояние свернуто/развернуто"""
