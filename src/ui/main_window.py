@@ -554,6 +554,16 @@ class MainWindow(QMainWindow):
         channels_group_layout.setContentsMargins(6, 10, 6, 6)
         channels_group.setLayout(channels_group_layout)
         
+        # --- ControlPanel: общая для обоих режимов, не переключается ---
+        self.control_panel = ControlPanel()
+        self.control_panel.start_stop_clicked.connect(self.toggle_generation)
+        self.control_panel.reset_clicked.connect(self.reset_signals)
+        self.control_panel.plot_clicked.connect(self.open_plot_window)
+        self.control_panel.logger_clicked.connect(self.open_logger_window)
+        self.control_panel.plc_clicked.connect(self.open_plc_view)
+        self.control_panel.save_channels_clicked.connect(self.save_channels)
+        channels_group_layout.addWidget(self.control_panel)
+        
         # --- Сегментированный тумблер: Ручной ⇄ Сценарий ---
         mode_row = QHBoxLayout()
         mode_row.setSpacing(0)
@@ -604,17 +614,10 @@ class MainWindow(QMainWindow):
         mode_row.addStretch()
         channels_group_layout.addLayout(mode_row)
         
-        # --- Сплиттер: [ControlPanel/ScenarioWidget] сверху, сетка каналов снизу ---
-        mode_content_splitter = QSplitter(Qt.Vertical)
-        
-        self.control_panel = ControlPanel()
-        self.control_panel.start_stop_clicked.connect(self.toggle_generation)
-        self.control_panel.reset_clicked.connect(self.reset_signals)
-        self.control_panel.plot_clicked.connect(self.open_plot_window)
-        self.control_panel.logger_clicked.connect(self.open_logger_window)
-        self.control_panel.plc_clicked.connect(self.open_plc_view)
-        self.control_panel.save_channels_clicked.connect(self.save_channels)
-        
+        # --- Переключаемая часть: сетка каналов (ручной) ⇄ конструктор сценария ---
+        # QStackedWidget, а не QSplitter: сетка и конструктор сценария больше
+        # никогда не видны одновременно, делить между ними место не нужно —
+        # видимая страница получает всё доступное пространство целиком.
         scenario_group = QGroupBox("🎬 Сценарии")
         scenario_group.setStyleSheet("""
             QGroupBox {
@@ -640,12 +643,7 @@ class MainWindow(QMainWindow):
         self.scenario_widget = ScenarioWidget(self.generator, self.scenario_engine, self)
         scenario_layout.addWidget(self.scenario_widget)
         
-        self.mode_stack = QStackedWidget()
-        self.mode_stack.addWidget(self.control_panel)   # index 0 — "manual"
-        self.mode_stack.addWidget(scenario_group)         # index 1 — "scenario"
-        mode_content_splitter.addWidget(self.mode_stack)
-        
-        # --- Сетка каналов: часть ручного режима, видна только в нём ---
+        # --- Сетка каналов ---
         self.channel_grid_scroll = QScrollArea()
         self.channel_grid_scroll.setWidgetResizable(True)
         self.channel_grid_scroll.setStyleSheet("QScrollArea { border: none; background-color: #f5f5f5; }")
@@ -668,13 +666,12 @@ class MainWindow(QMainWindow):
             self.channel_widgets.append(widget)
             
         self.channel_grid_scroll.setWidget(self.channel_grid_widget)
-        mode_content_splitter.addWidget(self.channel_grid_scroll)
         
-        mode_content_splitter.setStretchFactor(0, 1)
-        mode_content_splitter.setStretchFactor(1, 2)
-        mode_content_splitter.setSizes([200, 500])
+        self.mode_stack = QStackedWidget()
+        self.mode_stack.addWidget(self.channel_grid_scroll)   # index 0 — "manual"
+        self.mode_stack.addWidget(scenario_group)              # index 1 — "scenario"
         
-        channels_group_layout.addWidget(mode_content_splitter, 1)
+        channels_group_layout.addWidget(self.mode_stack, 1)
         left_container_layout.addWidget(channels_group, 1)
         
         splitter.addWidget(left_container)
@@ -915,11 +912,8 @@ class MainWindow(QMainWindow):
         is_scenario_view = view == "scenario"
         
         if hasattr(self, 'mode_stack') and self.mode_stack:
+            # mode_stack: index 0 — сетка каналов (ручной), index 1 — конструктор сценария.
             self.mode_stack.setCurrentIndex(1 if is_scenario_view else 0)
-            
-        if hasattr(self, 'channel_grid_scroll') and self.channel_grid_scroll:
-            # Сетка каналов — часть ручного режима, показываем только там.
-            self.channel_grid_scroll.setVisible(not is_scenario_view)
             
         if hasattr(self, 'manual_mode_btn') and hasattr(self, 'scenario_mode_btn'):
             self.manual_mode_btn.blockSignals(True)
