@@ -1,10 +1,21 @@
-from PyQt5.QtWidgets import (QWidget, QGroupBox, QHBoxLayout, QVBoxLayout,
-                             QLabel, QDoubleSpinBox, QSlider, QPushButton,
-                             QSpinBox, QFrame, QTabWidget)
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
 import json
 import os
+
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (
+    QDoubleSpinBox,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSlider,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .collapsible_groupbox import CollapsibleGroupBox
 

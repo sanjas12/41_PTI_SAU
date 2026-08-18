@@ -1,12 +1,13 @@
 import struct
-import time
 import threading
-from typing import List, Optional, Tuple
-from PyQt5.QtCore import QObject, pyqtSignal, QTimer, QThreadPool
+import time
+from typing import List, Optional
 
+from PyQt5.QtCore import QObject, QThreadPool, QTimer, pyqtSignal
+
+from core.signal_generator import SignalGenerator
 from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
-from core.signal_generator import SignalGenerator
 
 
 class PLCInterface(QObject):

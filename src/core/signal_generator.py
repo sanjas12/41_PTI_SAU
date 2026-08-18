@@ -1,9 +1,11 @@
-import numpy as np
-from typing import List, Optional
-from .channel import AnalogChannel
-from .signal_types import SignalType
 import random
 import time
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+
+from .channel import AnalogChannel
+from .signal_types import SignalType
 
 
 class SignalGenerator:
@@ -133,7 +135,7 @@ class SignalGenerator:
         channel = self.get_channel(channel_id)
         return channel.current_value if channel else None
         
-    def get_channel_info(self) -> List[dict]:
+    def get_channel_info(self) -> List[Dict[str, Any]]:
         """Получить информацию о всех каналах"""
         info = []
         for ch in self.channels:

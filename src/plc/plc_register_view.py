@@ -1,9 +1,19 @@
 from typing import List
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QPushButton, QLabel, QTableWidget, QTableWidgetItem,
-                             QGroupBox, QSpinBox, QComboBox, QHeaderView)
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class PLCRegisterView(QMainWindow):

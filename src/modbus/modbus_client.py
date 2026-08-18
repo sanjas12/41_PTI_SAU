@@ -1,3 +1,4 @@
+import contextlib
 import threading
 from typing import List, Optional
 
@@ -21,10 +22,8 @@ class ModbusClientWrapper:
             
         with self._lock:
             if self._client is not None:
-                try:
+                with contextlib.suppress(Exception):
                     self._client.close()
-                except Exception:
-                    pass
             self._client = ModbusClient(
                 host=host,
                 port=port,

@@ -1,5 +1,6 @@
-from PyQt5 import QtCore
 from typing import Callable, Optional
+
+from PyQt5 import QtCore
 
 
 class WorkerSignals(QtCore.QObject):

@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Dict, Optional
+
 from .signal_types import SignalType
+
 
 @dataclass
 class AnalogChannel:
@@ -17,7 +19,7 @@ class AnalogChannel:
     current_value: float = 0.0
     time: float = 0.0  # Внутреннее время для генерации
     
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
             'name': self.name,

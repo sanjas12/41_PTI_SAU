@@ -1,5 +1,6 @@
 from enum import Enum, auto
 
+
 class SignalType(Enum):
     SINE = auto()
     SQUARE = auto()
