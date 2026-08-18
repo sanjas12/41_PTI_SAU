@@ -16,6 +16,7 @@ repos:
       - id: detect-private-key         # предотвращает коммит приватных ключей
       - id: mixed-line-ending          # нормализует окончания строк
         args: ["--fix=lf"]
+        exclude: ^(docs/CHANGELOG\.md|src/_version\.py)$
 
   # --- Форматирование Python (Ruff) ---
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -49,7 +50,7 @@ repos:
     hooks:
       - id: conventional-pre-commit   # проверяет формат сообщений коммитов
         stages: [commit-msg]
-        args: [feat, fix, docs, style, refactor, test, chore, ci, perf]
+        args: [feat, fix, docs, style, refactor, test, chore, ci, perf, bump, build]
 
 # --- Глобальные настройки ---
 default_language_version:
