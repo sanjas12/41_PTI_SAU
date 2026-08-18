@@ -12,7 +12,7 @@ class SignalGenerator:
     def __init__(self, channels: Optional[List[AnalogChannel]] = None):
         self.channels = channels or []
         self._dt = 0.01  # Шаг времени 10ms (100 Гц)
-        self._update_interval = 0.5  # Интервал обновления в секундах (по умолчанию 500ms)
+        self._update_interval = 0.05  # Интервал обновления в секундах (по умолчанию 500ms)
         self._last_update_time = 0
         self._time_accumulator = 0  # Аккумулятор времени для синхронизации
         
