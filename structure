@@ -102,3 +102,68 @@
 │ │ index 1: конструктор сценария          ││  ← видна в "Сценарий"
 │ └──────────────────────────────────────────┘│
 └────────────────────────────────────────────┘
+
+
+
+
+41_PTI_SAU
+ ┣ docs
+ ┃ ┣ Help.md
+ ┃ ┣ Readme.md
+ ┃ ┣ RelNote.txt
+ ┃ ┗ TODO.md
+ ┣ logs
+ ┃ ┣ app.log
+ ┃ ┣ init_env_20260818_151817.log
+ ┣ plc
+ ┃ ┗ plc.stu
+ ┣ reports
+ ┣ scripts
+ ┃ ┣ init_env.sh
+ ┃ ┣ run.sh
+ ┃ ┗ toexe.sh
+ ┣ src
+ ┃ ┣ config
+ ┃ ┃ ┗ config.py
+ ┃ ┣ core
+ ┃ ┃ ┣ channel.py
+ ┃ ┃ ┣ signal_generator.py
+ ┃ ┃ ┣ signal_history.py
+ ┃ ┃ ┣ signal_types.py
+ ┃ ┃ ┗ __init__.py
+ ┃ ┣ modbus
+ ┃ ┃ ┣ modbus_client.py
+ ┃ ┃ ┗ worker.py
+ ┃ ┣ plc
+ ┃ ┃ ┣ plc_interface.py
+ ┃ ┃ ┗ plc_register_view.py
+ ┃ ┣ scenario
+ ┃ ┃ ┣ scenario_engine.py
+ ┃ ┃ ┣ scenario_model.py
+ ┃ ┃ ┣ scenario_widget.py
+ ┃ ┃ ┗ __init__.py
+ ┃ ┣ ui
+ ┃ ┃ ┣ collapsible_groupbox.py
+ ┃ ┃ ┣ connection_panel.py
+ ┃ ┃ ┣ control_panel.py
+ ┃ ┃ ┣ interval_control.py
+ ┃ ┃ ┣ logger_window.py
+ ┃ ┃ ┣ main_window.py
+ ┃ ┃ ┣ plot_widget.py
+ ┃ ┃ ┣ styles.py
+ ┃ ┃ ┗ __init__.py
+ ┃ ┣ main.py
+ ┃ ┣ _version.py
+ ┃ ┗ __init__.py
+ ┣ .gitignore
+ ┣ .pre-commit-config.yaml
+ ┣ .python-version
+ ┣ build.py
+ ┣ pyproject.toml
+ ┣ README copy 2.md
+ ┣ README copy.md
+ ┣ Readme.md
+ ┣ requirements.txt
+ ┣ settings.json
+ ┣ structure
+ ┗ uv.lock
