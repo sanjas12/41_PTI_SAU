@@ -1,8 +1,11 @@
+import json
+import os
 
-from PyQt5.QtCore import QMimeData, Qt, pyqtSignal
-from PyQt5.QtGui import QDrag, QPixmap
+from PyQt5.QtCore import QMimeData, QPoint, Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QColor, QDrag, QFont, QPixmap
 from PyQt5.QtWidgets import (
     QAction,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -10,13 +13,19 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMenu,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QScrollArea,
+    QSpinBox,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -253,82 +262,11 @@ class ScenarioWidget(QWidget):
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(3)
         
-        # Кнопки управления
-        self.play_btn = QPushButton("▶")
-        self.play_btn.setFixedSize(25, 22)
-        self.play_btn.setToolTip("Запустить сценарий")
-        self.play_btn.clicked.connect(self.play_scenario)
-        self.play_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-            QPushButton:hover { background-color: #45a049; }
-        """)
-        bottom_layout.addWidget(self.play_btn)
-        
-        self.stop_btn = QPushButton("⏹")
-        self.stop_btn.setFixedSize(25, 22)
-        self.stop_btn.setToolTip("Остановить сценарий")
-        self.stop_btn.setEnabled(False)
-        self.stop_btn.clicked.connect(self.stop_scenario)
-        self.stop_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f44336;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-            QPushButton:hover { background-color: #da190b; }
-        """)
-        bottom_layout.addWidget(self.stop_btn)
-        
-        self.pause_btn = QPushButton("⏸")
-        self.pause_btn.setFixedSize(25, 22)
-        self.pause_btn.setToolTip("Пауза/Возобновить")
-        self.pause_btn.setEnabled(False)
-        self.pause_btn.clicked.connect(self.pause_scenario)
-        self.pause_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FF9800;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-            QPushButton:hover { background-color: #F57C00; }
-        """)
-        bottom_layout.addWidget(self.pause_btn)
-        
-        # Прогресс
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximumWidth(80)
-        self.progress_bar.setMaximumHeight(14)
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 1px solid #ddd;
-                border-radius: 3px;
-                height: 14px;
-            }
-            QProgressBar::chunk {
-                background-color: #4CAF50;
-                border-radius: 3px;
-            }
-        """)
-        bottom_layout.addWidget(self.progress_bar)
-        
-        bottom_layout.addStretch()
-        
-        # Кнопки сохранения/загрузки
+        # Play/Stop/Пауза/прогресс переехали в общий ControlPanel — эти
+        # кнопки теперь работают и для ручного режима, и для сценария,
+        # в зависимости от того, какая вкладка выбрана в MainWindow.
+        # Здесь остаются только специфичные для конструктора сценария
+        # действия: сохранить/загрузить сценарий в файл.
         self.save_btn = QPushButton("💾")
         self.save_btn.setFixedSize(22, 22)
         self.save_btn.setToolTip("Сохранить сценарий")
@@ -468,29 +406,16 @@ class ScenarioWidget(QWidget):
         self.engine.load_scenario(self.scenario)
         self.engine.start_scenario()
         
-        self.play_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)
-        self.pause_btn.setEnabled(True)
-        
     def stop_scenario(self):
         """Остановить сценарий"""
         self.engine.stop_scenario()
-        
-        self.play_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.pause_btn.setEnabled(False)
-        self.progress_bar.setValue(0)
         
     def pause_scenario(self):
         """Пауза сценария"""
         if self.engine.mode == ScenarioMode.SCENARIO:
             self.engine.pause_scenario()
-            self.pause_btn.setText("▶")
-            self.pause_btn.setToolTip("Возобновить")
         else:
             self.engine.resume_scenario()
-            self.pause_btn.setText("⏸")
-            self.pause_btn.setToolTip("Пауза")
             
     def switch_mode(self):
         """Переключить режим"""
@@ -538,27 +463,17 @@ class ScenarioWidget(QWidget):
         self.status_label.setText("Остановлен")
         self.status_label.setStyleSheet("color: #f44336; font-size: 8px;")
         
-        self.play_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.pause_btn.setEnabled(False)
-        self.pause_btn.setText("⏸")
-        self.pause_btn.setToolTip("Пауза")
-        
     def on_scenario_finished(self):
         self.status_label.setText("Завершен")
         self.status_label.setStyleSheet("color: #4CAF50; font-size: 8px;")
-        
-        self.play_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.pause_btn.setEnabled(False)
-        self.pause_btn.setText("⏸")
-        self.pause_btn.setToolTip("Пауза")
         
     def on_step_changed(self, current: int, total: int):
         pass
         
     def on_progress_changed(self, progress: float):
-        self.progress_bar.setValue(int(progress))
+        # Прогресс-бар теперь в ControlPanel — MainWindow подписан на
+        # тот же сигнал engine.progress_changed напрямую.
+        pass
         
     def on_mode_changed(self, mode: str):
         if mode == "manual":

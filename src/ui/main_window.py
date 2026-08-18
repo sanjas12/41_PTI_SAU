@@ -381,6 +381,10 @@ class MainWindow(QMainWindow):
         self.scenario_engine = ScenarioEngine(self.generator, self)
         self.scenario_engine.log_signal.connect(self.log)
         self.scenario_engine.mode_changed.connect(self.on_scenario_mode_changed)
+        self.scenario_engine.scenario_started.connect(self.on_scenario_started)
+        self.scenario_engine.scenario_stopped.connect(self.on_scenario_stopped)
+        self.scenario_engine.scenario_finished.connect(self.on_scenario_finished)
+        self.scenario_engine.progress_changed.connect(self.on_scenario_progress_changed)
         
         # Создаем интерфейс для PLC
         self.plc_interface = PLCInterface(
@@ -403,9 +407,16 @@ class MainWindow(QMainWindow):
         # Счетчик
         self.frame_count = 0
         self.is_running = True
+        self.is_paused = False
         self.plot_window = None
         self.logger_window = None
         self.plc_view = None
+        
+        # Генерация уже запущена (см. self.timer.start(10) выше) — приводим
+        # кнопки ControlPanel в соответствие, иначе они остались бы в
+        # состоянии по умолчанию из конструктора (Play доступен, Stop и
+        # Пауза — нет).
+        self._refresh_control_buttons()
         
         # Потоковый пул для Modbus операций
         self.thread_pool = QThreadPool.globalInstance()
@@ -556,7 +567,9 @@ class MainWindow(QMainWindow):
         
         # --- ControlPanel: общая для обоих режимов, не переключается ---
         self.control_panel = ControlPanel()
-        self.control_panel.start_stop_clicked.connect(self.toggle_generation)
+        self.control_panel.play_clicked.connect(self.on_play_clicked)
+        self.control_panel.stop_clicked.connect(self.on_stop_clicked)
+        self.control_panel.pause_clicked.connect(self.on_pause_clicked)
         self.control_panel.reset_clicked.connect(self.reset_signals)
         self.control_panel.plot_clicked.connect(self.open_plot_window)
         self.control_panel.logger_clicked.connect(self.open_logger_window)
@@ -887,24 +900,17 @@ class MainWindow(QMainWindow):
     def on_scenario_mode_changed(self, mode: str):
         """Синхронизирует UI с фактическим режимом движка сценариев.
         
-        Пока сценарий реально выполняется или стоит на паузе, ручная
-        кнопка Старт/Стоп заблокирована — иначе получилось бы два
-        источника управления одними и теми же каналами одновременно.
-        Также подтягиваем видимую панель под факт: если сценарий начал
+        Подтягиваем видимую панель под факт: если сценарий начал
         выполняться, показываем именно её (и наоборот, когда он
         останавливается — возвращаемся на ручной режим).
         """
         self._engine_mode = mode
         scenario_active = mode in ("scenario", "paused")
-        
-        if hasattr(self, 'control_panel') and self.control_panel:
-            self.control_panel.start_btn.setEnabled(not scenario_active)
-            
         self._show_channel_mode_view("scenario" if scenario_active else "manual")
         
     def _show_channel_mode_view(self, view: str):
-        """Переключить ВИДИМУЮ панель (ControlPanel+сетка каналов ИЛИ
-        конструктор сценария) — чисто UI-действие, движок не трогает.
+        """Переключить ВИДИМУЮ панель (сетка каналов ИЛИ конструктор
+        сценария) — чисто UI-действие, движок не трогает.
         
         Используется и явным кликом по тумблеру, и синхронизацией с
         фактическим режимом движка (on_scenario_mode_changed).
@@ -923,6 +929,78 @@ class MainWindow(QMainWindow):
             self.manual_mode_btn.blockSignals(False)
             self.scenario_mode_btn.blockSignals(False)
             
+        self._refresh_control_buttons()
+        
+    def _refresh_control_buttons(self):
+        """Единая точка, решающая состояние Play/Stop/Пауза/прогресс-бара
+        в ControlPanel — общей панели для ручного режима и сценария.
+        
+        Что именно отражают кнопки, зависит от того, какая вкладка сейчас
+        выбрана: в "Сценарий" — состояние ScenarioEngine, в "Ручной" —
+        self.is_running/self.is_paused. Вызывается при любой смене вида
+        или состояния — это единственное место, где выставляется иконка
+        Пауза/Возобновить, чтобы не разъезжаться с реальным состоянием.
+        """
+        if not (hasattr(self, 'control_panel') and self.control_panel):
+            return
+            
+        if self._is_scenario_view_active():
+            engine_mode = getattr(self, '_engine_mode', 'manual')
+            scenario_running = engine_mode in ("scenario", "paused")
+            self.control_panel.set_running_state(scenario_running)
+            self.control_panel.set_pause_enabled(scenario_running)
+            self.control_panel.set_pause_icon(paused=(engine_mode == "paused"))
+            self.control_panel.set_progress_visible(True)
+        else:
+            self.control_panel.set_running_state(self.is_running)
+            self.control_panel.set_pause_enabled(self.is_running)
+            self.control_panel.set_pause_icon(paused=self.is_paused)
+            self.control_panel.set_progress_visible(False)
+            
+    def _is_scenario_view_active(self) -> bool:
+        return hasattr(self, 'mode_stack') and self.mode_stack.currentIndex() == 1
+        
+    def on_play_clicked(self):
+        """Play: запускает сценарий, если открыта вкладка "Сценарий",
+        иначе — обычную ручную генерацию."""
+        if self._is_scenario_view_active():
+            self.scenario_widget.play_scenario()
+        else:
+            self.start_generation()
+            
+    def on_stop_clicked(self):
+        if self._is_scenario_view_active():
+            self.scenario_widget.stop_scenario()
+        else:
+            self.stop_generation()
+            
+    def on_pause_clicked(self):
+        """Пауза/Возобновить — работает одинаково в обоих режимах:
+        замораживает таймер, не сбрасывая состояние (в отличие от Stop).
+        Повторный клик по той же кнопке возобновляет."""
+        if self._is_scenario_view_active():
+            self.scenario_widget.pause_scenario()
+        else:
+            if self.is_paused:
+                self.resume_generation()
+            else:
+                self.pause_generation()
+            
+    def on_scenario_started(self, name: str):
+        self._refresh_control_buttons()
+        
+    def on_scenario_stopped(self):
+        self._refresh_control_buttons()
+        if hasattr(self, 'control_panel'):
+            self.control_panel.set_progress(0)
+            
+    def on_scenario_finished(self):
+        self._refresh_control_buttons()
+        
+    def on_scenario_progress_changed(self, progress: float):
+        if hasattr(self, 'control_panel'):
+            self.control_panel.set_progress(int(progress))
+            
     def request_channel_mode(self, target_mode: str):
         """Обработчик клика по тумблеру Ручной/Сценарий.
         
@@ -933,8 +1011,8 @@ class MainWindow(QMainWindow):
         первый шаг) можно было только после перехода, а перейти —
         только если шаги уже есть.
         
-        Реальный запуск — по кнопке Play внутри ScenarioWidget, она уже
-        сама проверяет, что сценарий не пуст.
+        Реальный запуск — по кнопке Play в ControlPanel (см. on_play_clicked),
+        она уже сама проверяет, что сценарий не пуст.
         
         Единственный случай, когда тумблер обращается к движку: уход
         из работающего/приостановленного сценария обратно в "Ручной" —
@@ -958,19 +1036,46 @@ class MainWindow(QMainWindow):
             if hasattr(self.logger_window, 'log_debug_data'):
                 self.logger_window.log_debug_data(debug_info)
         
-    def toggle_generation(self):
+    def start_generation(self):
         if self.is_running:
-            self.timer.stop()
-            self.is_running = False
-            self.control_panel.set_start_button_state(False)
-            self.status_label.setText("● Остановлен")
-            self.status_label.setStyleSheet("color: #FF4444; font-weight: bold; font-size: 12px;")
-        else:
-            self.timer.start(10)
-            self.is_running = True
-            self.control_panel.set_start_button_state(True)
-            self.status_label.setText("● Работает")
-            self.status_label.setStyleSheet("color: #00CC00; font-weight: bold; font-size: 12px;")
+            return
+        self.timer.start(10)
+        self.is_running = True
+        self.is_paused = False
+        self.status_label.setText("● Работает")
+        self.status_label.setStyleSheet("color: #00CC00; font-weight: bold; font-size: 12px;")
+        self._refresh_control_buttons()
+        
+    def stop_generation(self):
+        if not self.is_running:
+            return
+        self.timer.stop()
+        self.is_running = False
+        self.is_paused = False
+        self.status_label.setText("● Остановлен")
+        self.status_label.setStyleSheet("color: #FF4444; font-weight: bold; font-size: 12px;")
+        self._refresh_control_buttons()
+        
+    def pause_generation(self):
+        """Заморозить таймер, не сбрасывая is_running — в отличие от
+        stop_generation() это временная приостановка, из которой можно
+        вернуться resume_generation(), а не полный сброс состояния."""
+        if not self.is_running or self.is_paused:
+            return
+        self.timer.stop()
+        self.is_paused = True
+        self.status_label.setText("⏸ Пауза")
+        self.status_label.setStyleSheet("color: #FF9800; font-weight: bold; font-size: 12px;")
+        self._refresh_control_buttons()
+        
+    def resume_generation(self):
+        if not self.is_running or not self.is_paused:
+            return
+        self.timer.start(10)
+        self.is_paused = False
+        self.status_label.setText("● Работает")
+        self.status_label.setStyleSheet("color: #00CC00; font-weight: bold; font-size: 12px;")
+        self._refresh_control_buttons()
             
     def reset_signals(self):
         for channel in self.generator.channels:

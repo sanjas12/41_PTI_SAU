@@ -1,12 +1,6 @@
+from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QLabel,
+                             QGroupBox, QVBoxLayout, QProgressBar)
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import (
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
 
 from .collapsible_groupbox import CollapsibleGroupBox
 
@@ -14,8 +8,13 @@ from .collapsible_groupbox import CollapsibleGroupBox
 class ControlPanel(CollapsibleGroupBox):
     """Панель управления с кнопками"""
     
-    # Сигналы для внешнего использования
-    start_stop_clicked = pyqtSignal()
+    # Сигналы для внешнего использования.
+    # Play/Stop/Пауза — общие кнопки: что именно они запускают (ручную
+    # генерацию или сценарий) решает MainWindow, глядя на то, какая
+    # вкладка (Ручной/Сценарий) сейчас выбрана.
+    play_clicked = pyqtSignal()
+    stop_clicked = pyqtSignal()
+    pause_clicked = pyqtSignal()
     reset_clicked = pyqtSignal()
     plot_clicked = pyqtSignal()
     logger_clicked = pyqtSignal()
@@ -33,10 +32,10 @@ class ControlPanel(CollapsibleGroupBox):
         layout = QHBoxLayout()
         content_widget.setLayout(layout)
         
-        # Кнопка Старт/Стоп
-        self.start_btn = QPushButton("⏸ Стоп")
-        self.start_btn.clicked.connect(self.start_stop_clicked.emit)
-        self.start_btn.setStyleSheet("""
+        # Play / Stop / Пауза — общие кнопки для ручного режима и сценария
+        self.play_btn = QPushButton("▶ Старт")
+        self.play_btn.clicked.connect(self.play_clicked.emit)
+        self.play_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
@@ -44,11 +43,66 @@ class ControlPanel(CollapsibleGroupBox):
                 padding: 6px 12px;
                 border-radius: 4px;
                 font-weight: bold;
-                min-width: 70px;
+                min-width: 60px;
             }
             QPushButton:hover { background-color: #45a049; }
+            QPushButton:disabled { background-color: #a5d6a7; color: #eeeeee; }
         """)
-        layout.addWidget(self.start_btn)
+        layout.addWidget(self.play_btn)
+        
+        self.stop_btn = QPushButton("⏹ Стоп")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(self.stop_clicked.emit)
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+                min-width: 60px;
+            }
+            QPushButton:hover { background-color: #da190b; }
+            QPushButton:disabled { background-color: #ef9a9a; color: #eeeeee; }
+        """)
+        layout.addWidget(self.stop_btn)
+        
+        self.pause_btn = QPushButton("⏸ Пауза")
+        self.pause_btn.setEnabled(False)
+        self.pause_btn.clicked.connect(self.pause_clicked.emit)
+        self.pause_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+                min-width: 60px;
+            }
+            QPushButton:hover { background-color: #F57C00; }
+            QPushButton:disabled { background-color: #ffcc80; color: #eeeeee; }
+        """)
+        layout.addWidget(self.pause_btn)
+        
+        # Индикатор выполнения — актуален для сценария (ход выполнения
+        # шагов); в ручном режиме скрыт (MainWindow управляет видимостью).
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMaximumWidth(100)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #ddd;
+                border-radius: 3px;
+            }
+            QProgressBar::chunk {
+                background-color: #4CAF50;
+                border-radius: 3px;
+            }
+        """)
+        layout.addWidget(self.progress_bar)
         
         # Кнопка Сброс
         self.reset_btn = QPushButton("↺ Сброс")
@@ -182,36 +236,34 @@ class ControlPanel(CollapsibleGroupBox):
             }
         """)
         
-    def set_start_button_state(self, is_running: bool):
-        """Установить состояние кнопки Старт/Стоп"""
-        if is_running:
-            self.start_btn.setText("⏸ Стоп")
-            self.start_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    font-weight: bold;
-                    min-width: 70px;
-                }
-                QPushButton:hover { background-color: #45a049; }
-            """)
+    def set_running_state(self, is_running: bool):
+        """Play/Stop: включить нужную пару в зависимости от того,
+        идёт ли сейчас генерация/выполнение (ручное или сценарий)."""
+        self.play_btn.setEnabled(not is_running)
+        self.stop_btn.setEnabled(is_running)
+        
+    def set_pause_enabled(self, enabled: bool):
+        """В ручном режиме паузы нет — кнопка гасится."""
+        self.pause_btn.setEnabled(enabled)
+        if not enabled:
+            self.set_pause_icon(paused=False)
+            
+    def set_pause_icon(self, paused: bool):
+        """Переключить иконку между 'Пауза' и 'Возобновить'."""
+        if paused:
+            self.pause_btn.setText("▶ Возобновить")
+            self.pause_btn.setToolTip("Возобновить")
         else:
-            self.start_btn.setText("▶ Старт")
-            self.start_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #f44336;
-                    color: white;
-                    border: none;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    font-weight: bold;
-                    min-width: 70px;
-                }
-                QPushButton:hover { background-color: #da190b; }
-            """)
+            self.pause_btn.setText("⏸ Пауза")
+            self.pause_btn.setToolTip("Пауза")
+            
+    def set_progress(self, value: int):
+        """Обновить индикатор выполнения (0-100)."""
+        self.progress_bar.setValue(value)
+        
+    def set_progress_visible(self, visible: bool):
+        """Индикатор актуален только для сценария — в ручном режиме прячем."""
+        self.progress_bar.setVisible(visible)
             
     def update_fps(self, fps: int):
         """Обновить FPS"""
