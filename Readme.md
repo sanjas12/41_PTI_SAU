@@ -46,6 +46,7 @@ uv run python src/main.py     - скрипт для инициализации �
 #### 3.2 Без uv
 
 ```bash
+source .venv/Scripts/activate
 python src/main.py
 ```
 

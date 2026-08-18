@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = ".git"
+Repository = "https://github.com/sanjas12/41_PTI_SAU.git"
 
 [build-system]
 requires = ["setuptools>=68"]
