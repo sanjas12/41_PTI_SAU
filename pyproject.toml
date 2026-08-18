@@ -1,7 +1,7 @@
 [project]
 name = "pti_sau"
 version = "0.0.1"
-description = "Add your description here"
+description = "Программа генерации аналоговых сигналов и обмена данными с PLC Modicon Premium по Modbus TCP"
 readme = "README.md"
 requires-python = ">=3.8, <3.9"
 authors = [
@@ -19,20 +19,21 @@ dependencies = [
 Repository = "https://github.com/sanjas12/41_PTI_SAU.git"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68,<81"]
 build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 build = [
-    "cx-freeze==7.2.10 ; sys_platform == 'win32'",
+    "cx-freeze==7.2.10; sys_platform == 'win32'",
 ]
+
 dev = [
     "commitizen>=3.27.0",
-    "pre-commit>= 2.0.0, < 3.0.0",
+    "pre-commit>=2.0.0,<3.0.0",
     "python-semantic-release>=9.3.1",
     "pytest>=8.3.5",
     "pytest-cov>=5.0.0",
-    
+    "ruff>=0.4.6",
 ]
 
 [tool.uv]
@@ -59,7 +60,9 @@ select = [
     "N",
     "SIM",
 ]
-ignore = ["E501"]
+ignore = [
+    "E501",
+]
 
 [tool.ruff.format]
 quote-style = "double"
