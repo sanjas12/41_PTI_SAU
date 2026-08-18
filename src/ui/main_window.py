@@ -912,8 +912,49 @@ class MainWindow(QMainWindow):
             )
 
     def open_plot_window(self):
+        """Открыть окно графиков с автоматическим добавлением активных каналов."""
+
         if self.plot_window is None or not self.plot_window.isVisible():
+            # Создаем окно графиков
             self.plot_window = PlotWindow(self.generator, self)
+
+            # Получаем активные каналы (включенные)
+            active_channels = [ch for ch in self.generator.channels if ch.enabled]
+
+            # Если есть активные каналы, добавляем их на графики
+            if active_channels:
+                # Сортируем по ID для стабильности
+                active_channels.sort(key=lambda ch: ch.id)
+
+                # Определяем количество графиков (не больше 6 для читаемости)
+                num_plots = min(len(active_channels), 6)
+
+                # Если каналов больше 6, распределяем по 3-4 канала на график
+                channels_per_plot = max(
+                    1, (len(active_channels) + num_plots - 1) // num_plots
+                )
+
+                # Добавляем графики
+                for i in range(num_plots):
+                    # Добавляем новый график
+                    if i > 0:  # Первый график уже создан в PlotWindow
+                        self.plot_window.add_plot()
+
+                    # Вычисляем каналы для этого графика
+                    start_idx = i * channels_per_plot
+                    end_idx = min(start_idx + channels_per_plot, len(active_channels))
+
+                    # Добавляем каналы на график
+                    for ch in active_channels[start_idx:end_idx]:
+                        self.plot_window.add_channel_to_plot(ch.id, i)
+
+                self.log(
+                    f"Добавлено {len(active_channels)} активных каналов на {num_plots} графиков",
+                    "info",
+                )
+            else:
+                self.log("Нет активных каналов для отображения", "warning")
+
             self.plot_window.show()
         else:
             self.plot_window.raise_()

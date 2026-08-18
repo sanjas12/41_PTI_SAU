@@ -1514,3 +1514,7 @@ class PlotWindow(QMainWindow):
 
         if self.channels_list is not None:
             self.channels_list.itemSelectionChanged.connect(self.update_selection_info)
+
+    def get_active_channels(self) -> List[int]:
+        """Получить список ID активных (включенных) каналов."""
+        return [ch.id for ch in self.generator.channels if ch.enabled]
