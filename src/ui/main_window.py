@@ -988,13 +988,21 @@ class MainWindow(QMainWindow):
     def on_scenario_mode_changed(self, mode: str):
         """Синхронизирует UI с фактическим режимом движка сценариев.
 
-        Подтягиваем видимую панель под факт: если сценарий начал
-        выполняться, показываем именно её (и наоборот, когда он
-        останавливается — возвращаемся на ручной режим).
+        Асимметрично специально: запуск/возобновление сценария
+        автоматически переключает вид на "Сценарий" (удобно — то, что
+        сейчас происходит, сразу видно). А вот когда сценарий
+        останавливается или завершается сам (движок всегда возвращает
+        mode в "manual" — это внутреннее состояние движка, а не
+        команда UI), вид НЕ трогаем: пользователь мог быть на вкладке
+        "Сценарий" и должен там же остаться, просто в состоянии
+        Play-доступен/Stop-Пауза недоступны. Обратно на "Ручной" вид
+        переключает только явный клик по тумблеру — см. request_channel_mode.
         """
         self._engine_mode = mode
-        scenario_active = mode in ("scenario", "paused")
-        self._show_channel_mode_view("scenario" if scenario_active else "manual")
+        if mode in ("scenario", "paused"):
+            self._show_channel_mode_view("scenario")
+        else:
+            self._refresh_control_buttons()
         self._sync_generation_timer()
 
     def _sync_generation_timer(self):
@@ -1126,7 +1134,11 @@ class MainWindow(QMainWindow):
 
         Единственный случай, когда тумблер обращается к движку: уход
         из работающего/приостановленного сценария обратно в "Ручной" —
-        это явная просьба остановить его.
+        это явная просьба остановить его. Вид переключаем явно сами,
+        не полагаясь на сигнал mode_changed от движка: он теперь не
+        дёргает вид сам по себе при возврате в "manual" (см.
+        on_scenario_mode_changed) — это нужно, чтобы сценарий, дошедший
+        до конца САМ, не перебрасывал пользователя на вкладку "Ручной".
         """
         if target_mode == "scenario":
             self._show_channel_mode_view("scenario")
@@ -1135,8 +1147,7 @@ class MainWindow(QMainWindow):
         # target_mode == "manual"
         if getattr(self, "_engine_mode", "manual") in ("scenario", "paused"):
             self.scenario_widget.set_engine_mode("manual")
-        else:
-            self._show_channel_mode_view("manual")
+        self._show_channel_mode_view("manual")
 
     def on_plc_debug_data(self, debug_info: dict):
         print(
