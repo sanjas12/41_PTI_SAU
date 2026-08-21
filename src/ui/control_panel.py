@@ -19,6 +19,7 @@ class ControlPanel(CollapsibleGroupBox):
     logger_clicked = pyqtSignal()
     plc_clicked = pyqtSignal()
     save_channels_clicked = pyqtSignal()
+    toggle_all_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__("Управление", parent, collapsed=False)
@@ -119,6 +120,26 @@ class ControlPanel(CollapsibleGroupBox):
             QPushButton:hover { background-color: #F57C00; }
         """)
         layout.addWidget(self.reset_btn)
+
+        # Кнопка Вкл/Выкл все каналы — актуальна только для ручного
+        # режима (в сценарии enabled каналов управляет ScenarioEngine
+        # сам, по шагам); MainWindow гасит её в режиме "Сценарий".
+        self.toggle_all_btn = QPushButton("⏻ Все вкл/выкл")
+        self.toggle_all_btn.clicked.connect(self.toggle_all_clicked.emit)
+        self.toggle_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #607D8B;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-weight: bold;
+                min-width: 70px;
+            }
+            QPushButton:hover { background-color: #455A64; }
+            QPushButton:disabled { background-color: #cfd8dc; color: #eeeeee; }
+        """)
+        layout.addWidget(self.toggle_all_btn)
 
         # Кнопка Графики
         self.plot_btn = QPushButton("Графики")
@@ -263,6 +284,11 @@ class ControlPanel(CollapsibleGroupBox):
     def set_progress_visible(self, visible: bool):
         """Индикатор актуален только для сценария — в ручном режиме прячем."""
         self.progress_bar.setVisible(visible)
+
+    def set_toggle_all_enabled(self, enabled: bool):
+        """В режиме сценария кнопка гасится — enabled каналов там
+        управляет ScenarioEngine, ручное вмешательство ему помешает."""
+        self.toggle_all_btn.setEnabled(enabled)
 
     def update_fps(self, fps: int):
         """Обновить FPS"""

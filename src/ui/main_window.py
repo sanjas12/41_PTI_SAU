@@ -580,6 +580,9 @@ class MainWindow(QMainWindow):
         self.control_panel.logger_clicked.connect(self.open_logger_window)
         self.control_panel.plc_clicked.connect(self.open_plc_view)
         self.control_panel.save_channels_clicked.connect(self.save_channels)
+        self.control_panel.toggle_all_clicked.connect(
+            self.on_toggle_all_channels_clicked
+        )
         channels_group_layout.addWidget(self.control_panel)
 
         # --- Сегментированный тумблер: Ручной ⇄ Сценарий ---
@@ -1056,11 +1059,13 @@ class MainWindow(QMainWindow):
             self.control_panel.set_pause_enabled(scenario_running)
             self.control_panel.set_pause_icon(paused=(engine_mode == "paused"))
             self.control_panel.set_progress_visible(True)
+            self.control_panel.set_toggle_all_enabled(False)
         else:
             self.control_panel.set_running_state(self.is_running)
             self.control_panel.set_pause_enabled(self.is_running)
             self.control_panel.set_pause_icon(paused=self.is_paused)
             self.control_panel.set_progress_visible(False)
+            self.control_panel.set_toggle_all_enabled(True)
 
     def _is_scenario_view_active(self) -> bool:
         return hasattr(self, "mode_stack") and self.mode_stack.currentIndex() == 1
@@ -1200,6 +1205,28 @@ class MainWindow(QMainWindow):
             channel.time = 0
             channel.current_value = 0
         self.update_signals()
+
+    def on_toggle_all_channels_clicked(self):
+        """Включить/выключить разом все каналы. Актуально только для
+        ручного режима — в сценарии enabled каждого канала выставляет
+        сам ScenarioEngine по шагам (см. _refresh_control_buttons,
+        где кнопка гасится в режиме "Сценарий").
+
+        Логика "все включены → выключить всё, иначе → включить всё":
+        если хотя бы один канал выключен, первый клик включает всех
+        разом, а не переключает вразнобой.
+        """
+        if self._is_scenario_view_active():
+            return
+
+        all_enabled = all(ch.enabled for ch in self.generator.channels)
+        new_state = not all_enabled
+
+        for widget in self.channel_widgets:
+            try:
+                widget.enabled_check.setChecked(new_state)
+            except (RuntimeError, AttributeError):
+                continue
 
     def update_signals(self):
         """Обновить сигналы и UI"""
