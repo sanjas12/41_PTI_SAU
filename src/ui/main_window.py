@@ -30,7 +30,6 @@ from PyQt5.QtWidgets import (
 from _version import __full_version__
 from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
-from core.signal_history import SignalHistory
 from core.signal_types import SignalType
 from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
@@ -376,11 +375,6 @@ class MainWindow(QMainWindow):
         # Создаем генератор с 20 каналами
         self.generator = SignalGenerator()
         self._setup_channels()
-
-        # Полная история сигналов с момента запуска приложения.
-        self.history = SignalHistory(
-            channel_ids=[channel.id for channel in self.generator.channels]
-        )
 
         # Создаем Modbus клиент
         self.modbus = ModbusClientWrapper()
@@ -912,53 +906,59 @@ class MainWindow(QMainWindow):
             )
 
     def open_plot_window(self):
-        """Открыть окно графиков с автоматическим добавлением активных каналов."""
-
         if self.plot_window is None or not self.plot_window.isVisible():
-            # Создаем окно графиков
             self.plot_window = PlotWindow(self.generator, self)
-
-            # Получаем активные каналы (включенные)
-            active_channels = [ch for ch in self.generator.channels if ch.enabled]
-
-            # Если есть активные каналы, добавляем их на графики
-            if active_channels:
-                # Сортируем по ID для стабильности
-                active_channels.sort(key=lambda ch: ch.id)
-
-                # Определяем количество графиков (не больше 6 для читаемости)
-                num_plots = min(len(active_channels), 6)
-
-                # Если каналов больше 6, распределяем по 3-4 канала на график
-                channels_per_plot = max(
-                    1, (len(active_channels) + num_plots - 1) // num_plots
-                )
-
-                # Добавляем графики
-                for i in range(num_plots):
-                    # Добавляем новый график
-                    if i > 0:  # Первый график уже создан в PlotWindow
-                        self.plot_window.add_plot()
-
-                    # Вычисляем каналы для этого графика
-                    start_idx = i * channels_per_plot
-                    end_idx = min(start_idx + channels_per_plot, len(active_channels))
-
-                    # Добавляем каналы на график
-                    for ch in active_channels[start_idx:end_idx]:
-                        self.plot_window.add_channel_to_plot(ch.id, i)
-
-                self.log(
-                    f"Добавлено {len(active_channels)} активных каналов на {num_plots} графиков",
-                    "info",
-                )
-            else:
-                self.log("Нет активных каналов для отображения", "warning")
-
             self.plot_window.show()
+            self._auto_populate_plot_window()
         else:
             self.plot_window.raise_()
             self.plot_window.activateWindow()
+
+    def _auto_populate_plot_window(self):
+        """При открытии окна графиков сразу выводим на него каналы,
+        релевантные текущему режиму:
+        - "Ручной" — все включённые (enabled) каналы, КАЖДЫЙ на своём
+          отдельном графике (так было и раньше — удобно сравнивать
+          сигналы разных типов, когда они не свалены в кучу);
+        - "Сценарий" — все каналы, задействованные хоть в одном шаге
+          текущего загруженного сценария (а не только в шаге, активном
+          прямо сейчас — иначе график терял бы уже пройденные каналы
+          по мере продвижения сценария по шагам), все на одном общем
+          графике — там обычно важно видеть их вместе, во времени
+          относительно друг друга.
+        """
+        if not self.plot_window:
+            return
+
+        if self._is_scenario_view_active():
+            channel_ids = self._get_scenario_channel_ids()
+            for channel_id in channel_ids:
+                self.plot_window.add_channel_to_plot(channel_id)
+        else:
+            channel_ids = [ch.id for ch in self.generator.channels if ch.enabled]
+            for i, channel_id in enumerate(channel_ids):
+                if i == 0 and self.plot_window.plot_widgets:
+                    # Переиспользуем пустой график, который PlotWindow
+                    # уже создал сам при открытии — иначе он повис бы
+                    # пустым первым графиком перед всеми остальными.
+                    plot_index = 0
+                else:
+                    plot = self.plot_window.add_plot()
+                    plot_index = plot.plot_index
+                self.plot_window.add_channel_to_plot(channel_id, plot_index=plot_index)
+
+    def _get_scenario_channel_ids(self):
+        """ID каналов, задействованных хоть в одном шаге текущего
+        сценария (self.scenario_widget.scenario), без повторов, в
+        порядке первого появления."""
+        scenario = getattr(self.scenario_widget, "scenario", None)
+        if not scenario or not getattr(scenario, "steps", None):
+            return []
+        seen = []
+        for step in scenario.steps:
+            if step.channel_id not in seen:
+                seen.append(step.channel_id)
+        return seen
 
     def open_logger_window(self):
         if self.logger_window is None or not self.logger_window.isVisible():
@@ -992,6 +992,26 @@ class MainWindow(QMainWindow):
         self._engine_mode = mode
         scenario_active = mode in ("scenario", "paused")
         self._show_channel_mode_view("scenario" if scenario_active else "manual")
+        self._sync_generation_timer()
+
+    def _sync_generation_timer(self):
+        """Общий self.timer (тот, что вызывает update_signals) должен
+        тикать, если реально что-то генерирует значения — ручной режим
+        ИЛИ активно проигрываемый сценарий. На паузе сценария (mode ==
+        "paused") таймер тоже останавливаем: пауза должна замораживать
+        не только переход между шагами (это делает свой таймер внутри
+        ScenarioEngine), но и сами значения каналов, а их считает
+        generator.update(), вызываемый именно отсюда.
+        """
+        engine_mode = getattr(self, "_engine_mode", "manual")
+        should_run = (
+            self.is_running and not self.is_paused
+        ) or engine_mode == "scenario"
+
+        if should_run and not self.timer.isActive():
+            self.timer.start(10)
+        elif not should_run and self.timer.isActive():
+            self.timer.stop()
 
     def _show_channel_mode_view(self, view: str):
         """Переключить ВИДИМУЮ панель (сетка каналов ИЛИ конструктор
@@ -1129,9 +1149,9 @@ class MainWindow(QMainWindow):
     def start_generation(self):
         if self.is_running:
             return
-        self.timer.start(10)
         self.is_running = True
         self.is_paused = False
+        self._sync_generation_timer()
         self.status_label.setText("● Работает")
         self.status_label.setStyleSheet(
             "color: #00CC00; font-weight: bold; font-size: 12px;"
@@ -1141,9 +1161,9 @@ class MainWindow(QMainWindow):
     def stop_generation(self):
         if not self.is_running:
             return
-        self.timer.stop()
         self.is_running = False
         self.is_paused = False
+        self._sync_generation_timer()
         self.status_label.setText("● Остановлен")
         self.status_label.setStyleSheet(
             "color: #FF4444; font-weight: bold; font-size: 12px;"
@@ -1156,8 +1176,8 @@ class MainWindow(QMainWindow):
         вернуться resume_generation(), а не полный сброс состояния."""
         if not self.is_running or self.is_paused:
             return
-        self.timer.stop()
         self.is_paused = True
+        self._sync_generation_timer()
         self.status_label.setText("⏸ Пауза")
         self.status_label.setStyleSheet(
             "color: #FF9800; font-weight: bold; font-size: 12px;"
@@ -1182,43 +1202,26 @@ class MainWindow(QMainWindow):
         self.update_signals()
 
     def update_signals(self):
-        """Обновить сигналы, записать историю и обновить UI."""
-
-        if not self.is_running:
-            return
-
+        """Обновить сигналы и UI"""
         scenario_running = (
             hasattr(self, "scenario_engine") and self.scenario_engine.is_running()
         )
 
-        if not scenario_running:
-            self.generator.update(dt=0.01)
+        if not self.is_running and not scenario_running:
+            return
 
-        # ---------------------------------------------------------
-        # Запись истории
-        # ---------------------------------------------------------
-        #
-        # Используем время самого генератора.
-        #
-        # Все каналы имеют одну временную шкалу, поэтому один
-        # timestamp соответствует одному общему отсчёту.
-        #
-        timestamp = 0.0
-
-        if self.generator.channels:
-            timestamp = max(channel.time for channel in self.generator.channels)
-
-        self.history.add_channels_sample(
-            timestamp,
-            self.generator.channels,
-        )
-
-        # ---------------------------------------------------------
-        # Обновление виджетов каналов
-        # ---------------------------------------------------------
+        # generator.update() — единственное место, которое реально считает
+        # current_value по параметрам канала (signal_type/frequency/amplitude/
+        # offset). ScenarioEngine на каждом шаге меняет только эти параметры
+        # (_apply_step), саму генерацию значения не делает — значит,
+        # update() должен работать и во время сценария, иначе значения
+        # каналов (а с ними и графики в PlotWindow, который тянет их
+        # напрямую из generator) просто замирают на месте.
+        self.generator.update(dt=0.01)
 
         active_count = 0
 
+        # Обновляем виджеты каналов
         for i, widget in enumerate(self.channel_widgets):
             if i >= len(self.generator.channels):
                 break
@@ -1233,41 +1236,32 @@ class MainWindow(QMainWindow):
                     continue
 
                 widget.update_display()
-
                 if self.generator.channels[i].enabled:
                     active_count += 1
 
             except (RuntimeError, AttributeError):
                 continue
 
-        # ---------------------------------------------------------
-        # Статистика
-        # ---------------------------------------------------------
-
+        # Обновляем статистику
         try:
             if self.stats_label:
                 self.stats_label.setText(
-                    f"Каналов: {len(self.generator.channels)}\n"
-                    f"Активных: {active_count}\n"
-                    f"Отсчётов: {self.history.sample_count()}"
+                    f"Каналов: {len(self.generator.channels)}\nАктивных: {active_count}"
                 )
         except (RuntimeError, AttributeError):
             pass
 
         self.frame_count += 1
-
         if self.frame_count >= 50:
             fps = self.frame_count * 2
-
             try:
                 if self.control_panel:
                     self.control_panel.update_fps(fps)
             except (RuntimeError, AttributeError):
                 pass
-
             self.frame_count = 0
 
-    def closeEvent(self, event):  # type: ignore  # noqa: N802
+    def closeEvent(self, event):  # type: ignore # noqa: N802
         self._save_channels_config()
         self.log("Настройки каналов сохранены", "info")
 
