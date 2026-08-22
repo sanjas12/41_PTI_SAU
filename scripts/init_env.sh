@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Назначение: полностью подготавливает окружение разработки проекта.
+# Скрипт удаляет существующую .venv, создаёт её заново, устанавливает runtime-,
+# dev- и build-зависимости, а затем устанавливает Git hooks pre-commit.
+# Поддерживает uv и fallback на pip, а также онлайн- и офлайн-установку из
+# локального каталога python_Library на дисках D, E или F.
+# Ход выполнения и ошибки записываются в каталог logs/.
+# ВАЖНО: запуск удаляет текущую .venv вместе с установленными в ней пакетами.
+
 # uv + интернет → uv sync (если есть pyproject.toml) или uv pip install -r requirements.txt
 # uv + офлайн → uv sync --no-index --find-links=... или uv pip install --no-index
 # нет uv + интернет → fallback на pip install -r requirements.txt
