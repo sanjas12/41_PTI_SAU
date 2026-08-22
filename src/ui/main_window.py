@@ -207,17 +207,25 @@ class MainWindow(QMainWindow):
         left_container.setLayout(left_container_layout)
 
         # --- Общие настройки, не зависящие от режима работы ---
+        # Подключение и интервалы образуют одну верхнюю строку. Основная
+        # рабочая область каналов остаётся ниже и занимает всю ширину.
+        settings_row = QHBoxLayout()
+        settings_row.setContentsMargins(0, 0, 0, 0)
+        settings_row.setSpacing(6)
+
         self.connection_panel = ConnectionPanel()
         self.connection_panel.connection_changed.connect(self.on_connection_changed)
         self.connection_panel.connected.connect(self.on_connection_status_changed)
-        left_container_layout.addWidget(self.connection_panel)
+        settings_row.addWidget(self.connection_panel, 1, Qt.AlignTop)
 
         self.interval_control = IntervalControl()
         self.interval_control.signal_interval_changed.connect(
             self.on_signal_interval_changed
         )
         self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
-        left_container_layout.addWidget(self.interval_control)
+        settings_row.addWidget(self.interval_control, 1, Qt.AlignTop)
+
+        left_container_layout.addLayout(settings_row)
 
         # ============================================================
         # СЕКЦИЯ "УПРАВЛЕНИЕ КАНАЛАМИ": режим + панель режима + сетка
