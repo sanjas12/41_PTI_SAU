@@ -1,22 +1,14 @@
 import json
 import os
 
-from PyQt5.QtCore import Qt, QThreadPool, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt, QThreadPool, QTimer
 from PyQt5.QtWidgets import (
     QButtonGroup,
-    QCheckBox,
-    QComboBox,
-    QDialog,
-    QDialogButtonBox,
-    QDoubleSpinBox,
-    QFormLayout,
     QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -37,6 +29,7 @@ from plc.plc_interface import PLCInterface
 from plc.plc_register_view import PLCRegisterView
 from scenario.scenario_engine import ScenarioEngine
 from scenario.scenario_widget import ScenarioWidget
+from ui.channel_widget import ChannelWidget
 
 # Импорты для сценариев - ВЫНОСИМ В КОНЕЦ ФАЙЛА
 from ui.connection_panel import ConnectionPanel
@@ -44,319 +37,6 @@ from ui.control_panel import ControlPanel
 from ui.interval_control import IntervalControl
 from ui.logger_window import LoggerWindow
 from ui.plot_widget import PlotWindow
-
-
-class ChannelSettingsDialog(QDialog):
-    """Диалог настроек канала"""
-
-    def __init__(self, channel: AnalogChannel, parent=None):
-        super().__init__(parent)
-        self.channel = channel
-        self.setWindowTitle(f"Настройки канала {channel.id + 1}: {channel.name}")
-        self.setModal(True)
-        self.setup_ui()
-
-    def setup_ui(self):
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-
-        form_layout = QFormLayout()
-
-        self.name_edit = QLineEdit(self.channel.name)
-        form_layout.addRow("Имя канала:", self.name_edit)
-
-        self.min_spin = QDoubleSpinBox()
-        self.min_spin.setRange(-10000, 10000)
-        self.min_spin.setValue(self.channel.min_value)
-        self.min_spin.setSingleStep(0.1)
-        form_layout.addRow("Минимум:", self.min_spin)
-
-        self.max_spin = QDoubleSpinBox()
-        self.max_spin.setRange(-10000, 10000)
-        self.max_spin.setValue(self.channel.max_value)
-        self.max_spin.setSingleStep(0.1)
-        form_layout.addRow("Максимум:", self.max_spin)
-
-        self.freq_spin = QDoubleSpinBox()
-        self.freq_spin.setRange(0.01, 100)
-        self.freq_spin.setValue(self.channel.frequency)
-        self.freq_spin.setSingleStep(0.1)
-        form_layout.addRow("Частота (Гц):", self.freq_spin)
-
-        self.amp_spin = QDoubleSpinBox()
-        self.amp_spin.setRange(0, 100)
-        self.amp_spin.setValue(self.channel.amplitude)
-        self.amp_spin.setSingleStep(1)
-        form_layout.addRow("Амплитуда (%):", self.amp_spin)
-
-        self.offset_spin = QDoubleSpinBox()
-        self.offset_spin.setRange(-100, 100)
-        self.offset_spin.setValue(self.channel.offset)
-        self.offset_spin.setSingleStep(1)
-        form_layout.addRow("Смещение (%):", self.offset_spin)
-
-        self.type_combo = QComboBox()
-        self.type_combo.addItems([st.name.capitalize() for st in SignalType])
-        current_type = self.channel.signal_type.name.capitalize()
-        index = self.type_combo.findText(current_type)
-        if index >= 0:
-            self.type_combo.setCurrentIndex(index)
-        form_layout.addRow("Тип сигнала:", self.type_combo)
-
-        self.enabled_check = QCheckBox()
-        self.enabled_check.setChecked(self.channel.enabled)
-        form_layout.addRow("Включен:", self.enabled_check)
-
-        layout.addLayout(form_layout)
-
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
-
-        self.setMinimumWidth(350)
-
-    def get_settings(self) -> dict:
-        """Получить измененные настройки"""
-        return {
-            "name": self.name_edit.text(),
-            "min_value": self.min_spin.value(),
-            "max_value": self.max_spin.value(),
-            "frequency": self.freq_spin.value(),
-            "amplitude": self.amp_spin.value(),
-            "offset": self.offset_spin.value(),
-            "signal_type": self.type_combo.currentText().upper(),
-            "enabled": self.enabled_check.isChecked(),
-        }
-
-
-class ChannelWidget(QFrame):
-    """Виджет для отображения и управления одним каналом"""
-
-    channel_selected = pyqtSignal(int)
-    channel_type_changed = pyqtSignal(int, str)
-    channel_settings_changed = pyqtSignal(int)
-
-    def __init__(self, channel: AnalogChannel, parent=None):
-        super().__init__(parent)
-        self.channel = channel
-        self.setup_ui()
-        self.update_display()
-
-    def setup_ui(self):
-        self.setFrameStyle(QFrame.Box | QFrame.Raised)
-        self.setLineWidth(1)
-        self.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 5px;
-            }
-            QFrame:hover {
-                background-color: #f0f8ff;
-                border: 2px solid #4CAF50;
-            }
-        """)
-
-        layout = QVBoxLayout()
-        layout.setSpacing(2)
-        layout.setContentsMargins(5, 5, 5, 5)
-
-        self.name_label = QLabel(f"Ch{self.channel.id + 1}: {self.channel.name}")
-        self.name_label.setAlignment(Qt.AlignCenter)
-        self.name_label.setFont(QFont("Arial", 8, QFont.Bold))
-        self.name_label.setStyleSheet("color: #0066CC; cursor: pointer;")
-        self.name_label.mousePressEvent = self.on_name_click
-        layout.addWidget(self.name_label)
-
-        self.value_label = QLabel("0.00")
-        self.value_label.setAlignment(Qt.AlignCenter)
-        self.value_label.setFont(QFont("Arial", 14, QFont.Bold))
-        self.value_label.setStyleSheet("color: #0066CC;")
-        layout.addWidget(self.value_label)
-
-        self.bar_frame = QFrame()
-        bar_layout = QVBoxLayout()
-        bar_layout.setContentsMargins(0, 0, 0, 0)
-        self.bar = QFrame()
-        self.bar.setFixedHeight(4)
-        self.bar.setStyleSheet("background-color: #4CAF50; border-radius: 2px;")
-        bar_layout.addWidget(self.bar)
-
-        bounds_layout = QHBoxLayout()
-        bounds_layout.setContentsMargins(0, 0, 0, 0)
-        self.min_label = QLabel(f"{self.channel.min_value:.0f}")
-        self.min_label.setStyleSheet("color: #999999; font-size: 6px;")
-        self.min_label.setAlignment(Qt.AlignLeft)
-        bounds_layout.addWidget(self.min_label)
-        bounds_layout.addStretch()
-        self.max_label = QLabel(f"{self.channel.max_value:.0f}")
-        self.max_label.setStyleSheet("color: #999999; font-size: 6px;")
-        self.max_label.setAlignment(Qt.AlignRight)
-        bounds_layout.addWidget(self.max_label)
-
-        bar_layout.addLayout(bounds_layout)
-        self.bar_frame.setLayout(bar_layout)
-        layout.addWidget(self.bar_frame)
-
-        self.type_combo = QComboBox()
-        self.type_combo.addItems([st.name.capitalize() for st in SignalType])
-        current_type = self.channel.signal_type.name.capitalize()
-        index = self.type_combo.findText(current_type)
-        if index >= 0:
-            self.type_combo.setCurrentIndex(index)
-        self.type_combo.currentTextChanged.connect(self.on_type_changed)
-        self.type_combo.setStyleSheet("""
-            QComboBox {
-                font-size: 7px;
-                padding: 1px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: none;
-            }
-        """)
-        layout.addWidget(self.type_combo)
-
-        settings_layout = QHBoxLayout()
-        settings_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.settings_btn = QPushButton("⚙")
-        self.settings_btn.setFixedSize(20, 20)
-        self.settings_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e0e0e0;
-                border: 1px solid #b0b0b0;
-                border-radius: 10px;
-                font-size: 10px;
-                padding: 0px;
-            }
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-        """)
-        self.settings_btn.clicked.connect(self.open_settings)
-        settings_layout.addWidget(self.settings_btn, alignment=Qt.AlignCenter)
-
-        self.enabled_check = QCheckBox("Вкл")
-        self.enabled_check.setChecked(self.channel.enabled)
-        self.enabled_check.stateChanged.connect(self.on_enabled_changed)
-        self.enabled_check.setStyleSheet("font-size: 8px;")
-        settings_layout.addWidget(self.enabled_check, alignment=Qt.AlignCenter)
-
-        layout.addLayout(settings_layout)
-
-        self.setLayout(layout)
-        self.setMinimumSize(100, 160)
-        self.setMaximumSize(120, 180)
-
-    def on_name_click(self, event):
-        self.channel_selected.emit(self.channel.id)
-
-    def on_type_changed(self, text: str):
-        try:
-            signal_type = SignalType[text.upper()]
-            self.channel.signal_type = signal_type
-            self.channel_type_changed.emit(self.channel.id, text)
-        except KeyError:
-            pass
-
-    def open_settings(self):
-        dialog = ChannelSettingsDialog(self.channel, self)
-        if dialog.exec_() == QDialog.Accepted:
-            settings = dialog.get_settings()
-
-            self.channel.name = settings["name"]
-            self.channel.min_value = settings["min_value"]
-            self.channel.max_value = settings["max_value"]
-            self.channel.frequency = settings["frequency"]
-            self.channel.amplitude = settings["amplitude"]
-            self.channel.offset = settings["offset"]
-            self.channel.signal_type = SignalType[settings["signal_type"]]
-            self.channel.enabled = settings["enabled"]
-
-            self.name_label.setText(f"Ch{self.channel.id + 1}: {self.channel.name}")
-            self.min_label.setText(f"{self.channel.min_value:.0f}")
-            self.max_label.setText(f"{self.channel.max_value:.0f}")
-
-            current_type = self.channel.signal_type.name.capitalize()
-            index = self.type_combo.findText(current_type)
-            if index >= 0:
-                self.type_combo.setCurrentIndex(index)
-
-            self.enabled_check.setChecked(self.channel.enabled)
-            self.update_display()
-
-            self.channel_settings_changed.emit(self.channel.id)
-
-    def on_enabled_changed(self, state):
-        self.channel.enabled = bool(state)
-        if not state:
-            self.value_label.setStyleSheet("color: #999999;")
-            self.bar.setStyleSheet("background-color: #cccccc; border-radius: 2px;")
-            self.type_combo.setEnabled(False)
-            self.settings_btn.setEnabled(False)
-        else:
-            self.value_label.setStyleSheet("color: #0066CC;")
-            self.bar.setStyleSheet("background-color: #4CAF50; border-radius: 2px;")
-            self.type_combo.setEnabled(True)
-            self.settings_btn.setEnabled(True)
-
-    def update_display(self):
-        """Обновить отображение значения"""
-        try:
-            # Проверяем существование основных виджетов
-            if not hasattr(self, "value_label") or not self.value_label:
-                return
-
-            if self.channel.enabled:
-                value = self.channel.current_value
-                self.value_label.setText(f"{value:.1f}")
-
-                range_val = self.channel.max_value - self.channel.min_value
-                if range_val > 0:
-                    percent = (value - self.channel.min_value) / range_val
-                    bar_width = max(0, min(100, percent * 100))
-                else:
-                    bar_width = 50
-
-                if self.bar:
-                    self.bar.setStyleSheet(f"""
-                        background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                            stop:0 #4CAF50, stop:{bar_width / 100} #4CAF50,
-                            stop:{bar_width / 100} #e0e0e0, stop:1 #e0e0e0);
-                        border-radius: 2px;
-                    """)
-            else:
-                if self.value_label:
-                    self.value_label.setText("Off")
-                if self.bar:
-                    self.bar.setStyleSheet(
-                        "background-color: #cccccc; border-radius: 2px;"
-                    )
-
-        except (RuntimeError, AttributeError):
-            # Виджет уже удален - просто игнорируем
-            # print(f"[DEBUG] Widget update error: {e}")
-            pass
-
-    def update_channel(self, channel: AnalogChannel):
-        self.channel = channel
-        self.name_label.setText(f"Ch{channel.id + 1}: {channel.name}")
-        self.min_label.setText(f"{channel.min_value:.0f}")
-        self.max_label.setText(f"{channel.max_value:.0f}")
-
-        current_type = channel.signal_type.name.capitalize()
-        index = self.type_combo.findText(current_type)
-        if index >= 0:
-            self.type_combo.setCurrentIndex(index)
-
-        self.enabled_check.setChecked(channel.enabled)
-        self.update_display()
 
 
 class MainWindow(QMainWindow):
@@ -514,7 +194,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
 
         main_layout = QHBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setContentsMargins(8, 8, 8, 8)
         central_widget.setLayout(main_layout)
 
         splitter = QSplitter(Qt.Horizontal)
@@ -523,6 +203,7 @@ class MainWindow(QMainWindow):
         left_container = QWidget()
         left_container_layout = QVBoxLayout()
         left_container_layout.setContentsMargins(0, 0, 0, 0)
+        left_container_layout.setSpacing(6)
         left_container.setLayout(left_container_layout)
 
         # --- Общие настройки, не зависящие от режима работы ---
@@ -549,23 +230,7 @@ class MainWindow(QMainWindow):
         # Сетка каналов — часть ручного режима: видна только когда
         # выбран "Ручной", в режиме "Сценарий" скрыта целиком.
 
-        channels_group = QGroupBox("📡 Управление каналами")
-        channels_group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 2px solid #d0d0d0;
-                border-radius: 8px;
-                margin-top: 8px;
-                padding-top: 8px;
-                background-color: #fafafa;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-                background-color: #fafafa;
-            }
-        """)
+        channels_group = QGroupBox("Управление каналами")
         channels_group_layout = QVBoxLayout()
         channels_group_layout.setContentsMargins(6, 10, 6, 6)
         channels_group.setLayout(channels_group_layout)
@@ -589,37 +254,12 @@ class MainWindow(QMainWindow):
         mode_row = QHBoxLayout()
         mode_row.setSpacing(0)
 
-        self.manual_mode_btn = QPushButton("🖐 Ручной")
-        self.scenario_mode_btn = QPushButton("🎬 Сценарий")
+        self.manual_mode_btn = QPushButton("Ручной режим")
+        self.scenario_mode_btn = QPushButton("Сценарий")
         for btn in (self.manual_mode_btn, self.scenario_mode_btn):
+            btn.setObjectName("modeButton")
             btn.setCheckable(True)
             btn.setMinimumHeight(30)
-        self.manual_mode_btn.setStyleSheet("""
-            QPushButton {
-                border: 2px solid #4CAF50;
-                border-right: 1px solid #4CAF50;
-                border-top-left-radius: 6px;
-                border-bottom-left-radius: 6px;
-                background-color: white;
-                color: #4CAF50;
-                font-weight: bold;
-                padding: 4px 14px;
-            }
-            QPushButton:checked { background-color: #4CAF50; color: white; }
-        """)
-        self.scenario_mode_btn.setStyleSheet("""
-            QPushButton {
-                border: 2px solid #4CAF50;
-                border-left: 1px solid #4CAF50;
-                border-top-right-radius: 6px;
-                border-bottom-right-radius: 6px;
-                background-color: white;
-                color: #4CAF50;
-                font-weight: bold;
-                padding: 4px 14px;
-            }
-            QPushButton:checked { background-color: #4CAF50; color: white; }
-        """)
 
         self.mode_button_group = QButtonGroup(self)
         self.mode_button_group.setExclusive(True)
@@ -643,23 +283,7 @@ class MainWindow(QMainWindow):
         # QStackedWidget, а не QSplitter: сетка и конструктор сценария больше
         # никогда не видны одновременно, делить между ними место не нужно —
         # видимая страница получает всё доступное пространство целиком.
-        scenario_group = QGroupBox("🎬 Сценарии")
-        scenario_group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 2px solid #4CAF50;
-                border-radius: 8px;
-                margin-top: 8px;
-                padding-top: 8px;
-                background-color: #f0f8f0;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-                background-color: #f0f8f0;
-            }
-        """)
+        scenario_group = QGroupBox("Сценарий")
         scenario_layout = QVBoxLayout()
         scenario_layout.setContentsMargins(5, 5, 5, 5)
         scenario_layout.setSpacing(3)
@@ -673,13 +297,11 @@ class MainWindow(QMainWindow):
         # --- Сетка каналов ---
         self.channel_grid_scroll = QScrollArea()
         self.channel_grid_scroll.setWidgetResizable(True)
-        self.channel_grid_scroll.setStyleSheet(
-            "QScrollArea { border: none; background-color: #f5f5f5; }"
-        )
 
         self.channel_grid_widget = QWidget()
         grid_layout = QGridLayout()
-        grid_layout.setSpacing(3)
+        grid_layout.setContentsMargins(4, 4, 4, 4)
+        grid_layout.setSpacing(6)
         self.channel_grid_widget.setLayout(grid_layout)
 
         self.channel_widgets = []
@@ -711,11 +333,6 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([1050, 350])
-
-        self.setStyleSheet("""
-            QMainWindow { background-color: #f5f5f5; }
-            QLabel { color: #333333; }
-        """)
 
     def _create_info_panel(self):
         """Создать информационную панель"""
