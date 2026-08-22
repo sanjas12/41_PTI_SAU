@@ -34,8 +34,8 @@ from ui.channel_widget import ChannelWidget
 # Импорты для сценариев - ВЫНОСИМ В КОНЕЦ ФАЙЛА
 from ui.connection_panel import ConnectionPanel
 from ui.control_panel import ControlPanel
+from ui.event_log_panel import EventLogPanel
 from ui.interval_control import IntervalControl
-from ui.logger_window import LoggerWindow
 from ui.plot_widget import PlotWindow
 
 
@@ -89,7 +89,6 @@ class MainWindow(QMainWindow):
         self.is_running = True
         self.is_paused = False
         self.plot_window = None
-        self.logger_window = None
         self.plc_view = None
 
         # Генерация уже запущена (см. self.timer.start(10) выше) — приводим
@@ -250,13 +249,13 @@ class MainWindow(QMainWindow):
         self.control_panel.pause_clicked.connect(self.on_pause_clicked)
         self.control_panel.reset_clicked.connect(self.reset_signals)
         self.control_panel.plot_clicked.connect(self.open_plot_window)
-        self.control_panel.logger_clicked.connect(self.open_logger_window)
         self.control_panel.plc_clicked.connect(self.open_plc_view)
         self.control_panel.save_channels_clicked.connect(self.save_channels)
         self.control_panel.toggle_all_clicked.connect(
             self.on_toggle_all_channels_clicked
         )
         channels_group_layout.addWidget(self.control_panel)
+        channels_group_layout.addWidget(self._create_info_bar())
 
         # --- Сегментированный тумблер: Ручной ⇄ Сценарий ---
         mode_row = QHBoxLayout()
@@ -335,71 +334,55 @@ class MainWindow(QMainWindow):
 
         splitter.addWidget(left_container)
 
-        right_panel = self._create_info_panel()
-        splitter.addWidget(right_panel)
+        self.event_log_panel = EventLogPanel(self)
+        splitter.addWidget(self.event_log_panel)
 
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([1050, 350])
 
-    def _create_info_panel(self):
-        """Создать информационную панель"""
-        panel = QGroupBox("Информация")
-        layout = QVBoxLayout()
-        panel.setLayout(layout)
+    def _create_info_bar(self):
+        """Создать компактную строку состояния внутри управления каналами."""
+        panel = QFrame()
+        panel.setObjectName("infoBar")
+        layout = QHBoxLayout(panel)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(6)
 
-        # Статус
         self.status_label = QLabel("● Работает")
         self.status_label.setStyleSheet(
             "color: #00CC00; font-weight: bold; font-size: 12px;"
         )
         layout.addWidget(self.status_label)
 
-        # Разделитель
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(line)
-
-        # Режим работы
         layout.addWidget(QLabel("Режим:"))
         self.mode_label = QLabel("Ручной")
         self.mode_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
         layout.addWidget(self.mode_label)
 
-        # Выбранный канал
-        layout.addWidget(QLabel("Выбранный канал:"))
+        layout.addWidget(QLabel("Канал:"))
         self.selected_channel_label = QLabel("Канал 1")
         self.selected_channel_label.setStyleSheet("color: #0066CC; font-weight: bold;")
         layout.addWidget(self.selected_channel_label)
 
-        # Тип сигнала выбранного канала
-        layout.addWidget(QLabel("Тип сигнала:"))
+        layout.addWidget(QLabel("Тип:"))
         self.selected_type_label = QLabel("Sine")
-        self.selected_type_label.setStyleSheet("color: #666666;")
+        self.selected_type_label.setObjectName("secondaryText")
         layout.addWidget(self.selected_type_label)
 
-        # Границы выбранного канала
-        layout.addWidget(QLabel("Границы:"))
+        layout.addWidget(QLabel("Диапазон:"))
         self.selected_bounds_label = QLabel("0 - 100")
-        self.selected_bounds_label.setStyleSheet("color: #666666;")
+        self.selected_bounds_label.setObjectName("secondaryText")
         layout.addWidget(self.selected_bounds_label)
 
-        layout.addSpacing(10)
-
-        # Статистика
-        layout.addWidget(QLabel("Статистика:"))
-        self.stats_label = QLabel("Каналов: 20\nАктивных: 20")
-        self.stats_label.setStyleSheet("color: #666666; font-size: 10px;")
+        self.stats_label = QLabel("Каналов: 20 · Активных: 20")
+        self.stats_label.setObjectName("secondaryText")
         layout.addWidget(self.stats_label)
-
         layout.addStretch()
 
-        # Версия
         version_label = QLabel(__full_version__)
-        version_label.setStyleSheet("color: #999999; font-size: 9px;")
+        version_label.setObjectName("secondaryText")
         layout.addWidget(version_label)
-
         return panel
 
     def save_channels(self):
@@ -513,8 +496,8 @@ class MainWindow(QMainWindow):
         self.thread_pool.start(job)
 
     def log(self, message: str, level: str = "info"):
-        if self.logger_window and self.logger_window.isVisible():
-            self.logger_window.log(message, level)
+        if hasattr(self, "event_log_panel"):
+            self.event_log_panel.log(message, level)
         else:
             print(f"[{level.upper()}] {message}")
 
@@ -588,14 +571,6 @@ class MainWindow(QMainWindow):
                 seen.append(step.channel_id)
         return seen
 
-    def open_logger_window(self):
-        if self.logger_window is None or not self.logger_window.isVisible():
-            self.logger_window = LoggerWindow(self)
-            self.logger_window.show()
-        else:
-            self.logger_window.raise_()
-            self.logger_window.activateWindow()
-
     def open_plc_view(self):
         if self.plc_view is None or not self.plc_view.isVisible():
             self.plc_view = PLCRegisterView(self.plc_interface, self)
@@ -624,6 +599,13 @@ class MainWindow(QMainWindow):
         переключает только явный клик по тумблеру — см. request_channel_mode.
         """
         self._engine_mode = mode
+        if hasattr(self, "mode_label"):
+            mode_names = {
+                "manual": "Ручной",
+                "scenario": "Сценарий",
+                "paused": "Пауза",
+            }
+            self.mode_label.setText(mode_names.get(mode, mode))
         if mode in ("scenario", "paused"):
             self._show_channel_mode_view("scenario")
         else:
@@ -775,17 +757,11 @@ class MainWindow(QMainWindow):
         self._show_channel_mode_view("manual")
 
     def on_plc_debug_data(self, debug_info: dict):
-        print(
-            f"\n[PLC_DEBUG] Запись #{debug_info['write_count']} - "
-            f"{len(debug_info.get('registers', []))} регистров записано"
+        self.log(
+            f"Запись PLC #{debug_info['write_count']}: "
+            f"{len(debug_info.get('registers', []))} регистров",
+            "debug",
         )
-
-        if (
-            self.logger_window
-            and self.logger_window.isVisible()
-            and hasattr(self.logger_window, "log_debug_data")
-        ):
-            self.logger_window.log_debug_data(debug_info)
 
     def start_generation(self):
         if self.is_running:
@@ -909,7 +885,7 @@ class MainWindow(QMainWindow):
         try:
             if self.stats_label:
                 self.stats_label.setText(
-                    f"Каналов: {len(self.generator.channels)}\nАктивных: {active_count}"
+                    f"Каналов: {len(self.generator.channels)} · Активных: {active_count}"
                 )
         except (RuntimeError, AttributeError):
             pass
@@ -930,8 +906,6 @@ class MainWindow(QMainWindow):
 
         if self.plot_window:
             self.plot_window.close()
-        if self.logger_window:
-            self.logger_window.close()
         if self.plc_view:
             self.plc_view.close()
         self.plc_interface.disconnect()

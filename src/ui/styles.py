@@ -96,6 +96,11 @@ def app_stylesheet() -> str:
             background-color: {color["primary_soft"]};
             border-color: {color["primary"]};
         }}
+        QFrame#infoBar {{
+            background-color: {color["surface_alt"]};
+            border: 1px solid {color["border"]};
+            border-radius: 2px;
+        }}
         QLabel#channelName, QLabel#channelValue {{
             color: {color["primary"]};
             font-weight: 600;
@@ -130,6 +135,13 @@ def app_stylesheet() -> str:
             text-align: center;
         }}
         QProgressBar::chunk {{ background-color: {color["primary"]}; }}
+        QTextEdit#eventLog {{
+            padding: 5px;
+            background-color: {color["surface_alt"]};
+            border: 1px solid {color["border"]};
+            border-radius: 2px;
+            font-family: Consolas;
+        }}
         QToolTip {{
             color: {color["text"]};
             background-color: {color["surface"]};

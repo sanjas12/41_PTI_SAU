@@ -16,7 +16,6 @@ class ControlPanel(CollapsibleGroupBox):
     pause_clicked = pyqtSignal()
     reset_clicked = pyqtSignal()
     plot_clicked = pyqtSignal()
-    logger_clicked = pyqtSignal()
     plc_clicked = pyqtSignal()
     save_channels_clicked = pyqtSignal()
     toggle_all_clicked = pyqtSignal()
@@ -157,23 +156,6 @@ class ControlPanel(CollapsibleGroupBox):
             QPushButton:hover { background-color: #1976D2; }
         """)
         layout.addWidget(self.plot_btn)
-
-        # Кнопка Журнал
-        self.logger_btn = QPushButton("📋 Журнал")
-        self.logger_btn.clicked.connect(self.logger_clicked.emit)
-        self.logger_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #9C27B0;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-                min-width: 70px;
-            }
-            QPushButton:hover { background-color: #7B1FA2; }
-        """)
-        layout.addWidget(self.logger_btn)
 
         # Кнопка PLC Регистры
         self.plc_btn = QPushButton("📋 PLC Регистры")
