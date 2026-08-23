@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QAction,
     QApplication,
     QDoubleSpinBox,
+    QFrame,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -18,6 +19,7 @@ from PyQt5.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSpinBox,
     QSplitter,
@@ -26,6 +28,8 @@ from PyQt5.QtWidgets import (
 )
 
 from core.signal_generator import SignalGenerator
+from ui.styles import COLORS as UI_COLORS
+from ui.styles import app_stylesheet
 
 
 class ChannelBuffer:
@@ -148,22 +152,32 @@ class PlotWidget(pg.PlotWidget):
     def setup_plot(self) -> None:
         """Настроить внешний вид графика."""
 
+        self.setBackground("#101214")
+        self.getPlotItem().setContentsMargins(6, 5, 6, 4)
+
+        for axis_name in ("left", "bottom"):
+            axis = self.getAxis(axis_name)
+            axis.setPen(pg.mkPen("#8a929b"))
+            axis.setTextPen(pg.mkPen("#c7cdd3"))
+
         self.setLabel(
             "left",
             "Значение",
             units="%",
+            color="#c7cdd3",
         )
 
         self.setLabel(
             "bottom",
             "Время",
             units="с",
+            color="#c7cdd3",
         )
 
         self.showGrid(
             x=True,
             y=True,
-            alpha=0.3,
+            alpha=0.28,
         )
 
         self.setMouseEnabled(
@@ -171,13 +185,19 @@ class PlotWidget(pg.PlotWidget):
             y=True,
         )
 
-        self._legend = self.addLegend()
+        self._legend = self.addLegend(
+            brush=pg.mkBrush(24, 27, 30, 220),
+            pen=pg.mkPen("#525a63"),
+        )
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
 
         self.customContextMenuRequested.connect(self.show_context_menu)
 
         self.setMinimumHeight(200)
+        self.setStyleSheet(
+            f"border: 1px solid {UI_COLORS['border']}; border-radius: 3px;"
+        )
 
         self.setSizePolicy(
             QSizePolicy.Expanding,
@@ -377,7 +397,10 @@ class PlotWidget(pg.PlotWidget):
         if self._legend is not None:
             self._legend.scene().removeItem(self._legend)
 
-        self._legend = self.addLegend()
+        self._legend = self.addLegend(
+            brush=pg.mkBrush(24, 27, 30, 220),
+            pen=pg.mkPen("#525a63"),
+        )
 
         for channel_id, curve in self.curves.items():
             name = self.get_channel_name(channel_id)
@@ -397,7 +420,11 @@ class PlotWidget(pg.PlotWidget):
         channel_ids = self.get_channel_ids()
 
         if not channel_ids:
-            self.setTitle(f"График {self.plot_index + 1} (пусто)")
+            self.setTitle(
+                f"График {self.plot_index + 1} · каналы не добавлены",
+                color="#aeb6be",
+                size="9pt",
+            )
             return
 
         names = [self.get_channel_name(channel_id) for channel_id in channel_ids]
@@ -407,7 +434,7 @@ class PlotWidget(pg.PlotWidget):
         if len(title) > 60:
             title = title[:57] + "..."
 
-        self.setTitle(title)
+        self.setTitle(title, color="#e5e9ed", size="9pt")
 
     # ------------------------------------------------------------------
     # Настройки
@@ -434,7 +461,7 @@ class PlotWidget(pg.PlotWidget):
         menu = QMenu(self)
 
         clear_action = QAction(
-            "🗑 Очистить график",
+            "Очистить данные графика",
             self,
         )
 
@@ -445,7 +472,7 @@ class PlotWidget(pg.PlotWidget):
         menu.addAction(clear_action)
 
         add_action = QAction(
-            "➕ Добавить канал",
+            "Добавить канал",
             self,
         )
 
@@ -459,7 +486,7 @@ class PlotWidget(pg.PlotWidget):
             menu.addSeparator()
 
             channel_menu = QMenu(
-                "📊 Каналы на графике",
+                "Каналы на графике",
                 self,
             )
 
@@ -478,7 +505,7 @@ class PlotWidget(pg.PlotWidget):
         menu.addSeparator()
 
         remove_action = QAction(
-            "❌ Удалить график",
+            "Удалить график",
             self,
         )
 
@@ -517,7 +544,7 @@ class PlotWindow(QMainWindow):
 
         self.generator = generator
 
-        self.setWindowTitle("📊 Графики сигналов")
+        self.setWindowTitle("Графики сигналов")
 
         self._setup_window_geometry()
 
@@ -527,7 +554,7 @@ class PlotWindow(QMainWindow):
 
         self.time_window = 10.0
         self.max_points = 2000
-        self.plot_height = 200
+        self.plot_height = 170
 
         # --------------------------------------------------------------
         # Графики
@@ -623,22 +650,26 @@ class PlotWindow(QMainWindow):
 
         main_layout = QVBoxLayout(central_widget)
 
-        main_layout.setContentsMargins(
-            5,
-            5,
-            5,
-            5,
-        )
+        main_layout.setContentsMargins(6, 6, 6, 5)
+        main_layout.setSpacing(5)
 
-        main_layout.setSpacing(3)
+        header_layout = QHBoxLayout()
+        title = QLabel("Графики сигналов")
+        title.setObjectName("pageTitle")
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        self.fps_label = QLabel("Обновлений: 0")
+        self.fps_label.setObjectName("statusPill")
+        header_layout.addWidget(self.fps_label)
+        main_layout.addLayout(header_layout)
 
         # Верхняя панель
-        main_layout.addLayout(self._create_control_panel())
+        main_layout.addWidget(self._create_control_panel())
 
         # Основная область
         splitter = QSplitter(Qt.Horizontal)
 
-        splitter.setHandleWidth(3)
+        splitter.setHandleWidth(5)
 
         left_panel = self._create_channels_panel()
 
@@ -661,7 +692,7 @@ class PlotWindow(QMainWindow):
         main_layout.addWidget(splitter)
 
         # Нижняя панель
-        main_layout.addLayout(self._create_info_panel())
+        main_layout.addWidget(self._create_info_panel())
 
         self._apply_styles()
 
@@ -669,66 +700,53 @@ class PlotWindow(QMainWindow):
         """Применить стили."""
 
         self.setStyleSheet(
-            """
-            QMainWindow {
-                background-color: #f5f5f5;
-            }
-
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 4px 10px;
+            app_stylesheet()
+            + f"""
+            QLabel#pageTitle {{
+                color: {UI_COLORS["text"]};
+                font-size: 15pt;
+                font-weight: 600;
+            }}
+            QFrame#toolbar, QFrame#statusBar, QFrame#panelCard {{
+                background-color: {UI_COLORS["surface"]};
+                border: 1px solid {UI_COLORS["border"]};
                 border-radius: 3px;
-                font-weight: bold;
-                font-size: 9px;
-            }
-
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-
-            QPushButton#remove_btn {
-                background-color: #f44336;
-            }
-
-            QPushButton#remove_btn:hover {
-                background-color: #da190b;
-            }
-
-            QListWidget {
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
-                background-color: white;
-                font-size: 9px;
-            }
-
-            QListWidget::item {
-                padding: 3px;
-            }
-
-            QListWidget::item:selected {
-                background-color: #4CAF50;
+            }}
+            QLabel#sectionTitle {{
+                color: {UI_COLORS["text"]};
+                font-weight: 600;
+            }}
+            QLabel#statusPill {{
+                color: {UI_COLORS["primary"]};
+                background-color: {UI_COLORS["primary_soft"]};
+                border: 1px solid {UI_COLORS["border"]};
+                border-radius: 9px;
+                padding: 3px 9px;
+            }}
+            QPushButton#primaryButton {{
                 color: white;
-            }
-
-            QListWidget::item:hover {
-                background-color: #e8f5e9;
-            }
-
-            QLabel {
-                font-size: 9px;
-            }
-
-            QSpinBox,
-            QDoubleSpinBox {
-                font-size: 9px;
-                padding: 2px;
-            }
-
-            QGroupBox {
-                font-size: 9px;
-            }
+                background-color: {UI_COLORS["primary"]};
+                border-color: {UI_COLORS["primary"]};
+                font-weight: 600;
+            }}
+            QPushButton#primaryButton:hover {{
+                background-color: {UI_COLORS["primary_hover"]};
+            }}
+            QPushButton#dangerButton {{ color: {UI_COLORS["danger"]}; }}
+            QListWidget {{
+                background-color: {UI_COLORS["surface_alt"]};
+                border: 1px solid {UI_COLORS["border"]};
+                border-radius: 2px;
+                outline: none;
+            }}
+            QListWidget::item {{ padding: 6px 5px; }}
+            QListWidget::item:selected {{
+                color: white;
+                background-color: {UI_COLORS["primary"]};
+            }}
+            QListWidget::item:hover:!selected {{
+                background-color: {UI_COLORS["primary_soft"]};
+            }}
             """
         )
 
@@ -739,37 +757,37 @@ class PlotWindow(QMainWindow):
     def _create_control_panel(self):
         """Создать панель управления."""
 
-        layout = QHBoxLayout()
-
-        layout.setSpacing(5)
+        toolbar = QFrame()
+        toolbar.setObjectName("toolbar")
+        layout = QHBoxLayout(toolbar)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(6)
 
         # Добавить график
-        self.add_plot_btn = QPushButton("➕ Добавить график")
+        self.add_plot_btn = QPushButton("＋ Добавить график")
+        self.add_plot_btn.setObjectName("primaryButton")
 
         self.add_plot_btn.clicked.connect(self.add_plot)
 
         layout.addWidget(self.add_plot_btn)
 
         # Удалить последний
-        self.remove_last_btn = QPushButton("➖ Удалить график")
-
-        self.remove_last_btn.setObjectName("remove_btn")
+        self.remove_last_btn = QPushButton("− Удалить последний")
+        self.remove_last_btn.setObjectName("dangerButton")
 
         self.remove_last_btn.clicked.connect(self.remove_last_plot)
 
         layout.addWidget(self.remove_last_btn)
 
         # Очистить всё
-        self.clear_all_btn = QPushButton("🗑 Очистить все")
-
-        self.clear_all_btn.setObjectName("remove_btn")
+        self.clear_all_btn = QPushButton("Очистить данные")
 
         self.clear_all_btn.clicked.connect(self.clear_all_plots)
 
         layout.addWidget(self.clear_all_btn)
 
         # Автомасштаб
-        self.auto_btn = QPushButton("📐 Авто-масштаб")
+        self.auto_btn = QPushButton("Автомасштаб")
 
         self.auto_btn.clicked.connect(self.auto_range_all)
 
@@ -777,13 +795,17 @@ class PlotWindow(QMainWindow):
 
         layout.addStretch()
 
-        # Высота
-        layout.addWidget(QLabel("Высота:"))
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(separator)
+
+        layout.addWidget(QLabel("Высота"))
 
         self.height_spin = QSpinBox()
 
         self.height_spin.setRange(
-            150,
+            130,
             400,
         )
 
@@ -799,10 +821,8 @@ class PlotWindow(QMainWindow):
 
         layout.addWidget(self.height_spin)
 
-        layout.addStretch()
-
         # Временное окно
-        layout.addWidget(QLabel("Окно (с):"))
+        layout.addWidget(QLabel("Окно"))
 
         self.time_window_spin = QDoubleSpinBox()
 
@@ -819,17 +839,10 @@ class PlotWindow(QMainWindow):
 
         self.time_window_spin.valueChanged.connect(self.on_time_window_changed)
 
+        self.time_window_spin.setSuffix(" с")
         layout.addWidget(self.time_window_spin)
 
-        layout.addStretch()
-
-        self.fps_label = QLabel("Обновлений: 0")
-
-        self.fps_label.setStyleSheet("color: #666666; font-size: 8px;")
-
-        layout.addWidget(self.fps_label)
-
-        return layout
+        return toolbar
 
     # ==================================================================
     # Панель каналов
@@ -838,29 +851,16 @@ class PlotWindow(QMainWindow):
     def _create_channels_panel(self):
         """Создать список каналов."""
 
-        widget = QWidget()
+        widget = QFrame()
+        widget.setObjectName("panelCard")
 
         layout = QVBoxLayout(widget)
 
-        layout.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(4)
 
-        layout.setSpacing(2)
-
-        title = QLabel("📋 Каналы")
-
-        title.setStyleSheet(
-            """
-            font-weight: bold;
-            padding: 3px;
-            background-color: #e8e8e8;
-            font-size: 9px;
-            """
-        )
+        title = QLabel("Каналы")
+        title.setObjectName("sectionTitle")
 
         layout.addWidget(title)
 
@@ -872,7 +872,8 @@ class PlotWindow(QMainWindow):
 
         self.channels_list.customContextMenuRequested.connect(self.show_channel_menu)
 
-        self.channels_list.setMaximumWidth(200)
+        self.channels_list.setMinimumWidth(220)
+        self.channels_list.setMaximumWidth(280)
 
         layout.addWidget(self.channels_list)
 
@@ -882,17 +883,16 @@ class PlotWindow(QMainWindow):
 
         self.selection_info = QLabel("Выбрано: 0")
 
-        self.selection_info.setStyleSheet("color: #666666; font-size: 8px;")
+        self.selection_info.setObjectName("secondaryText")
 
         info_layout.addWidget(self.selection_info)
 
         info_layout.addStretch()
 
-        self.add_selected_btn = QPushButton("➕")
+        self.add_selected_btn = QPushButton("Добавить на график")
+        self.add_selected_btn.setObjectName("primaryButton")
 
         self.add_selected_btn.setToolTip("Добавить выбранные каналы на график")
-
-        self.add_selected_btn.setMaximumWidth(25)
 
         self.add_selected_btn.clicked.connect(self.add_selected_channels)
 
@@ -909,46 +909,45 @@ class PlotWindow(QMainWindow):
     def _create_plots_panel(self):
         """Создать область графиков."""
 
-        widget = QWidget()
+        widget = QFrame()
+        widget.setObjectName("panelCard")
 
         layout = QVBoxLayout(widget)
 
-        layout.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(4)
 
-        layout.setSpacing(2)
+        title_layout = QHBoxLayout()
+        title = QLabel("Область графиков")
+        title.setObjectName("sectionTitle")
+        title_layout.addWidget(title)
+        title_layout.addStretch()
+        hint = QLabel("Правый щелчок по графику открывает действия")
+        hint.setObjectName("secondaryText")
+        title_layout.addWidget(hint)
 
-        title = QLabel("📈 Графики (ПКМ → меню)")
-
-        title.setStyleSheet(
-            """
-            font-weight: bold;
-            padding: 3px;
-            background-color: #e8e8e8;
-            font-size: 9px;
-            """
-        )
-
-        layout.addWidget(title)
+        layout.addLayout(title_layout)
 
         self.plots_container = QWidget()
 
         self.plots_layout = QVBoxLayout(self.plots_container)
 
-        self.plots_layout.setSpacing(5)
+        self.plots_layout.setSpacing(4)
 
         self.plots_layout.setContentsMargins(
-            2,
-            2,
-            2,
-            2,
+            0,
+            0,
+            0,
+            0,
         )
 
-        layout.addWidget(self.plots_container)
+        self.plots_layout.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(self.plots_container)
+        layout.addWidget(scroll)
 
         return widget
 
@@ -959,13 +958,17 @@ class PlotWindow(QMainWindow):
     def _create_info_panel(self):
         """Создать информационную панель."""
 
-        layout = QHBoxLayout()
-
+        panel = QFrame()
+        panel.setObjectName("statusBar")
+        layout = QHBoxLayout(panel)
+        layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(5)
 
-        info_label = QLabel("💡 Клик → выбор | Ctrl+клик → множественный | ПКМ → меню")
-
-        info_label.setStyleSheet("color: #666666; font-size: 8px;")
+        info_label = QLabel(
+            "Ctrl + щелчок — выбор нескольких каналов · "
+            "правый щелчок — дополнительные действия"
+        )
+        info_label.setObjectName("secondaryText")
 
         layout.addWidget(info_label)
 
@@ -973,11 +976,11 @@ class PlotWindow(QMainWindow):
 
         self.plots_count_label = QLabel("Графиков: 0")
 
-        self.plots_count_label.setStyleSheet("color: #999999; font-size: 8px;")
+        self.plots_count_label.setObjectName("secondaryText")
 
         layout.addWidget(self.plots_count_label)
 
-        return layout
+        return panel
 
     # ==================================================================
     # Каналы
@@ -1018,13 +1021,7 @@ class PlotWindow(QMainWindow):
             )
 
             if plot_indices:
-                item.setBackground(
-                    QColor(
-                        200,
-                        255,
-                        200,
-                    )
-                )
+                item.setBackground(QColor(UI_COLORS["primary_soft"]))
 
             self.channels_list.addItem(item)
 
@@ -1051,7 +1048,7 @@ class PlotWindow(QMainWindow):
         menu = QMenu(self)
 
         add_action = QAction(
-            "➕ Добавить на график",
+            "Добавить на график",
             self,
         )
 
@@ -1067,7 +1064,7 @@ class PlotWindow(QMainWindow):
 
         if plot_indices:
             remove_menu = QMenu(
-                "❌ Удалить с графиков",
+                "Удалить с графиков",
                 self,
             )
 
@@ -1094,7 +1091,7 @@ class PlotWindow(QMainWindow):
 
         info_action = QAction(
             (
-                f"ℹ️ {channel.name[:15]} | "
+                f"{channel.name[:15]} | "
                 f"{channel.min_value:.0f}-"
                 f"{channel.max_value:.0f} | "
                 f"{channel.frequency:.1f} Гц"
@@ -1252,7 +1249,7 @@ class PlotWindow(QMainWindow):
 
         plot.setMinimumHeight(self.plot_height)
 
-        plot.setMaximumHeight(self.plot_height + 30)
+        plot.setMaximumHeight(self.plot_height + 20)
 
         plot.remove_requested.connect(self.remove_plot)
 
@@ -1262,7 +1259,7 @@ class PlotWindow(QMainWindow):
 
         self.plot_widgets.append(plot)
 
-        self.plots_layout.addWidget(plot)
+        self.plots_layout.insertWidget(self.plots_layout.count() - 1, plot)
 
         self._update_plot_numbers()
 
@@ -1433,7 +1430,7 @@ class PlotWindow(QMainWindow):
         for plot in self.plot_widgets:
             plot.setMinimumHeight(value)
 
-            plot.setMaximumHeight(value + 30)
+            plot.setMaximumHeight(value + 20)
 
     def auto_range_all(self) -> None:
         """Автомасштабировать графики."""
