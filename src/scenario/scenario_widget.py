@@ -2,23 +2,19 @@ import json
 import os
 from typing import Optional
 
-from PyQt5.QtCore import QMimeData, Qt, pyqtSignal
-from PyQt5.QtGui import QDrag, QPixmap
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import (
-    QAction,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
-    QFrame,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
-    QMenu,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -27,7 +23,14 @@ from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 
 from .scenario_engine import ScenarioEngine, ScenarioMode
-from .scenario_model import Scenario, ScenarioStep
+from .scenario_graph import ConnectionItem, ScenarioGraphScene, ScenarioGraphView
+from .scenario_model import (
+    TRIGGER_ALL,
+    TRIGGER_ANY,
+    TRIGGER_SPECIFIC,
+    Scenario,
+    ScenarioStep,
+)
 
 SIGNAL_TYPE_NAMES = {
     "Sine": "Синус",
@@ -60,164 +63,6 @@ def format_step_count(count: int) -> str:
     return f"{count} {suffix}"
 
 
-class StepWidget(QFrame):
-    """Виджет для отображения шага сценария (drag&drop)"""
-
-    edit_requested = pyqtSignal(int)
-    delete_requested = pyqtSignal(int)
-    move_requested = pyqtSignal(int, int)
-
-    def __init__(self, step_index: int, step: ScenarioStep, parent=None):
-        super().__init__(parent)
-        self.step_index = step_index
-        self.step = step
-        self.setup_ui()
-        self.setAcceptDrops(True)
-
-    def setup_ui(self):
-        self.setFrameStyle(QFrame.Box | QFrame.Raised)
-        self.setLineWidth(1)
-        self.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 4px;
-                padding: 2px;
-                margin: 1px;
-            }
-            QFrame:hover {
-                background-color: #e8f5e9;
-                border: 2px solid #4CAF50;
-            }
-        """)
-
-        layout = QHBoxLayout()
-        layout.setContentsMargins(3, 2, 3, 2)
-        layout.setSpacing(3)
-
-        # Номер шага
-        self.number_label = QLabel(f"Шаг {self.step_index + 1}")
-        self.number_label.setStyleSheet(
-            "font-weight: bold; color: #666; min-width: 25px; font-size: 8px;"
-        )
-        layout.addWidget(self.number_label)
-
-        # Информация о канале
-        channel_info = f"Канал {self.step.channel_id + 1}"
-        self.channel_label = QLabel(channel_info)
-        self.channel_label.setStyleSheet(
-            "font-weight: bold; min-width: 25px; font-size: 8px;"
-        )
-        layout.addWidget(self.channel_label)
-
-        # Тип сигнала
-        type_color = {
-            "Sine": "#2196F3",
-            "Square": "#f44336",
-            "Sawtooth": "#FF9800",
-            "Triangle": "#4CAF50",
-            "Random": "#9C27B0",
-            "Custom": "#795548",
-        }.get(self.step.signal_type, "#666666")
-
-        signal_name = SIGNAL_TYPE_NAMES.get(
-            self.step.signal_type, self.step.signal_type
-        )
-        self.type_label = QLabel(signal_name)
-        self.type_label.setStyleSheet(
-            f"color: {type_color}; font-weight: bold; min-width: 30px; font-size: 8px;"
-        )
-        layout.addWidget(self.type_label)
-
-        # Длительность
-        duration = f"{self.step.duration:g} с"
-        self.duration_label = QLabel(duration)
-        self.duration_label.setStyleSheet(
-            "color: #666; min-width: 25px; font-size: 8px;"
-        )
-        layout.addWidget(self.duration_label)
-
-        parameters = QLabel(
-            f"A {self.step.amplitude:g} % · f {self.step.frequency:g} Гц · "
-            f"смещение {self.step.offset:g} %"
-        )
-        parameters.setObjectName("secondaryText")
-        layout.addWidget(parameters)
-
-        layout.addStretch()
-
-        # Кнопка удаления
-        self.delete_btn = QPushButton("✕")
-        self.delete_btn.setFixedSize(16, 16)
-        self.delete_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f44336;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 8px;
-            }
-            QPushButton:hover {
-                background-color: #da190b;
-            }
-        """)
-        self.delete_btn.clicked.connect(self.delete_step)
-        layout.addWidget(self.delete_btn)
-
-        self.setLayout(layout)
-        self.setMinimumHeight(32)
-        self.setMaximumHeight(38)
-
-    def mousePressEvent(self, event):  # noqa: N802
-        if event.button() == Qt.LeftButton:
-            drag = QDrag(self)
-            mime_data = QMimeData()
-            mime_data.setText(str(self.step_index))
-            drag.setMimeData(mime_data)
-
-            pixmap = QPixmap(self.size())
-            self.render(pixmap)
-            drag.setPixmap(pixmap)
-            drag.setHotSpot(event.pos())
-
-            drag.exec_(Qt.MoveAction)
-
-    def contextMenuEvent(self, event):  # noqa: N802
-        menu = QMenu()
-
-        edit_action = QAction("✏️ Редактировать", self)
-        edit_action.triggered.connect(self.edit_step)
-        menu.addAction(edit_action)
-
-        delete_action = QAction("🗑 Удалить", self)
-        delete_action.triggered.connect(self.delete_step)
-        menu.addAction(delete_action)
-
-        menu.addSeparator()
-
-        move_up = QAction("⬆ Вверх", self)
-        move_up.triggered.connect(self.move_up)
-        menu.addAction(move_up)
-
-        move_down = QAction("⬇ Вниз", self)
-        move_down.triggered.connect(self.move_down)
-        menu.addAction(move_down)
-
-        menu.exec_(event.globalPos())
-
-    def edit_step(self):
-        self.edit_requested.emit(self.step_index)
-
-    def delete_step(self):
-        self.delete_requested.emit(self.step_index)
-
-    def move_up(self):
-        self.move_requested.emit(self.step_index, -1)
-
-    def move_down(self):
-        self.move_requested.emit(self.step_index, 1)
-
-
 class ScenarioWidget(QWidget):
     """Виджет конструктора сценариев"""
 
@@ -241,7 +86,7 @@ class ScenarioWidget(QWidget):
         self.engine.mode_changed.connect(self.on_mode_changed)
 
         self.setup_ui()
-        self.update_step_list()
+        self.update_graph()
 
     def _log_change(self, message: str, level: str = "info") -> None:
         """Передать событие редактора в общий журнал приложения."""
@@ -274,27 +119,33 @@ class ScenarioWidget(QWidget):
         self.add_step_btn.clicked.connect(self.add_step)
         title_layout.addWidget(self.add_step_btn)
 
+        self.trigger_btn = QPushButton("◉ Условие запуска")
+        self.trigger_btn.setToolTip(
+            "Настроить запуск выбранного блока при нескольких входящих связях"
+        )
+        self.trigger_btn.clicked.connect(self.configure_selected_trigger)
+        title_layout.addWidget(self.trigger_btn)
+
+        self.delete_btn = QPushButton("✕ Удалить")
+        self.delete_btn.setToolTip("Удалить выбранный блок или выбранную связь")
+        self.delete_btn.clicked.connect(self.delete_selected_step)
+        title_layout.addWidget(self.delete_btn)
+
         layout.addLayout(title_layout)
 
-        # Список шагов
-        self.steps_container = QWidget()
-        self.steps_layout = QVBoxLayout()
-        self.steps_layout.setSpacing(1)
-        self.steps_layout.setContentsMargins(0, 0, 0, 0)
-        self.steps_container.setLayout(self.steps_layout)
+        hint = QLabel(
+            "Связь: перетащите линию от зелёного выхода к синему входу. "
+            "Двойной щелчок по блоку — редактирование. Колесо мыши — масштаб."
+        )
+        hint.setObjectName("secondaryText")
+        layout.addWidget(hint)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setMinimumHeight(100)
-        scroll.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #ddd;
-                border-radius: 3px;
-                background-color: white;
-            }
-        """)
-        scroll.setWidget(self.steps_container)
-        layout.addWidget(scroll, stretch=1)
+        self.graph_scene = ScenarioGraphScene(self)
+        self.graph_scene.edit_requested.connect(self.edit_step_by_id)
+        self.graph_scene.connection_requested.connect(self.add_connection)
+        self.graph_scene.graph_changed.connect(self._emit_scenario_changed)
+        self.graph_view = ScenarioGraphView(self.graph_scene, self)
+        layout.addWidget(self.graph_view, stretch=1)
 
         # Нижняя панель
         bottom_layout = QHBoxLayout()
@@ -340,36 +191,13 @@ class ScenarioWidget(QWidget):
 
         layout.addLayout(status_layout)
 
-    def update_step_list(self):
-        """Обновить список шагов"""
-        # Очищаем контейнер
-        for i in reversed(range(self.steps_layout.count())):
-            widget = self.steps_layout.itemAt(i).widget()
-            if widget:
-                widget.deleteLater()
-
-        # Добавляем шаги
-        for i, step in enumerate(self.scenario.steps):
-            step_widget = StepWidget(i, step, self)
-            step_widget.edit_requested.connect(self.edit_step)
-            step_widget.delete_requested.connect(self.delete_step)
-            step_widget.move_requested.connect(self.move_step)
-            self.steps_layout.addWidget(step_widget)
-
-        if not self.scenario.steps:
-            empty_label = QLabel(
-                "Сценарий пока пуст. Нажмите «Добавить шаг», чтобы настроить "
-                "первое действие."
-            )
-            empty_label.setObjectName("secondaryText")
-            empty_label.setAlignment(Qt.AlignCenter)
-            empty_label.setWordWrap(True)
-            self.steps_layout.addWidget(empty_label)
-
-        # Обновляем информацию
+    def update_graph(self) -> None:
+        """Перестроить графическое представление сценария."""
+        self.graph_scene.set_scenario(self.scenario)
         self.steps_count_label.setText(format_step_count(len(self.scenario.steps)))
+        self.scenario_changed.emit(self.scenario)
 
-        # Отправляем сигнал об изменении
+    def _emit_scenario_changed(self) -> None:
         self.scenario_changed.emit(self.scenario)
 
     def add_step(self):
@@ -378,14 +206,16 @@ class ScenarioWidget(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             step = dialog.get_step()
             if step:
+                step.position_x = float((len(self.scenario.steps) % 4) * 250)
+                step.position_y = float((len(self.scenario.steps) // 4) * 170)
                 self.scenario.steps.append(step)
-                self.update_step_list()
+                self.update_graph()
                 self._log_change(
                     f"Добавлен шаг {len(self.scenario.steps)}: {describe_step(step)}",
                     "success",
                 )
 
-    def edit_step(self, index: int):
+    def edit_step(self, index: int) -> None:
         """Редактировать шаг"""
         if 0 <= index < len(self.scenario.steps):
             dialog = StepEditDialog(self.generator, self, self.scenario.steps[index])
@@ -393,13 +223,59 @@ class ScenarioWidget(QWidget):
                 step = dialog.get_step()
                 if step:
                     self.scenario.steps[index] = step
-                    self.update_step_list()
+                    self.update_graph()
                     self._log_change(
                         f"Изменён шаг {index + 1}: {describe_step(step)}",
                         "info",
                     )
 
-    def delete_step(self, index: int):
+    def edit_step_by_id(self, step_id: str) -> None:
+        for index, step in enumerate(self.scenario.steps):
+            if step.id == step_id:
+                self.edit_step(index)
+                return
+
+    def delete_selected_step(self) -> None:
+        selected_connections = [
+            item
+            for item in self.graph_scene.selectedItems()
+            if isinstance(item, ConnectionItem)
+        ]
+        if selected_connections:
+            item = selected_connections[0]
+            source_number = item.source.number
+            target_number = item.target.number
+            self.scenario.connections = [
+                connection
+                for connection in self.scenario.connections
+                if not (
+                    connection.source_id == item.source.step.id
+                    and connection.target_id == item.target.step.id
+                )
+            ]
+            self.update_graph()
+            self._log_change(
+                f"Удалена связь: шаг {source_number} → шаг {target_number}",
+                "warning",
+            )
+            return
+        selected = [
+            item.step.id
+            for item in self.graph_scene.selectedItems()
+            if hasattr(item, "step")
+        ]
+        if not selected:
+            QMessageBox.information(self, "Выбор блока", "Сначала выберите блок")
+            return
+        self.delete_step_by_id(selected[0])
+
+    def delete_step_by_id(self, step_id: str) -> None:
+        for index, step in enumerate(self.scenario.steps):
+            if step.id == step_id:
+                self.delete_step(index)
+                return
+
+    def delete_step(self, index: int) -> None:
         """Удалить шаг"""
         if 0 <= index < len(self.scenario.steps):
             reply = QMessageBox.question(
@@ -410,8 +286,9 @@ class ScenarioWidget(QWidget):
                 QMessageBox.No,
             )
             if reply == QMessageBox.Yes:
-                removed_step = self.scenario.steps.pop(index)
-                self.update_step_list()
+                removed_step = self.scenario.steps[index]
+                self.scenario.remove_step(removed_step.id)
+                self.update_graph()
                 self._log_change(
                     f"Удалён шаг {index + 1}: {describe_step(removed_step)}",
                     "warning",
@@ -433,23 +310,88 @@ class ScenarioWidget(QWidget):
         if reply == QMessageBox.Yes:
             removed_count = len(self.scenario.steps)
             self.scenario.steps.clear()
-            self.update_step_list()
+            self.scenario.connections.clear()
+            self.update_graph()
             self._log_change(
                 f"Очищен сценарий: удалено шагов — {removed_count}", "warning"
             )
 
-    def move_step(self, index: int, direction: int):
-        """Переместить шаг"""
-        new_index = index + direction
-        if 0 <= new_index < len(self.scenario.steps):
-            self.scenario.steps[index], self.scenario.steps[new_index] = (
-                self.scenario.steps[new_index],
-                self.scenario.steps[index],
+    def add_connection(self, source_id: str, target_id: str) -> None:
+        try:
+            before = len(self.scenario.connections)
+            self.scenario.add_connection(source_id, target_id)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Нельзя создать связь", str(exc))
+            self._log_change(f"Связь не создана: {exc}", "warning")
+            return
+        if len(self.scenario.connections) == before:
+            return
+        self.update_graph()
+        source_number = self._step_number(source_id)
+        target_number = self._step_number(target_id)
+        self._log_change(
+            f"Создана связь: шаг {source_number} → шаг {target_number}", "success"
+        )
+
+    def _step_number(self, step_id: str) -> int:
+        return next(
+            index
+            for index, step in enumerate(self.scenario.steps, 1)
+            if step.id == step_id
+        )
+
+    def configure_selected_trigger(self) -> None:
+        selected = [
+            item.step
+            for item in self.graph_scene.selectedItems()
+            if hasattr(item, "step")
+        ]
+        if not selected:
+            QMessageBox.information(self, "Выбор блока", "Сначала выберите блок")
+            return
+        step = selected[0]
+        incoming = self.scenario.incoming_ids(step.id)
+        if len(incoming) < 2:
+            QMessageBox.information(
+                self,
+                "Условие запуска",
+                "Настройка нужна блоку как минимум с двумя входящими связями.",
             )
-            self.update_step_list()
-            self._log_change(
-                f"Шаг {index + 1} перемещён на позицию {new_index + 1}", "info"
-            )
+            return
+
+        options = [
+            "После завершения всех входящих шагов",
+            "После любого входящего шага",
+        ]
+        source_by_option = {}
+        for source_id in sorted(incoming, key=self._step_number):
+            option = f"После завершения шага {self._step_number(source_id)}"
+            options.append(option)
+            source_by_option[option] = source_id
+        choice, accepted = QInputDialog.getItem(
+            self,
+            "Условие запуска",
+            "Когда запускать выбранный блок:",
+            options,
+            0,
+            False,
+        )
+        if not accepted:
+            return
+        if choice == options[0]:
+            step.trigger_mode = TRIGGER_ALL
+            step.trigger_step_id = None
+        elif choice == options[1]:
+            step.trigger_mode = TRIGGER_ANY
+            step.trigger_step_id = None
+        else:
+            step.trigger_mode = TRIGGER_SPECIFIC
+            step.trigger_step_id = source_by_option[choice]
+        self.update_graph()
+        self._log_change(
+            f"Для шага {self._step_number(step.id)} задано условие: {choice.lower()}",
+            "info",
+        )
 
     def play_scenario(self):
         """Запустить сценарий"""
@@ -584,7 +526,7 @@ class ScenarioWidget(QWidget):
             try:
                 self.scenario = Scenario.load_from_file(filepath)
                 self.current_file = filepath
-                self.update_step_list()
+                self.update_graph()
                 self._log_change(
                     f"Сценарий загружен: {os.path.basename(filepath)} "
                     f"({format_step_count(len(self.scenario.steps))})",
@@ -710,6 +652,7 @@ class StepEditDialog(QDialog):
 
     def get_step(self) -> ScenarioStep:
         return ScenarioStep(
+            id=self.step.id,
             channel_id=self.channel_combo.currentData(),
             signal_type=self.type_combo.currentData(),
             amplitude=self.amp_spin.value(),
@@ -718,4 +661,8 @@ class StepEditDialog(QDialog):
             duration=self.duration_spin.value(),
             ramp_up=self.ramp_up_spin.value(),
             ramp_down=self.ramp_down_spin.value(),
+            position_x=self.step.position_x,
+            position_y=self.step.position_y,
+            trigger_mode=self.step.trigger_mode,
+            trigger_step_id=self.step.trigger_step_id,
         )
