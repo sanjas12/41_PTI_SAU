@@ -82,6 +82,7 @@ class ScenarioWidget(QWidget):
         self.engine.scenario_stopped.connect(self.on_scenario_stopped)
         self.engine.scenario_finished.connect(self.on_scenario_finished)
         self.engine.step_changed.connect(self.on_step_changed)
+        self.engine.active_steps_changed.connect(self.on_active_steps_changed)
         self.engine.progress_changed.connect(self.on_progress_changed)
         self.engine.mode_changed.connect(self.on_mode_changed)
 
@@ -211,7 +212,7 @@ class ScenarioWidget(QWidget):
                 self.scenario.steps.append(step)
                 self.update_graph()
                 self._log_change(
-                    f"Добавлен шаг {len(self.scenario.steps)}: {describe_step(step)}",
+                    f"Добавлен шаг {self._step_number(step.id)}: {describe_step(step)}",
                     "success",
                 )
 
@@ -225,7 +226,7 @@ class ScenarioWidget(QWidget):
                     self.scenario.steps[index] = step
                     self.update_graph()
                     self._log_change(
-                        f"Изменён шаг {index + 1}: {describe_step(step)}",
+                        f"Изменён шаг {self._step_number(step.id)}: {describe_step(step)}",
                         "info",
                     )
 
@@ -278,10 +279,11 @@ class ScenarioWidget(QWidget):
     def delete_step(self, index: int) -> None:
         """Удалить шаг"""
         if 0 <= index < len(self.scenario.steps):
+            step_label = self._step_number(self.scenario.steps[index].id)
             reply = QMessageBox.question(
                 self,
                 "Подтверждение",
-                f"Удалить шаг #{index + 1}?",
+                f"Удалить шаг {step_label}?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
@@ -290,7 +292,7 @@ class ScenarioWidget(QWidget):
                 self.scenario.remove_step(removed_step.id)
                 self.update_graph()
                 self._log_change(
-                    f"Удалён шаг {index + 1}: {describe_step(removed_step)}",
+                    f"Удалён шаг {step_label}: {describe_step(removed_step)}",
                     "warning",
                 )
 
@@ -333,10 +335,13 @@ class ScenarioWidget(QWidget):
             f"Создана связь: шаг {source_number} → шаг {target_number}", "success"
         )
 
-    def _step_number(self, step_id: str) -> int:
+    def _step_number(self, step_id: str) -> str:
+        return self.scenario.get_step_label(step_id)
+
+    def _step_index(self, step_id: str) -> int:
         return next(
             index
-            for index, step in enumerate(self.scenario.steps, 1)
+            for index, step in enumerate(self.scenario.steps)
             if step.id == step_id
         )
 
@@ -364,7 +369,7 @@ class ScenarioWidget(QWidget):
             "После любого входящего шага",
         ]
         source_by_option = {}
-        for source_id in sorted(incoming, key=self._step_number):
+        for source_id in sorted(incoming, key=self._step_index):
             option = f"После завершения шага {self._step_number(source_id)}"
             options.append(option)
             source_by_option[option] = source_id
@@ -469,6 +474,14 @@ class ScenarioWidget(QWidget):
     def on_step_changed(self, current: int, total: int):
         if current > 0:
             self.status_label.setText(f"Выполняется шаг {current} из {total}")
+
+    def on_active_steps_changed(self, labels: str) -> None:
+        if not labels:
+            return
+        if "," in labels:
+            self.status_label.setText(f"Выполняются шаги {labels}")
+        else:
+            self.status_label.setText(f"Выполняется шаг {labels}")
 
     def on_progress_changed(self, progress: float):
         # Прогресс-бар теперь в ControlPanel — MainWindow подписан на

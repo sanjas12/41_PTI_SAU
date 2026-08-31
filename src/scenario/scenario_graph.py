@@ -63,7 +63,7 @@ class ConnectionItem(QGraphicsPathItem):
 class StepNodeItem(QGraphicsItem):
     """Перемещаемый блок шага с входным и выходным портами."""
 
-    def __init__(self, scene: "ScenarioGraphScene", step: ScenarioStep, number: int):
+    def __init__(self, scene: "ScenarioGraphScene", step: ScenarioStep, number: str):
         super().__init__()
         self.graph_scene = scene
         self.step = step
@@ -182,8 +182,9 @@ class ScenarioGraphScene(QGraphicsScene):
         self.clear()
         self.nodes.clear()
         self.connections.clear()
-        for number, step in enumerate(scenario.steps, 1):
-            node = StepNodeItem(self, step, number)
+        labels = scenario.get_step_labels()
+        for step in scenario.steps:
+            node = StepNodeItem(self, step, labels[step.id])
             self.nodes[step.id] = node
             self.addItem(node)
         for connection in scenario.connections:

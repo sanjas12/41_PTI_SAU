@@ -50,3 +50,37 @@ def test_graph_settings_survive_serialization():
     restored = Scenario.from_dict(scenario.to_dict())
 
     assert restored.to_dict() == scenario.to_dict()
+
+
+def test_parallel_steps_receive_branch_numbers():
+    first = make_step("first")
+    upper = make_step("upper")
+    lower = make_step("lower")
+    final = make_step("final")
+    scenario = Scenario(steps=[first, upper, lower, final])
+    scenario.add_connection(first.id, upper.id)
+    scenario.add_connection(first.id, lower.id)
+    scenario.add_connection(upper.id, final.id)
+    scenario.add_connection(lower.id, final.id)
+
+    assert scenario.get_step_labels() == {
+        "first": "1",
+        "upper": "2.1",
+        "lower": "2.2",
+        "final": "3",
+    }
+
+
+def test_linear_steps_keep_integer_numbers():
+    first = make_step("first")
+    second = make_step("second")
+    third = make_step("third")
+    scenario = Scenario(steps=[first, second, third])
+    scenario.add_connection(first.id, second.id)
+    scenario.add_connection(second.id, third.id)
+
+    assert scenario.get_step_labels() == {
+        "first": "1",
+        "second": "2",
+        "third": "3",
+    }

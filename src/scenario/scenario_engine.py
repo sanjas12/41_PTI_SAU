@@ -28,6 +28,7 @@ class ScenarioEngine(QObject):
     scenario_started = pyqtSignal(str)  # Запущен сценарий
     scenario_stopped = pyqtSignal()  # Остановлен сценарий
     scenario_finished = pyqtSignal()  # Завершен сценарий
+    active_steps_changed = pyqtSignal(str)  # Отображаемые номера активных блоков
     log_signal = pyqtSignal(str, str)  # (message, level)
 
     def __init__(self, generator: SignalGenerator, parent=None):
@@ -111,6 +112,7 @@ class ScenarioEngine(QObject):
             self.mode_changed.emit("scenario")
             self.scenario_started.emit(self.scenario.name)
             self.step_changed.emit(0, len(self.scenario.steps))
+            self._emit_active_steps()
             self.log_signal.emit(f"Запущен сценарий: {self.scenario.name}", "success")
 
     def stop_scenario(self):
@@ -232,9 +234,10 @@ class ScenarioEngine(QObject):
         channel.time = 0.0
         self._active_steps[step.id] = 0.0
         index = self.scenario.steps.index(step) + 1
+        label = self.scenario.get_step_label(step.id)
         self.step_changed.emit(index, len(self.scenario.steps))
         self.log_signal.emit(
-            f"Запущен шаг {index}: Канал {step.channel_id + 1} - "
+            f"Запущен шаг {label}: Канал {step.channel_id + 1} - "
             f"{step.signal_type} ({step.duration:.1f}с)",
             "info",
         )
@@ -257,6 +260,17 @@ class ScenarioEngine(QObject):
         for step in self.scenario.steps:
             if self._can_start(step):
                 self._apply_graph_step(step)
+
+    def _emit_active_steps(self) -> None:
+        if not self.scenario:
+            return
+        labels = self.scenario.get_step_labels()
+        active_labels = [
+            labels[step.id]
+            for step in self.scenario.steps
+            if step.id in self._active_steps
+        ]
+        self.active_steps_changed.emit(", ".join(active_labels))
 
     def _update(self):
         """Обновление состояния (вызывается по таймеру)"""
@@ -288,12 +302,13 @@ class ScenarioEngine(QObject):
                 del self._active_steps[step_id]
                 self._completed_steps.add(step_id)
                 self.log_signal.emit(
-                    f"Завершён шаг {self.scenario.steps.index(step_by_id[step_id]) + 1}",
+                    f"Завершён шаг {self.scenario.get_step_label(step_id)}",
                     "info",
                 )
 
             if completed_now:
                 self._start_ready_steps()
+                self._emit_active_steps()
 
             if not self._active_steps:
                 if len(self._completed_steps) == len(self.scenario.steps):

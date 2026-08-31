@@ -138,6 +138,57 @@ class Scenario:
             if connection.target_id == step_id
         }
 
+    def get_step_labels(self) -> Dict[str, str]:
+        """Вернуть номера блоков с учётом параллельных уровней графа.
+
+        Блоки одного топологического уровня выполняются как параллельная
+        группа и получают номера ``2.1``, ``2.2`` и так далее. Одиночный
+        блок уровня отображается обычным целым номером: ``1``, ``3``.
+        """
+        levels: Dict[str, int] = {}
+        unresolved = {step.id for step in self.steps}
+
+        while unresolved:
+            resolved_in_pass = False
+            for step in self.steps:
+                if step.id not in unresolved:
+                    continue
+                incoming = self.incoming_ids(step.id)
+                if not incoming:
+                    levels[step.id] = 1
+                elif incoming <= levels.keys():
+                    levels[step.id] = (
+                        max(levels[source_id] for source_id in incoming) + 1
+                    )
+                else:
+                    continue
+                unresolved.remove(step.id)
+                resolved_in_pass = True
+            if not resolved_in_pass:
+                break
+
+        labels: Dict[str, str] = {}
+        steps_by_level: Dict[int, List[ScenarioStep]] = {}
+        for step in self.steps:
+            level = levels.get(step.id)
+            if level is not None:
+                steps_by_level.setdefault(level, []).append(step)
+
+        for level, level_steps in steps_by_level.items():
+            if len(level_steps) == 1:
+                labels[level_steps[0].id] = str(level)
+            else:
+                for branch, step in enumerate(level_steps, 1):
+                    labels[step.id] = f"{level}.{branch}"
+
+        for index, step in enumerate(self.steps, 1):
+            labels.setdefault(step.id, str(index))
+        return labels
+
+    def get_step_label(self, step_id: str) -> str:
+        """Вернуть отображаемый номер одного блока."""
+        return self.get_step_labels().get(step_id, "?")
+
     def add_connection(self, source_id: str, target_id: str) -> None:
         connection = ScenarioConnection(source_id, target_id)
         known_ids = {step.id for step in self.steps}
