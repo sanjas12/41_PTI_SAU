@@ -20,6 +20,7 @@ from .scenario_model import (
 
 NODE_WIDTH = 210.0
 NODE_HEIGHT = 144.0
+NODE_HEIGHT_WITH_TRIGGER = 166.0
 SOCKET_RADIUS = 7.0
 
 
@@ -68,6 +69,12 @@ class StepNodeItem(QGraphicsItem):
         self.graph_scene = scene
         self.step = step
         self.number = number
+        incoming_count = 0
+        if scene.scenario:
+            incoming_count = len(scene.scenario.incoming_ids(step.id))
+        self.node_height = (
+            NODE_HEIGHT_WITH_TRIGGER if incoming_count > 1 else NODE_HEIGHT
+        )
         self.setFlags(
             QGraphicsItem.ItemIsMovable
             | QGraphicsItem.ItemIsSelectable
@@ -80,17 +87,22 @@ class StepNodeItem(QGraphicsItem):
         )
 
     def boundingRect(self) -> QRectF:  # noqa: N802
-        return QRectF(-SOCKET_RADIUS, 0.0, NODE_WIDTH + 2 * SOCKET_RADIUS, NODE_HEIGHT)
+        return QRectF(
+            -SOCKET_RADIUS,
+            0.0,
+            NODE_WIDTH + 2 * SOCKET_RADIUS,
+            self.node_height,
+        )
 
     def input_position(self) -> QPointF:
-        return self.mapToScene(QPointF(0.0, NODE_HEIGHT / 2))
+        return self.mapToScene(QPointF(0.0, self.node_height / 2))
 
     def output_position(self) -> QPointF:
-        return self.mapToScene(QPointF(NODE_WIDTH, NODE_HEIGHT / 2))
+        return self.mapToScene(QPointF(NODE_WIDTH, self.node_height / 2))
 
     def paint(self, painter: QPainter, option, widget=None) -> None:
         painter.setRenderHint(QPainter.Antialiasing)
-        body = QRectF(0.0, 0.0, NODE_WIDTH, NODE_HEIGHT)
+        body = QRectF(0.0, 0.0, NODE_WIDTH, self.node_height)
         border = QColor("#69a7ff") if self.isSelected() else QColor("#4b5262")
         painter.setPen(QPen(border, 2.0 if self.isSelected() else 1.0))
         painter.setBrush(QBrush(QColor("#292d35")))
@@ -127,14 +139,20 @@ class StepNodeItem(QGraphicsItem):
             f"A: {self.step.amplitude:g} %   f: {self.step.frequency:g} Гц\n"
             f"Смещение: {self.step.offset:g} %{trigger_text}"
         )
-        painter.drawText(QRectF(13.0, 39.0, 185.0, 96.0), Qt.AlignLeft, details)
+        painter.drawText(
+            QRectF(13.0, 39.0, 185.0, self.node_height - 48.0),
+            Qt.AlignLeft,
+            details,
+        )
 
         painter.setPen(QPen(QColor("#15171b"), 1.0))
         painter.setBrush(QBrush(QColor("#69a7ff")))
-        painter.drawEllipse(QPointF(0.0, NODE_HEIGHT / 2), SOCKET_RADIUS, SOCKET_RADIUS)
+        painter.drawEllipse(
+            QPointF(0.0, self.node_height / 2), SOCKET_RADIUS, SOCKET_RADIUS
+        )
         painter.setBrush(QBrush(QColor("#55b879")))
         painter.drawEllipse(
-            QPointF(NODE_WIDTH, NODE_HEIGHT / 2), SOCKET_RADIUS, SOCKET_RADIUS
+            QPointF(NODE_WIDTH, self.node_height / 2), SOCKET_RADIUS, SOCKET_RADIUS
         )
 
     def itemChange(self, change, value):  # noqa: N802
@@ -149,7 +167,7 @@ class StepNodeItem(QGraphicsItem):
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.LeftButton:
             local = event.pos()
-            output = QPointF(NODE_WIDTH, NODE_HEIGHT / 2)
+            output = QPointF(NODE_WIDTH, self.node_height / 2)
             if abs(local.x() - output.x()) <= 14 and abs(local.y() - output.y()) <= 14:
                 self.graph_scene.begin_connection(self)
                 event.accept()
