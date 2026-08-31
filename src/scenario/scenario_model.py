@@ -228,8 +228,44 @@ class Scenario:
         return False
 
     def get_total_duration(self) -> float:
-        """Оценить длительность; точное значение зависит от условий ветвления."""
-        return sum(step.duration for step in self.steps)
+        """Рассчитать время выполнения графа с учётом параллельных ветвей."""
+        if not self.steps:
+            return 0.0
+
+        finish_times: Dict[str, float] = {}
+        unresolved = {step.id for step in self.steps}
+
+        while unresolved:
+            resolved_in_pass = False
+            for step in self.steps:
+                if step.id not in unresolved:
+                    continue
+                incoming = self.incoming_ids(step.id)
+                if incoming and not incoming.issubset(finish_times):
+                    continue
+
+                if not incoming:
+                    start_time = 0.0
+                elif (
+                    step.trigger_mode == TRIGGER_SPECIFIC
+                    and step.trigger_step_id in finish_times
+                ):
+                    start_time = finish_times[step.trigger_step_id]
+                elif step.trigger_mode == TRIGGER_ANY:
+                    start_time = min(finish_times[source_id] for source_id in incoming)
+                else:
+                    start_time = max(finish_times[source_id] for source_id in incoming)
+
+                finish_times[step.id] = start_time + step.duration
+                unresolved.remove(step.id)
+                resolved_in_pass = True
+
+            if not resolved_in_pass:
+                # Циклический граф не должен возникать через редактор. Для
+                # повреждённого внешнего файла возвращаем безопасную оценку.
+                return sum(step.duration for step in self.steps)
+
+        return max(finish_times.values())
 
     def save_to_file(self, filepath: str) -> None:
         with open(filepath, "w", encoding="utf-8") as file:

@@ -63,6 +63,23 @@ def format_step_count(count: int) -> str:
     return f"{count} {suffix}"
 
 
+def format_duration(seconds: float) -> str:
+    """Отформатировать длительность сценария без лишней точности."""
+    if seconds < 60.0:
+        return f"{seconds:g} с"
+    total_seconds = int(round(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, remaining_seconds = divmod(remainder, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours} ч")
+    if minutes:
+        parts.append(f"{minutes} мин")
+    if remaining_seconds:
+        parts.append(f"{remaining_seconds} с")
+    return " ".join(parts)
+
+
 class ScenarioWidget(QWidget):
     """Виджет конструктора сценариев"""
 
@@ -181,7 +198,9 @@ class ScenarioWidget(QWidget):
         status_layout.setSpacing(5)
 
         self.steps_count_label = QLabel("0 шагов")
-        self.steps_count_label.setStyleSheet("color: #666; font-size: 8px;")
+        self.steps_count_label.setStyleSheet(
+            "color: #46515c; font-size: 10pt; font-weight: 600;"
+        )
         status_layout.addWidget(self.steps_count_label)
 
         status_layout.addStretch()
@@ -195,7 +214,9 @@ class ScenarioWidget(QWidget):
     def update_graph(self) -> None:
         """Перестроить графическое представление сценария."""
         self.graph_scene.set_scenario(self.scenario)
-        self.steps_count_label.setText(format_step_count(len(self.scenario.steps)))
+        step_count = format_step_count(len(self.scenario.steps))
+        total_duration = format_duration(self.scenario.get_total_duration())
+        self.steps_count_label.setText(f"{step_count} · Общее время: {total_duration}")
         self.scenario_changed.emit(self.scenario)
 
     def _emit_scenario_changed(self) -> None:

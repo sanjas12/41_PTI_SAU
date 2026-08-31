@@ -2,6 +2,8 @@ import pytest
 
 from scenario.scenario_model import (
     TRIGGER_ALL,
+    TRIGGER_ANY,
+    TRIGGER_SPECIFIC,
     Scenario,
     ScenarioStep,
 )
@@ -84,3 +86,48 @@ def test_linear_steps_keep_integer_numbers():
         "second": "2",
         "third": "3",
     }
+
+
+def test_total_duration_uses_longest_parallel_branch():
+    first = make_step("first")
+    first.duration = 5.0
+    short = make_step("short")
+    short.duration = 3.0
+    long = make_step("long")
+    long.duration = 7.0
+    scenario = Scenario(steps=[first, short, long])
+    scenario.add_connection(first.id, short.id)
+    scenario.add_connection(first.id, long.id)
+
+    assert scenario.get_total_duration() == pytest.approx(12.0)
+
+
+@pytest.mark.parametrize(
+    ("trigger_mode", "trigger_step_id", "expected"),
+    [
+        (TRIGGER_ALL, None, 17.0),
+        (TRIGGER_ANY, None, 13.0),
+        (TRIGGER_SPECIFIC, "short", 13.0),
+        (TRIGGER_SPECIFIC, "long", 17.0),
+    ],
+)
+def test_total_duration_respects_join_condition(
+    trigger_mode: str, trigger_step_id: str, expected: float
+):
+    first = make_step("first")
+    first.duration = 5.0
+    short = make_step("short")
+    short.duration = 3.0
+    long = make_step("long")
+    long.duration = 7.0
+    final = make_step("final")
+    final.duration = 5.0
+    final.trigger_mode = trigger_mode
+    final.trigger_step_id = trigger_step_id
+    scenario = Scenario(steps=[first, short, long, final])
+    scenario.add_connection(first.id, short.id)
+    scenario.add_connection(first.id, long.id)
+    scenario.add_connection(short.id, final.id)
+    scenario.add_connection(long.id, final.id)
+
+    assert scenario.get_total_duration() == pytest.approx(expected)
