@@ -527,6 +527,7 @@ class MainWindow(QMainWindow):
             self.plot_window = PlotWindow(self.generator, self)
             self.plot_window.show()
             self._auto_populate_plot_window()
+            self._sync_generation_timer()
         else:
             self.plot_window.raise_()
             self.plot_window.activateWindow()
@@ -628,14 +629,17 @@ class MainWindow(QMainWindow):
         generator.update(), вызываемый именно отсюда.
         """
         engine_mode = getattr(self, "_engine_mode", "manual")
-        should_run = (
-            self.is_running and not self.is_paused
-        ) or engine_mode == "scenario"
+        scenario_view = self._is_scenario_view_active()
+        manual_running = not scenario_view and self.is_running and not self.is_paused
+        should_run = manual_running or engine_mode == "scenario"
 
         if should_run and not self.timer.isActive():
             self.timer.start(10)
         elif not should_run and self.timer.isActive():
             self.timer.stop()
+
+        if self.plot_window is not None:
+            self.plot_window.set_acquisition_running(should_run)
 
     def _show_channel_mode_view(self, view: str):
         """Переключить ВИДИМУЮ панель (сетка каналов ИЛИ конструктор
@@ -659,6 +663,7 @@ class MainWindow(QMainWindow):
             self.scenario_mode_btn.blockSignals(False)
 
         self._refresh_control_buttons()
+        self._sync_generation_timer()
 
     def _refresh_control_buttons(self):
         """Единая точка, решающая состояние Play/Stop/Пауза/прогресс-бара
@@ -833,8 +838,8 @@ class MainWindow(QMainWindow):
     def resume_generation(self):
         if not self.is_running or not self.is_paused:
             return
-        self.timer.start(10)
         self.is_paused = False
+        self._sync_generation_timer()
         self.status_label.setText("● Работает")
         self.status_label.setStyleSheet(
             "color: #00CC00; font-weight: bold; font-size: 12px;"

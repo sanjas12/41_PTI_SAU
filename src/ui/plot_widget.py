@@ -348,7 +348,7 @@ class PlotWidget(pg.PlotWidget):
             value,
         )
 
-    def update_plot(self) -> None:
+    def update_plot(self, current_time: Optional[float] = None) -> None:
         """
         Обновить визуальное представление.
 
@@ -374,7 +374,8 @@ class PlotWidget(pg.PlotWidget):
         if not self.channel_data:
             return
 
-        current_time = time.monotonic() - self.start_time
+        if current_time is None:
+            current_time = time.monotonic() - self.start_time
 
         min_time = max(
             0.0,
@@ -581,6 +582,7 @@ class PlotWindow(QMainWindow):
         # --------------------------------------------------------------
 
         self.is_running = True
+        self._acquisition_time = 0.0
         self.update_counter = 0
 
         # --------------------------------------------------------------
@@ -1442,6 +1444,10 @@ class PlotWindow(QMainWindow):
     # Обновление
     # ==================================================================
 
+    def set_acquisition_running(self, running: bool) -> None:
+        """Синхронизировать запись графиков с кнопками управления."""
+        self.is_running = running
+
     def update_plots(self) -> None:
         """
         Один цикл обновления.
@@ -1457,11 +1463,8 @@ class PlotWindow(QMainWindow):
 
         values = self.generator.get_values()
 
-        current_time = (
-            time.monotonic() - self.plot_widgets[0].start_time
-            if self.plot_widgets
-            else 0.0
-        )
+        self._acquisition_time += self.UPDATE_INTERVAL_MS / 1000.0
+        current_time = self._acquisition_time
 
         # --------------------------------------------------------------
         # 1. Записываем данные
@@ -1483,7 +1486,7 @@ class PlotWindow(QMainWindow):
         # --------------------------------------------------------------
 
         for plot in self.plot_widgets:
-            plot.update_plot()
+            plot.update_plot(current_time)
 
         # --------------------------------------------------------------
         # Информация
