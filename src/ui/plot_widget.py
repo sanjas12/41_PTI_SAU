@@ -1451,9 +1451,7 @@ class PlotWindow(QMainWindow):
         value: float,
     ) -> None:
         """Изменить временное окно."""
-
         self.time_window = float(value)
-
         for plot in self.plot_widgets:
             plot.set_time_window(self.time_window)
 

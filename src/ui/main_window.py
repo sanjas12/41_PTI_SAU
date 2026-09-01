@@ -536,23 +536,44 @@ class MainWindow(QMainWindow):
         """При открытии окна графиков сразу выводим на него каналы,
         релевантные текущему режиму:
         - "Ручной" — все включённые (enabled) каналы, КАЖДЫЙ на своём
-          отдельном графике (так было и раньше — удобно сравнивать
-          сигналы разных типов, когда они не свалены в кучу);
+        отдельном графике (так было и раньше — удобно сравнивать
+        сигналы разных типов, когда они не свалены в кучу);
         - "Сценарий" — все каналы, задействованные хоть в одном шаге
-          текущего загруженного сценария (а не только в шаге, активном
-          прямо сейчас — иначе график терял бы уже пройденные каналы
-          по мере продвижения сценария по шагам), все на одном общем
-          графике — там обычно важно видеть их вместе, во времени
-          относительно друг друга.
+        текущего загруженного сценария, все на одном общем графике.
+        При этом время окна автоматически выставляется равным общей
+        длительности сценария.
         """
         if not self.plot_window:
             return
 
         if self._is_scenario_view_active():
+            # --- РЕЖИМ СЦЕНАРИЯ ---
             channel_ids = self._get_scenario_channel_ids()
             for channel_id in channel_ids:
                 self.plot_window.add_channel_to_plot(channel_id)
+            
+            # Устанавливаем время окна = общая длительность сценария
+            scenario = getattr(self.scenario_widget, "scenario", None)
+            if scenario:
+                total_duration = scenario.get_total_duration()
+                if total_duration > 0:
+                    # Добавляем запас 10% для наглядности
+                    time_window = total_duration * 1.1
+                    # Ограничиваем максимум 60 секунд
+                    time_window = min(time_window, 60.0)
+                    # Обновляем спинбокс и применяем к графикам
+                    self.plot_window.time_window_spin.setValue(time_window)
+                    self.plot_window.on_time_window_changed(time_window)
+                    
+                    # Обновляем подпись в информационной панели
+                    self.status_label.setText(f"⏱ Окно: {time_window:.1f} с (по сценарию)")
+                    self.status_label.setStyleSheet(
+                        "color: #4CAF50; font-weight: bold; font-size: 12px;"
+                    )
+                    self.log(f"Время окна графиков установлено: {time_window:.1f} с "
+                            f"(общая длительность сценария: {total_duration:.1f} с)", "info")
         else:
+            # --- РУЧНОЙ РЕЖИМ ---
             channel_ids = [ch.id for ch in self.generator.channels if ch.enabled]
             for i, channel_id in enumerate(channel_ids):
                 if i == 0 and self.plot_window.plot_widgets:
