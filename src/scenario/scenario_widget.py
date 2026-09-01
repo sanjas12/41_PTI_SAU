@@ -141,12 +141,26 @@ class ScenarioWidget(QWidget):
         self.add_step_btn.clicked.connect(self.add_step)
         title_layout.addWidget(self.add_step_btn)
 
+        # Кнопка клонирования шага
+        self.clone_step_btn = QPushButton("📋 Клонировать шаг")
+        self.clone_step_btn.setToolTip("Клонировать выбранный шаг (Shift+D)")
+        self.clone_step_btn.clicked.connect(self.clone_selected_step)
+        self.clone_step_btn.setEnabled(False)
+        title_layout.addWidget(self.clone_step_btn)
+
         self.add_step_action = QAction("Добавить шаг", self)
         self.add_step_action.setShortcut(QKeySequence("Shift+A"))
         self.add_step_action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
         self.add_step_action.setToolTip("Добавить шаг (Shift+A)")
         self.add_step_action.triggered.connect(self.add_step)
         self.addAction(self.add_step_action)
+
+        self.clone_step_action = QAction("Клонировать шаг", self)
+        self.clone_step_action.setShortcut(QKeySequence("Shift+D"))
+        self.clone_step_action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
+        self.clone_step_action.setToolTip("Клонировать выбранный шаг (Shift+D)")
+        self.clone_step_action.triggered.connect(self.clone_selected_step)
+        self.addAction(self.clone_step_action)
 
         self.trigger_btn = QPushButton("◉ Условие запуска")
         self.trigger_btn.setToolTip(
@@ -162,6 +176,7 @@ class ScenarioWidget(QWidget):
 
         settings_menu = QMenu(self)
         settings_menu.addAction(self.add_step_action)
+        settings_menu.addAction(self.clone_step_action)
 
         self.settings_btn = QToolButton()
         self.settings_btn.setText("Настройки ▾")
@@ -174,7 +189,8 @@ class ScenarioWidget(QWidget):
 
         hint = QLabel(
             "Связь: перетащите линию от зелёного выхода к синему входу. "
-            "Двойной щелчок по блоку — редактирование. Колесо мыши — масштаб."
+            "Двойной щелчок по блоку — редактирование. Колесо мыши — масштаб. "
+            "Shift+D — клонировать выбранный шаг."
         )
         hint.setObjectName("secondaryText")
         layout.addWidget(hint)
@@ -183,6 +199,7 @@ class ScenarioWidget(QWidget):
         self.graph_scene.edit_requested.connect(self.edit_step_by_id)
         self.graph_scene.connection_requested.connect(self.add_connection)
         self.graph_scene.graph_changed.connect(self._emit_scenario_changed)
+        self.graph_scene.selectionChanged.connect(self._on_selection_changed)
         self.graph_view = ScenarioGraphView(self.graph_scene, self)
         layout.addWidget(self.graph_view, stretch=1)
 
@@ -232,6 +249,16 @@ class ScenarioWidget(QWidget):
 
         layout.addLayout(status_layout)
 
+    def _on_selection_changed(self):
+        """Обновить состояние кнопки клонирования при изменении выделения."""
+        selected = [
+            item.step
+            for item in self.graph_scene.selectedItems()
+            if hasattr(item, "step")
+        ]
+        self.clone_step_btn.setEnabled(len(selected) == 1)
+        self.clone_step_action.setEnabled(len(selected) == 1)
+
     def update_graph(self) -> None:
         """Перестроить графическое представление сценария."""
         self.graph_scene.set_scenario(self.scenario)
@@ -239,6 +266,7 @@ class ScenarioWidget(QWidget):
         total_duration = format_duration(self.scenario.get_total_duration())
         self.steps_count_label.setText(f"{step_count} · Общее время: {total_duration}")
         self.scenario_changed.emit(self.scenario)
+        self._on_selection_changed()
 
     def _emit_scenario_changed(self) -> None:
         self.scenario_changed.emit(self.scenario)
@@ -257,6 +285,48 @@ class ScenarioWidget(QWidget):
                     f"Добавлен шаг {self._step_number(step.id)}: {describe_step(step)}",
                     "success",
                 )
+
+    def clone_selected_step(self):
+        """Клонировать выбранный шаг."""
+        selected = [
+            item.step
+            for item in self.graph_scene.selectedItems()
+            if hasattr(item, "step")
+        ]
+        if not selected:
+            QMessageBox.information(self, "Выбор шага", "Сначала выберите шаг для клонирования")
+            return
+        
+        source_step = selected[0]
+        
+        # Создаём копию шага с новым ID и смещённой позицией
+        import copy
+        import uuid
+        
+        new_step = copy.deepcopy(source_step)
+        new_step.id = uuid.uuid4().hex
+        new_step.position_x = source_step.position_x + 30
+        new_step.position_y = source_step.position_y + 30
+        
+        # Добавляем новый шаг в сценарий
+        self.scenario.steps.append(new_step)
+        
+        # Если были связи, копируем их (но только если источник не был стартовым)
+        # Для простоты — не копируем связи, пользователь может добавить их вручную
+        # или через перетаскивание
+        
+        self.update_graph()
+        self._log_change(
+            f"Клонирован шаг {self._step_number(source_step.id)} → "
+            f"{self._step_number(new_step.id)}: {describe_step(new_step)}",
+            "success",
+        )
+        
+        # Выделяем новый шаг
+        for item in self.graph_scene.items():
+            if hasattr(item, "step") and item.step.id == new_step.id:
+                item.setSelected(True)
+                break
 
     def edit_step(self, index: int) -> None:
         """Редактировать шаг"""
@@ -676,7 +746,7 @@ class StepEditDialog(QDialog):
         self.duration_spin.setSuffix(" с")
         form_layout.addRow("Длительность:", self.duration_spin)
 
-        # Нарастание
+        # Нарастание (не реализовано)
         self.ramp_up_spin = QDoubleSpinBox()
         self.ramp_up_spin.setRange(0, 60)
         self.ramp_up_spin.setValue(self.step.ramp_up)
@@ -685,7 +755,7 @@ class StepEditDialog(QDialog):
         self.ramp_up_spin.setToolTip("Плавное нарастание пока не реализовано")
         form_layout.addRow("Нарастание (не реализовано):", self.ramp_up_spin)
 
-        # Затухание
+        # Затухание (не реализовано)
         self.ramp_down_spin = QDoubleSpinBox()
         self.ramp_down_spin.setRange(0, 60)
         self.ramp_down_spin.setValue(self.step.ramp_down)
