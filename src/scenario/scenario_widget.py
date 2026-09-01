@@ -2,8 +2,10 @@ import json
 import os
 from typing import Optional
 
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
+    QAction,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -13,8 +15,10 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QMenu,
     QMessageBox,
     QPushButton,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -137,6 +141,13 @@ class ScenarioWidget(QWidget):
         self.add_step_btn.clicked.connect(self.add_step)
         title_layout.addWidget(self.add_step_btn)
 
+        self.add_step_action = QAction("Добавить шаг", self)
+        self.add_step_action.setShortcut(QKeySequence("Shift+A"))
+        self.add_step_action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
+        self.add_step_action.setToolTip("Добавить шаг (Shift+A)")
+        self.add_step_action.triggered.connect(self.add_step)
+        self.addAction(self.add_step_action)
+
         self.trigger_btn = QPushButton("◉ Условие запуска")
         self.trigger_btn.setToolTip(
             "Настроить запуск выбранного блока при нескольких входящих связях"
@@ -148,6 +159,16 @@ class ScenarioWidget(QWidget):
         self.delete_btn.setToolTip("Удалить выбранный блок или выбранную связь")
         self.delete_btn.clicked.connect(self.delete_selected_step)
         title_layout.addWidget(self.delete_btn)
+
+        settings_menu = QMenu(self)
+        settings_menu.addAction(self.add_step_action)
+
+        self.settings_btn = QToolButton()
+        self.settings_btn.setText("Настройки ▾")
+        self.settings_btn.setToolTip("Действия и сочетания клавиш сценария")
+        self.settings_btn.setPopupMode(QToolButton.InstantPopup)
+        self.settings_btn.setMenu(settings_menu)
+        title_layout.addWidget(self.settings_btn)
 
         layout.addLayout(title_layout)
 

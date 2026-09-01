@@ -59,19 +59,19 @@ def app_stylesheet() -> str:
         }}
         QLineEdit:focus, QComboBox:focus, QSpinBox:focus,
         QDoubleSpinBox:focus {{ border-color: {color["primary"]}; }}
-        QPushButton {{
+        QPushButton, QToolButton {{
             min-height: 26px;
             padding: 3px 10px;
             background-color: {color["surface_alt"]};
             border: 1px solid {color["border_strong"]};
             border-radius: 2px;
         }}
-        QPushButton:hover {{
+        QPushButton:hover, QToolButton:hover {{
             background-color: {color["primary_soft"]};
             border-color: {color["primary"]};
         }}
-        QPushButton:pressed {{ background-color: #d7e8f1; }}
-        QPushButton:disabled {{
+        QPushButton:pressed, QToolButton:pressed {{ background-color: #d7e8f1; }}
+        QPushButton:disabled, QToolButton:disabled {{
             color: {color["disabled"]};
             background-color: #eceff1;
             border-color: #d7dce1;
