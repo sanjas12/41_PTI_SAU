@@ -322,13 +322,10 @@ class PlotWidget(pg.PlotWidget):
     ) -> None:
         """
         Добавить новое значение.
-
-        ВАЖНО:
-        Здесь график НЕ перерисовывается.
+        ВАЖНО: Здесь график НЕ перерисовывается.
         """
 
         buffer = self.channel_data.get(channel_id)
-
         if buffer is None:
             return
 
@@ -340,13 +337,15 @@ class PlotWidget(pg.PlotWidget):
         if not np.isfinite(value):
             return
 
+        # Используем время из канала, если timestamp не передан
         if timestamp is None:
-            timestamp = time.monotonic() - self.start_time
+            channel = self.generator.get_channel(channel_id)
+            if channel is not None:
+                timestamp = channel.time
+            else:
+                timestamp = time.monotonic() - self.start_time
 
-        buffer.append(
-            timestamp,
-            value,
-        )
+        buffer.append(timestamp, value)
 
     def update_plot(self, current_time: Optional[float] = None) -> None:
         """
@@ -1463,11 +1462,8 @@ class PlotWindow(QMainWindow):
 
         values = self.generator.get_values()
 
-        self._acquisition_time += self.UPDATE_INTERVAL_MS / 1000.0
-        current_time = self._acquisition_time
-
         # --------------------------------------------------------------
-        # 1. Записываем данные
+        # 1. Записываем данные с реальным временем из каналов
         # --------------------------------------------------------------
 
         for plot in self.plot_widgets:
@@ -1475,15 +1471,30 @@ class PlotWindow(QMainWindow):
                 if not (0 <= channel_id < len(values)):
                     continue
 
+                # Получаем время из канала
+                channel = self.generator.get_channel(channel_id)
+                if channel is not None:
+                    timestamp = channel.time
+                else:
+                    timestamp = self._acquisition_time
+
                 plot.append_value(
                     channel_id,
                     values[channel_id],
-                    current_time,
+                    timestamp,
                 )
 
         # --------------------------------------------------------------
-        # 2. Один раз обновляем отображение
+        # 2. Обновляем отображение
         # --------------------------------------------------------------
+
+        # Вычисляем текущее время для оси X (максимальное время среди всех каналов)
+        current_time = self._acquisition_time
+        for plot in self.plot_widgets:
+            for channel_id in plot.get_channel_ids():
+                channel = self.generator.get_channel(channel_id)
+                if channel is not None and channel.time > current_time:
+                    current_time = channel.time
 
         for plot in self.plot_widgets:
             plot.update_plot(current_time)
@@ -1494,10 +1505,6 @@ class PlotWindow(QMainWindow):
 
         if self.update_counter % 20 == 0 and self.fps_label is not None:
             self.fps_label.setText(f"Обновлений: {self.update_counter}")
-
-    # ==================================================================
-    # Qt events
-    # ==================================================================
 
     def closeEvent(self, event) -> None:  # type: ignore  # noqa: N802
         """Корректно закрыть окно."""

@@ -86,6 +86,11 @@ class ScenarioEngine(QObject):
             # Сохраняем текущие настройки каналов
             self._save_channel_configs()
 
+            # СБРАСЫВАЕМ ВСЕ КАНАЛЫ ПРИ ЗАПУСКЕ
+            for channel in self.generator.channels:
+                channel.time = 0.0
+                channel.current_value = 0.0
+
             # Останавливаем ручную генерацию
             self.mode = ScenarioMode.SCENARIO
             self._is_running = True
@@ -226,12 +231,20 @@ class ScenarioEngine(QObject):
             )
             self._completed_steps.add(step.id)
             return
+        
+        # Применяем настройки
         channel.signal_type = SignalType[step.signal_type.upper()]
         channel.frequency = step.frequency
         channel.amplitude = step.amplitude
         channel.offset = step.offset
         channel.enabled = True
+        
+        # СБРАСЫВАЕМ ВРЕМЯ — сигнал начнётся с нуля
         channel.time = 0.0
+        
+        # Если нужно плавное нарастание, можно установить current_value = 0
+        # channel.current_value = 0.0  # опционально
+        
         self._active_steps[step.id] = 0.0
         index = self.scenario.steps.index(step) + 1
         label = self.scenario.get_step_label(step.id)
