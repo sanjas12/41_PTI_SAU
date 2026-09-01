@@ -28,6 +28,7 @@ from modbus.worker import Runnable
 from plc.plc_interface import PLCInterface
 from plc.plc_register_view import PLCRegisterView
 from scenario.scenario_engine import ScenarioEngine
+from scenario.scenario_model import Scenario
 from scenario.scenario_widget import ScenarioWidget
 from ui.channel_widget import ChannelWidget
 
@@ -67,6 +68,7 @@ class MainWindow(QMainWindow):
         self.scenario_engine.scenario_stopped.connect(self.on_scenario_stopped)
         self.scenario_engine.scenario_finished.connect(self.on_scenario_finished)
         self.scenario_engine.progress_changed.connect(self.on_scenario_progress_changed)
+        self.scenario_engine.time_updated.connect(self.on_scenario_time_updated)
 
         # Создаем интерфейс для PLC
         self.plc_interface = PLCInterface(self.generator, self, debug=True)
@@ -299,6 +301,10 @@ class MainWindow(QMainWindow):
         self.scenario_widget = ScenarioWidget(
             self.generator, self.scenario_engine, self
         )
+        self.scenario_widget.scenario_changed.connect(
+            self.on_scenario_definition_changed
+        )
+        self.on_scenario_definition_changed(self.scenario_widget.scenario)
         scenario_layout.addWidget(self.scenario_widget)
 
         # --- Сетка каналов ---
@@ -712,19 +718,42 @@ class MainWindow(QMainWindow):
                 self.pause_generation()
 
     def on_scenario_started(self, name: str):
+        self._update_scenario_time(0.0)
         self._refresh_control_buttons()
 
     def on_scenario_stopped(self):
         self._refresh_control_buttons()
         if hasattr(self, "control_panel"):
             self.control_panel.set_progress(0)
+            self._update_scenario_time(0.0)
 
     def on_scenario_finished(self):
+        scenario = self.scenario_engine.scenario
+        if scenario:
+            self.control_panel.set_progress(100)
+            self._update_scenario_time(scenario.get_total_duration())
         self._refresh_control_buttons()
 
     def on_scenario_progress_changed(self, progress: float):
         if hasattr(self, "control_panel"):
             self.control_panel.set_progress(int(progress))
+
+    def on_scenario_time_updated(self, elapsed: float) -> None:
+        self._update_scenario_time(elapsed)
+
+    def on_scenario_definition_changed(self, scenario: Scenario) -> None:
+        """Показать расчётное время ещё до запуска сценария."""
+        if self.scenario_engine.is_running():
+            return
+        self.control_panel.set_progress(0)
+        self.control_panel.set_scenario_time(0.0, scenario.get_total_duration())
+
+    def _update_scenario_time(self, elapsed: float) -> None:
+        if not hasattr(self, "control_panel"):
+            return
+        scenario = self.scenario_engine.scenario
+        total = scenario.get_total_duration() if scenario else 0.0
+        self.control_panel.set_scenario_time(elapsed, total)
 
     def request_channel_mode(self, target_mode: str):
         """Обработчик клика по тумблеру Ручной/Сценарий.

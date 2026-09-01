@@ -4,6 +4,16 @@ from PyQt5.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QPushButton, QWid
 from .collapsible_groupbox import CollapsibleGroupBox
 
 
+def format_scenario_time(seconds: float) -> str:
+    """Вернуть время сценария в формате MM:SS или HH:MM:SS."""
+    total_seconds = max(0, int(round(seconds)))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, remaining_seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{remaining_seconds:02d}"
+    return f"{minutes:02d}:{remaining_seconds:02d}"
+
+
 class ControlPanel(CollapsibleGroupBox):
     """Панель управления с кнопками"""
 
@@ -88,9 +98,14 @@ class ControlPanel(CollapsibleGroupBox):
         # Индикатор выполнения — актуален для сценария (ход выполнения
         # шагов); в ручном режиме скрыт (MainWindow управляет видимостью).
         self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximumWidth(100)
+        self.progress_bar.setMinimumWidth(210)
+        self.progress_bar.setMaximumWidth(260)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
+        self._progress_value = 0
+        self._elapsed_time = 0.0
+        self._total_time = 0.0
+        self._update_progress_text()
         self.progress_bar.setStyleSheet("""
             QProgressBar {
                 border: 1px solid #ddd;
@@ -261,7 +276,24 @@ class ControlPanel(CollapsibleGroupBox):
 
     def set_progress(self, value: int):
         """Обновить индикатор выполнения (0-100)."""
-        self.progress_bar.setValue(value)
+        self._progress_value = max(0, min(100, value))
+        self.progress_bar.setValue(self._progress_value)
+        self._update_progress_text()
+
+    def set_scenario_time(self, elapsed: float, total: float) -> None:
+        """Обновить прошедшее и общее время внутри индикатора."""
+        self._elapsed_time = max(0.0, elapsed)
+        self._total_time = max(0.0, total)
+        self._update_progress_text()
+
+    def _update_progress_text(self) -> None:
+        elapsed = format_scenario_time(self._elapsed_time)
+        total = format_scenario_time(self._total_time)
+        self.progress_bar.setFormat(f"%p% · {elapsed} / {total}")
+        self.progress_bar.setToolTip(
+            f"Выполнено: {self._progress_value}%\n"
+            f"Прошло: {elapsed}\nОбщее время: {total}"
+        )
 
     def set_progress_visible(self, visible: bool):
         """Индикатор актуален только для сценария — в ручном режиме прячем."""
