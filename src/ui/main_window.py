@@ -866,10 +866,21 @@ class MainWindow(QMainWindow):
         self._refresh_control_buttons()
 
     def reset_signals(self):
+        """Сбросить сигналы и очистить графики."""
+        # Сбрасываем значения каналов
         for channel in self.generator.channels:
             channel.time = 0
             channel.current_value = 0
+        
+        # Очищаем графики, если окно открыто
+        if self.plot_window and self.plot_window.isVisible():
+            for plot in self.plot_window.plot_widgets:
+                plot.clear_plot()
+            self.plot_window._update_channels_list()
+            self.log("Графики очищены", "info")
+        
         self.update_signals()
+        self.log("Сигналы сброшены", "info")
 
     def on_toggle_all_channels_clicked(self):
         """Включить/выключить разом все каналы. Актуально только для

@@ -1579,3 +1579,9 @@ class PlotWindow(QMainWindow):
     def get_active_channels(self) -> List[int]:
         """Получить список ID активных (включенных) каналов."""
         return [ch.id for ch in self.generator.channels if ch.enabled]
+    
+    def clear_all_plots_data(self) -> None:
+        """Очистить данные всех графиков без подтверждения (для сброса)."""
+        for plot in self.plot_widgets:
+            plot.clear_plot()
+        self._update_channels_list()
