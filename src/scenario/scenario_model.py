@@ -26,6 +26,9 @@ class ScenarioStep:
     position_y: float = 0.0
     trigger_mode: str = TRIGGER_ALL
     trigger_step_id: Optional[str] = None
+    # Дискретные параметры
+    duty_cycle: float = 50.0  # Для PWM
+    pulse_width: float = 1.0  # Для Pulse
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -41,6 +44,8 @@ class ScenarioStep:
             "position": [self.position_x, self.position_y],
             "trigger_mode": self.trigger_mode,
             "trigger_step_id": self.trigger_step_id,
+            "duty_cycle": self.duty_cycle,
+            "pulse_width": self.pulse_width,
         }
 
     @classmethod
@@ -63,6 +68,8 @@ class ScenarioStep:
             position_y=float(position[1]),
             trigger_mode=trigger_mode,
             trigger_step_id=data.get("trigger_step_id"),
+            duty_cycle=float(data.get("duty_cycle", 50.0)),
+            pulse_width=float(data.get("pulse_width", 1.0)),
         )
 
 

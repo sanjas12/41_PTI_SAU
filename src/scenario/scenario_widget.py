@@ -43,17 +43,30 @@ SIGNAL_TYPE_NAMES = {
     "Triangle": "Треугольный",
     "Random": "Случайный",
     "Custom": "Пользовательский",
+    # Дискретные
+    "Discrete": "Дискретный (0/1)",
+    "Pulse": "Импульсный",
+    "Pwm": "ШИМ",
+    "Step": "Ступенчатый",
+    "Toggle": "Переключающийся",
 }
 
 
 def describe_step(step: ScenarioStep) -> str:
     """Вернуть краткое понятное описание шага для UI и журнала."""
     signal_name = SIGNAL_TYPE_NAMES.get(step.signal_type, step.signal_type)
-    return (
-        f"канал {step.channel_id + 1}, {signal_name}, "
-        f"A={step.amplitude:g} %, f={step.frequency:g} Гц, "
-        f"смещение={step.offset:g} %, {step.duration:g} с"
-    )
+    desc = f"канал {step.channel_id + 1}, {signal_name}, "
+    desc += f"A={step.amplitude:g} %, f={step.frequency:g} Гц, "
+    desc += f"смещение={step.offset:g} %, {step.duration:g} с"
+    
+    # Добавляем информацию о дискретных параметрах
+    signal_type = SignalType[step.signal_type.upper()] if step.signal_type else None
+    if signal_type == SignalType.PWM:
+        desc += f", скважность={step.duty_cycle:g}%"
+    elif signal_type == SignalType.PULSE:
+        desc += f", длит. импульса={step.pulse_width:g} с"
+    
+    return desc
 
 
 def format_step_count(count: int) -> str:
@@ -673,7 +686,7 @@ class ScenarioWidget(QWidget):
 
 class StepEditDialog(QDialog):
     """Диалог редактирования шага"""
-
+    
     def __init__(
         self,
         generator: SignalGenerator,
@@ -686,6 +699,7 @@ class StepEditDialog(QDialog):
         self.setWindowTitle("Редактирование шага" if step else "Добавление шага")
         self.setModal(True)
         self.setup_ui()
+        self.update_discrete_visibility()
 
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -708,6 +722,7 @@ class StepEditDialog(QDialog):
 
         # Тип сигнала
         self.type_combo = QComboBox()
+        # Добавляем аналоговые и дискретные типы
         for signal_type in SignalType:
             serialized_name = signal_type.name.capitalize()
             display_name = SIGNAL_TYPE_NAMES.get(serialized_name, serialized_name)
@@ -716,6 +731,7 @@ class StepEditDialog(QDialog):
             index = self.type_combo.findData(self.step.signal_type)
             if index >= 0:
                 self.type_combo.setCurrentIndex(index)
+        self.type_combo.currentIndexChanged.connect(self.update_discrete_visibility)
         form_layout.addRow("Тип сигнала:", self.type_combo)
 
         # Амплитуда
@@ -723,6 +739,7 @@ class StepEditDialog(QDialog):
         self.amp_spin.setRange(0, 100)
         self.amp_spin.setValue(self.step.amplitude)
         self.amp_spin.setSuffix(" %")
+        self.amp_spin.setToolTip("Для дискретных: определяет количество уровней")
         form_layout.addRow("Амплитуда:", self.amp_spin)
 
         # Частота
@@ -732,7 +749,7 @@ class StepEditDialog(QDialog):
         self.freq_spin.setSuffix(" Гц")
         form_layout.addRow("Частота:", self.freq_spin)
 
-        # Смещение относительно центра диапазона канала
+        # Смещение
         self.offset_spin = QDoubleSpinBox()
         self.offset_spin.setRange(-100, 100)
         self.offset_spin.setValue(self.step.offset)
@@ -745,6 +762,29 @@ class StepEditDialog(QDialog):
         self.duration_spin.setValue(self.step.duration)
         self.duration_spin.setSuffix(" с")
         form_layout.addRow("Длительность:", self.duration_spin)
+
+        # ====== ДИСКРЕТНЫЕ ПАРАМЕТРЫ ======
+        self.discrete_group = QGroupBox("Параметры дискретного сигнала")
+        discrete_layout = QFormLayout()
+        self.discrete_group.setLayout(discrete_layout)
+        
+        # Скважность (для PWM)
+        self.duty_spin = QDoubleSpinBox()
+        self.duty_spin.setRange(0, 100)
+        self.duty_spin.setValue(getattr(self.step, 'duty_cycle', 50.0))
+        self.duty_spin.setSuffix(" %")
+        self.duty_spin.setToolTip("Скважность ШИМ-сигнала (0-100%)")
+        discrete_layout.addRow("Скважность (PWM):", self.duty_spin)
+        
+        # Длительность импульса (для Pulse)
+        self.pulse_width_spin = QDoubleSpinBox()
+        self.pulse_width_spin.setRange(0.01, 10.0)
+        self.pulse_width_spin.setValue(getattr(self.step, 'pulse_width', 1.0))
+        self.pulse_width_spin.setSuffix(" с")
+        self.pulse_width_spin.setToolTip("Длительность импульса")
+        discrete_layout.addRow("Длит. импульса:", self.pulse_width_spin)
+        
+        form_layout.addRow(self.discrete_group)
 
         # Нарастание (не реализовано)
         self.ramp_up_spin = QDoubleSpinBox()
@@ -773,13 +813,30 @@ class StepEditDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(350)
+
+    def update_discrete_visibility(self):
+        """Показать/скрыть параметры дискретных сигналов"""
+        current_data = self.type_combo.currentData()
+        if current_data:
+            # Проверяем, является ли тип дискретным
+            signal_type = SignalType[current_data.upper()] if current_data else None
+            if signal_type and signal_type.is_discrete():
+                self.discrete_group.setVisible(True)
+                # Для PWM показываем скважность
+                self.duty_spin.setVisible(signal_type == SignalType.PWM)
+                # Для Pulse показываем длительность импульса
+                self.pulse_width_spin.setVisible(signal_type == SignalType.PULSE)
+            else:
+                self.discrete_group.setVisible(False)
 
     def get_step(self) -> ScenarioStep:
+        """Получить настроенный шаг с поддержкой дискретных параметров"""
+        signal_type = self.type_combo.currentData()
         return ScenarioStep(
             id=self.step.id,
             channel_id=self.channel_combo.currentData(),
-            signal_type=self.type_combo.currentData(),
+            signal_type=signal_type,
             amplitude=self.amp_spin.value(),
             frequency=self.freq_spin.value(),
             offset=self.offset_spin.value(),
@@ -790,4 +847,6 @@ class StepEditDialog(QDialog):
             position_y=self.step.position_y,
             trigger_mode=self.step.trigger_mode,
             trigger_step_id=self.step.trigger_step_id,
+            duty_cycle=self.duty_spin.value(),
+            pulse_width=self.pulse_width_spin.value(),
         )
