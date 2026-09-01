@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -322,10 +323,13 @@ class PlotWidget(pg.PlotWidget):
     ) -> None:
         """
         Добавить новое значение.
-        ВАЖНО: Здесь график НЕ перерисовывается.
+
+        ВАЖНО:
+        Здесь график НЕ перерисовывается.
         """
 
         buffer = self.channel_data.get(channel_id)
+
         if buffer is None:
             return
 
@@ -337,7 +341,6 @@ class PlotWidget(pg.PlotWidget):
         if not np.isfinite(value):
             return
 
-        # Используем время из канала, если timestamp не передан
         if timestamp is None:
             channel = self.generator.get_channel(channel_id)
             if channel is not None:
@@ -345,7 +348,10 @@ class PlotWidget(pg.PlotWidget):
             else:
                 timestamp = time.monotonic() - self.start_time
 
-        buffer.append(timestamp, value)
+        buffer.append(
+            timestamp,
+            value,
+        )
 
     def update_plot(self, current_time: Optional[float] = None) -> None:
         """
@@ -374,7 +380,12 @@ class PlotWidget(pg.PlotWidget):
             return
 
         if current_time is None:
-            current_time = time.monotonic() - self.start_time
+            # Получаем максимальное время из каналов
+            current_time = 0.0
+            for channel_id in self.get_channel_ids():
+                channel = self.generator.get_channel(channel_id)
+                if channel is not None and channel.time > current_time:
+                    current_time = channel.time
 
         min_time = max(
             0.0,
@@ -575,6 +586,8 @@ class PlotWindow(QMainWindow):
         self.add_selected_btn: QPushButton
         self.time_window_spin: QDoubleSpinBox
         self.height_spin: QSpinBox
+        self.progress_bar: QProgressBar  # ← НОВЫЙ ВИДЖЕТ
+        self.progress_label: QLabel  # ← НОВЫЙ ВИДЖЕТ
 
         # --------------------------------------------------------------
         # Состояние
@@ -659,6 +672,30 @@ class PlotWindow(QMainWindow):
         title.setObjectName("pageTitle")
         header_layout.addWidget(title)
         header_layout.addStretch()
+        
+        # Прогресс-бар выполнения сценария
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFixedWidth(200)
+        self.progress_bar.setFixedHeight(22)
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setFormat("Сценарий: %p%")
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #4CAF50;
+                border-radius: 4px;
+                background-color: #1e1e1e;
+                color: #ffffff;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #4CAF50;
+                border-radius: 3px;
+            }
+        """)
+        header_layout.addWidget(self.progress_bar)
+        
         self.fps_label = QLabel("Обновлений: 0")
         self.fps_label.setObjectName("statusPill")
         header_layout.addWidget(self.fps_label)
@@ -1447,6 +1484,19 @@ class PlotWindow(QMainWindow):
         """Синхронизировать запись графиков с кнопками управления."""
         self.is_running = running
 
+    def set_scenario_progress(self, progress: int) -> None:
+        """Обновить индикатор выполнения сценария."""
+        if progress > 0:
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setValue(progress)
+            if progress >= 100:
+                self.progress_bar.setFormat("Сценарий завершён")
+            else:
+                self.progress_bar.setFormat(f"Сценарий: {progress}%")
+        else:
+            self.progress_bar.setVisible(False)
+            self.progress_bar.setValue(0)
+
     def update_plots(self) -> None:
         """
         Один цикл обновления.
@@ -1505,6 +1555,10 @@ class PlotWindow(QMainWindow):
 
         if self.update_counter % 20 == 0 and self.fps_label is not None:
             self.fps_label.setText(f"Обновлений: {self.update_counter}")
+
+    # ==================================================================
+    # Qt events
+    # ==================================================================
 
     def closeEvent(self, event) -> None:  # type: ignore  # noqa: N802
         """Корректно закрыть окно."""

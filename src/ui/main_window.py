@@ -725,12 +725,22 @@ class MainWindow(QMainWindow):
     def on_scenario_started(self, name: str):
         self._update_scenario_time(0.0)
         self._refresh_control_buttons()
+        
+        # Показываем прогресс в окне графиков
+        if self.plot_window and self.plot_window.isVisible():
+            self.plot_window.set_scenario_progress(0)
+            self.plot_window.progress_bar.setVisible(True)
 
     def on_scenario_stopped(self):
         self._refresh_control_buttons()
         if hasattr(self, "control_panel"):
             self.control_panel.set_progress(0)
             self._update_scenario_time(0.0)
+        
+        # Скрываем прогресс в окне графиков
+        if self.plot_window and self.plot_window.isVisible():
+            self.plot_window.set_scenario_progress(0)
+            self.plot_window.progress_bar.setVisible(False)
 
     def on_scenario_finished(self):
         scenario = self.scenario_engine.scenario
@@ -738,10 +748,19 @@ class MainWindow(QMainWindow):
             self.control_panel.set_progress(100)
             self._update_scenario_time(scenario.get_total_duration())
         self._refresh_control_buttons()
+    
+        # Показываем завершение в окне графиков
+        if self.plot_window and self.plot_window.isVisible():
+            self.plot_window.set_scenario_progress(100)
 
     def on_scenario_progress_changed(self, progress: float):
+        """Обновить прогресс сценария."""
         if hasattr(self, "control_panel"):
             self.control_panel.set_progress(int(progress))
+        
+        # Передаём прогресс в окно графиков
+        if self.plot_window and self.plot_window.isVisible():
+            self.plot_window.set_scenario_progress(int(progress))
 
     def on_scenario_time_updated(self, elapsed: float) -> None:
         self._update_scenario_time(elapsed)
