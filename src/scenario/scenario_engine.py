@@ -237,13 +237,9 @@ class ScenarioEngine(QObject):
         channel.frequency = step.frequency
         channel.amplitude = step.amplitude
         channel.offset = step.offset
-        channel.enabled = True
-        
-        # СБРАСЫВАЕМ ВРЕМЯ — сигнал начнётся с нуля
+        channel.enabled = True  # ← ВКЛЮЧАЕМ КАНАЛ
         channel.time = 0.0
-        
-        # Если нужно плавное нарастание, можно установить current_value = 0
-        # channel.current_value = 0.0  # опционально
+        channel.current_value = 0.0
         
         self._active_steps[step.id] = 0.0
         index = self.scenario.steps.index(step) + 1
@@ -311,13 +307,23 @@ class ScenarioEngine(QObject):
                 self._active_steps[step_id] = elapsed
                 if elapsed >= step_by_id[step_id].duration:
                     completed_now.append(step_id)
+            
             for step_id in completed_now:
                 del self._active_steps[step_id]
                 self._completed_steps.add(step_id)
-                self.log_signal.emit(
-                    f"Завершён шаг {self.scenario.get_step_label(step_id)}",
-                    "info",
-                )
+                
+                # ОТКЛЮЧАЕМ КАНАЛ ПОСЛЕ ЗАВЕРШЕНИЯ ШАГА
+                step = step_by_id[step_id]
+                channel = self.generator.get_channel(step.channel_id)
+                if channel:
+                    channel.enabled = False
+                    channel.current_value = 0.0
+                    channel.time = 0.0
+                    self.log_signal.emit(
+                        f"Шаг {self.scenario.get_step_label(step_id)} завершён, "
+                        f"канал {step.channel_id + 1} отключён",
+                        "info",
+                    )
 
             if completed_now:
                 self._start_ready_steps()
@@ -369,6 +375,7 @@ class ScenarioEngine(QObject):
         for channel in self.generator.channels:
             channel.enabled = True
             channel.time = 0
+            channel.current_value = 0
 
         self.mode = ScenarioMode.MANUAL
         self.mode_changed.emit("manual")

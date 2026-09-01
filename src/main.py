@@ -28,7 +28,6 @@ def excepthook(exc_type, exc_value, exc_traceback):
     # Выводим в консоль
     print(error_msg)
 
-
 def setup_logging() -> None:
     """Настраиваем систему логирования."""
     kwargs: Dict[str, Any] = {
@@ -42,7 +41,6 @@ def setup_logging() -> None:
 
     logging.basicConfig(**kwargs)
 
-
 def log_startup_begin() -> None:
     """Отбивка старта — что запустилось, в каком окружении."""
     sep = "=" * 55
@@ -54,7 +52,6 @@ def log_startup_begin() -> None:
     logger.info("Платформа:  %s", sys.platform)
     logger.info("Лог-файл:   %s", os.path.abspath(cfg.LOG_FILE))
     logger.info("Уровень лога: %s", logging.getLevelName(cfg.LEVEL_LOG))
-
 
 def log_startup_done(elapsed: float) -> None:
     sep = "=" * 55
