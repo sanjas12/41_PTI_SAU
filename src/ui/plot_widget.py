@@ -565,7 +565,7 @@ class PlotWindow(QMainWindow):
 
         self.time_window = 10.0
         self.max_points = 2000
-        self.plot_height = 170
+        self.plot_height = 230
 
         # --------------------------------------------------------------
         # Графики
@@ -1511,7 +1511,7 @@ class PlotWindow(QMainWindow):
         values = self.generator.get_values()
 
         # --------------------------------------------------------------
-        # 1. Записываем данные с реальным временем из каналов
+        # 1. Записываем данные ТОЛЬКО ДЛЯ ВКЛЮЧЁННЫХ каналов
         # --------------------------------------------------------------
 
         for plot in self.plot_widgets:
@@ -1519,13 +1519,16 @@ class PlotWindow(QMainWindow):
                 if not (0 <= channel_id < len(values)):
                     continue
 
-                # Получаем время из канала
                 channel = self.generator.get_channel(channel_id)
-                if channel is not None:
-                    timestamp = channel.time
-                else:
-                    timestamp = self._acquisition_time
+                if channel is None:
+                    continue
 
+                # Проверяем, включён ли канал
+                if not channel.enabled:
+                    # Канал отключён — не добавляем новые данные
+                    continue
+
+                timestamp = channel.time
                 plot.append_value(
                     channel_id,
                     values[channel_id],

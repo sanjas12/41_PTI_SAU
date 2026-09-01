@@ -86,10 +86,11 @@ class ScenarioEngine(QObject):
             # Сохраняем текущие настройки каналов
             self._save_channel_configs()
 
-            # СБРАСЫВАЕМ ВСЕ КАНАЛЫ ПРИ ЗАПУСКЕ
-            for channel in self.generator.channels:
-                channel.time = 0.0
-                channel.current_value = 0.0
+            # НЕ СБРАСЫВАЕМ ВСЕ КАНАЛЫ — время должно идти с 0 только для тех,
+            # у кого есть шаги, но они будут обнулены в _apply_graph_step
+            # for channel in self.generator.channels:
+            #     channel.time = 0.0  ← УДАЛЯЕМ
+            #     channel.current_value = 0.0
 
             # Останавливаем ручную генерацию
             self.mode = ScenarioMode.SCENARIO
@@ -238,7 +239,7 @@ class ScenarioEngine(QObject):
         channel.amplitude = step.amplitude
         channel.offset = step.offset
         channel.enabled = True  # ← ВКЛЮЧАЕМ КАНАЛ
-        channel.time = 0.0
+        # channel.time = 0.0
         channel.current_value = 0.0
         
         self._active_steps[step.id] = 0.0
@@ -252,6 +253,7 @@ class ScenarioEngine(QObject):
         )
 
     def _can_start(self, step: ScenarioStep) -> bool:
+        """Проверить, может ли шаг быть запущен."""
         if not self.scenario or step.id in self._started_steps:
             return False
         incoming = self.scenario.incoming_ids(step.id)
@@ -261,6 +263,7 @@ class ScenarioEngine(QObject):
             return bool(incoming & self._completed_steps)
         if step.trigger_mode == TRIGGER_SPECIFIC:
             return step.trigger_step_id in self._completed_steps
+        # TRIGGER_ALL — все входящие шаги завершены
         return incoming <= self._completed_steps
 
     def _start_ready_steps(self) -> None:
@@ -286,7 +289,7 @@ class ScenarioEngine(QObject):
         if not self._is_running or self.mode != ScenarioMode.SCENARIO:
             return
 
-        dt = 0.05  # 50ms
+        dt = 0.05
         self._scenario_time += dt
 
         # Обновляем время
@@ -307,25 +310,17 @@ class ScenarioEngine(QObject):
                 self._active_steps[step_id] = elapsed
                 if elapsed >= step_by_id[step_id].duration:
                     completed_now.append(step_id)
-            
+
             for step_id in completed_now:
                 del self._active_steps[step_id]
                 self._completed_steps.add(step_id)
-                
-                # ОТКЛЮЧАЕМ КАНАЛ ПОСЛЕ ЗАВЕРШЕНИЯ ШАГА
-                step = step_by_id[step_id]
-                channel = self.generator.get_channel(step.channel_id)
-                if channel:
-                    channel.enabled = False
-                    channel.current_value = 0.0
-                    channel.time = 0.0
-                    self.log_signal.emit(
-                        f"Шаг {self.scenario.get_step_label(step_id)} завершён, "
-                        f"канал {step.channel_id + 1} отключён",
-                        "info",
-                    )
+                self.log_signal.emit(
+                    f"Завершён шаг {self.scenario.get_step_label(step_id)}",
+                    "info",
+                )
 
             if completed_now:
+                # Проверяем, какие шаги готовы к запуску
                 self._start_ready_steps()
                 self._emit_active_steps()
 
@@ -341,15 +336,24 @@ class ScenarioEngine(QObject):
                         self._finish_scenario()
                         return
                 else:
-                    self.log_signal.emit(
-                        "Сценарий остановлен: для оставшихся блоков условия запуска "
-                        "не могут быть выполнены",
-                        "error",
-                    )
-                    self._finish_scenario()
-                    return
+                    # Проверяем, есть ли шаги, которые должны были запуститься
+                    ready_to_start = []
+                    for step in self.scenario.steps:
+                        if self._can_start(step) and step.id not in self._started_steps:
+                            ready_to_start.append(step.id)
+                    
+                    if ready_to_start:
+                        # Запускаем готовые шаги
+                        for step in self.scenario.steps:
+                            if step.id in ready_to_start:
+                                self._apply_graph_step(step)
+                        self._emit_active_steps()
+                    else:
+                        # Если есть незавершённые шаги, но нет готовых к запуску
+                        # это нормально — ждём завершения текущих
+                        pass
 
-        # Обновляем значения сигналов с учетом плавного перехода
+        # Обновляем значения сигналов
         self._apply_ramp()
 
     def _apply_ramp(self):
@@ -418,3 +422,17 @@ class ScenarioEngine(QObject):
             channel.enabled = enabled
             if enabled:
                 channel.time = 0
+    
+    def _start_ready_steps(self) -> None:
+        if not self.scenario:
+            return
+        started = []
+        for step in self.scenario.steps:
+            if self._can_start(step):
+                self._apply_graph_step(step)
+                started.append(step.id)
+        if started:
+            self.log_signal.emit(
+                f"Запущены шаги: {', '.join(self.scenario.get_step_label(sid) for sid in started)}",
+                "info",
+            )
