@@ -233,6 +233,12 @@ class ScenarioGraphScene(QGraphicsScene):
     def set_scenario(self, scenario: Scenario) -> None:
         self.scenario = scenario
         self.clear()
+        # clear() удаляет C++-объекты элементов сцены. Сбрасываем ссылки до
+        # создания узлов, поскольку их itemChange обновляет указатель времени.
+        self.playhead_line = None
+        self.playhead_label = None
+        self.preview = None
+        self.connection_source = None
         self.nodes.clear()
         self.connections.clear()
         self.duration_bars.clear()

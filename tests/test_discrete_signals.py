@@ -132,3 +132,23 @@ def test_scenario_playhead_tracks_progress_between_steps():
     assert second.position_x == 480.0
     assert scene.duration_bars[second.id].rect().x() == 480.0
     app.processEvents()
+
+
+def test_scenario_graph_can_be_reloaded_in_the_same_scene():
+    app = QApplication.instance() or QApplication([])
+    scene = ScenarioGraphScene()
+    original = Scenario(
+        steps=[ScenarioStep(channel_id=0, signal_type="Sine", position_x=75.0)]
+    )
+    loaded = Scenario(
+        steps=[ScenarioStep(channel_id=0, signal_type="Sine", position_x=320.0)]
+    )
+
+    scene.set_scenario(original)
+    scene.set_scenario(loaded)
+
+    loaded_node = scene.nodes[loaded.steps[0].id]
+    assert loaded_node.pos().x() == 320.0
+    assert scene.playhead_line is not None
+    assert scene.playhead_label is not None
+    app.processEvents()
