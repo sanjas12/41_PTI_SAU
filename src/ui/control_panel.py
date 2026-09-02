@@ -99,7 +99,7 @@ class ControlPanel(CollapsibleGroupBox):
         # шагов); в ручном режиме скрыт (MainWindow управляет видимостью).
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimumWidth(210)
-        self.progress_bar.setMaximumWidth(260)
+        self.progress_bar.setMaximumWidth(320)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self._progress_value = 0

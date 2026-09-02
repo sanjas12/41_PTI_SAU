@@ -192,6 +192,18 @@ class ScenarioWidget(QWidget):
         self.clone_step_action.triggered.connect(self.clone_selected_step)
         self.addAction(self.clone_step_action)
 
+        self.fit_scenario_action = QAction("Показать весь сценарий", self)
+        self.fit_scenario_action.setShortcut(QKeySequence("Home"))
+        self.fit_scenario_action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
+        self.fit_scenario_action.setToolTip("Подогнать весь сценарий под окно (Home)")
+        self.fit_scenario_action.triggered.connect(self.fit_scenario_to_view)
+        self.addAction(self.fit_scenario_action)
+
+        self.fit_scenario_btn = QPushButton("⛶ Показать всё")
+        self.fit_scenario_btn.setToolTip("Подогнать весь сценарий под окно (Home)")
+        self.fit_scenario_btn.clicked.connect(self.fit_scenario_to_view)
+        title_layout.addWidget(self.fit_scenario_btn)
+
         self.trigger_btn = QPushButton("◉ Условие запуска")
         self.trigger_btn.setToolTip(
             "Настроить запуск выбранного блока при нескольких входящих связях"
@@ -208,6 +220,7 @@ class ScenarioWidget(QWidget):
         settings_menu.addAction(self.add_step_action)
         settings_menu.addAction(self.add_discrete_step_action)
         settings_menu.addAction(self.clone_step_action)
+        settings_menu.addAction(self.fit_scenario_action)
 
         self.settings_btn = QToolButton()
         self.settings_btn.setText("Настройки ▾")
@@ -222,7 +235,7 @@ class ScenarioWidget(QWidget):
             "Связь: перетащите линию от зелёного выхода к синему входу. "
             "Двойной щелчок по блоку — редактирование. Колесо мыши — масштаб. "
             "Средняя кнопка мыши — перемещение поля. "
-            "Shift+D — клонировать выбранный шаг."
+            "Home — показать весь сценарий. Shift+D — клонировать выбранный шаг."
         )
         hint.setObjectName("secondaryText")
         layout.addWidget(hint)
@@ -302,6 +315,10 @@ class ScenarioWidget(QWidget):
 
     def _emit_scenario_changed(self) -> None:
         self.scenario_changed.emit(self.scenario)
+
+    def fit_scenario_to_view(self) -> None:
+        """Показать все элементы сценария в текущем размере редактора."""
+        self.graph_view.fit_scenario()
 
     def add_step(self, signal_family: str = "analog") -> None:
         """Добавить шаг выбранной категории сигнала."""

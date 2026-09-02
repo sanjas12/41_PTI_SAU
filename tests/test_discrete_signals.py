@@ -184,3 +184,26 @@ def test_scenario_view_can_be_panned_with_pointer_delta():
     assert vertical.value() == old_vertical + 25
     view.close()
     app.processEvents()
+
+
+def test_scenario_view_can_fit_all_steps_into_viewport():
+    app = QApplication.instance() or QApplication([])
+    scene = ScenarioGraphScene()
+    scene.set_scenario(
+        Scenario(
+            steps=[
+                ScenarioStep(channel_id=0, signal_type="Sine", position_x=0.0),
+                ScenarioStep(channel_id=0, signal_type="Sine", position_x=1800.0),
+            ]
+        )
+    )
+    view = ScenarioGraphView(scene)
+    view.resize(600, 400)
+    view.show()
+    app.processEvents()
+
+    view.fit_scenario()
+
+    assert view.transform().m11() < 1.0
+    view.close()
+    app.processEvents()

@@ -483,6 +483,18 @@ class ScenarioGraphView(QGraphicsView):
         horizontal.setValue(horizontal.value() - delta.x())
         vertical.setValue(vertical.value() - delta.y())
 
+    def fit_scenario(self) -> None:
+        """Подобрать масштаб так, чтобы все элементы сценария были видны."""
+        bounds = self.scene().itemsBoundingRect()
+        if bounds.isEmpty():
+            return
+        bounds.adjust(-35.0, -35.0, 35.0, 35.0)
+        self.fitInView(bounds, Qt.KeepAspectRatio)
+        if self.transform().m11() > 1.5:
+            self.resetTransform()
+            self.scale(1.5, 1.5)
+            self.centerOn(bounds.center())
+
     def wheelEvent(self, event) -> None:  # noqa: N802
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
         current = self.transform().m11()
