@@ -5,7 +5,12 @@ from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 from scenario.scenario_engine import ScenarioEngine
-from scenario.scenario_graph import NODE_WIDTH, ScenarioGraphScene, node_header_color
+from scenario.scenario_graph import (
+    NODE_WIDTH,
+    ScenarioGraphScene,
+    node_header_color,
+    node_width_for_duration,
+)
 from scenario.scenario_model import Scenario, ScenarioStep
 from scenario.scenario_widget import ScenarioWidget, StepEditDialog
 
@@ -152,3 +157,10 @@ def test_scenario_graph_can_be_reloaded_in_the_same_scene():
     assert scene.playhead_line is not None
     assert scene.playhead_label is not None
     app.processEvents()
+
+
+def test_step_width_grows_with_duration_and_is_limited():
+    assert node_width_for_duration(1.0) < node_width_for_duration(5.0)
+    assert node_width_for_duration(5.0) == NODE_WIDTH
+    assert node_width_for_duration(10.0) > node_width_for_duration(5.0)
+    assert node_width_for_duration(3600.0) == 760.0

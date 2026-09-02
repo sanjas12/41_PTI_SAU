@@ -25,11 +25,20 @@ from .scenario_model import (
 )
 
 NODE_WIDTH = 210.0
+MIN_NODE_WIDTH = 160.0
+MAX_NODE_WIDTH = 760.0
+NODE_WIDTH_PER_SECOND = 10.0
 NODE_HEIGHT = 144.0
 NODE_HEIGHT_WITH_TRIGGER = 166.0
 SOCKET_RADIUS = 7.0
 ANALOG_HEADER_COLOR = QColor("#315f4a")
 DISCRETE_HEADER_COLOR = QColor("#4f5f9f")
+
+
+def node_width_for_duration(duration: float) -> float:
+    """Рассчитать читаемую ширину блока по длительности шага."""
+    width = MIN_NODE_WIDTH + max(0.0, duration) * NODE_WIDTH_PER_SECOND
+    return min(MAX_NODE_WIDTH, width)
 
 
 def node_header_color(signal_type_name: str) -> QColor:
@@ -85,6 +94,7 @@ class StepNodeItem(QGraphicsItem):
         self.graph_scene = scene
         self.step = step
         self.number = number
+        self.node_width = node_width_for_duration(step.duration)
         incoming_count = 0
         if scene.scenario:
             incoming_count = len(scene.scenario.incoming_ids(step.id))
@@ -106,7 +116,7 @@ class StepNodeItem(QGraphicsItem):
         return QRectF(
             -SOCKET_RADIUS,
             0.0,
-            NODE_WIDTH + 2 * SOCKET_RADIUS,
+            self.node_width + 2 * SOCKET_RADIUS,
             self.node_height,
         )
 
@@ -114,27 +124,29 @@ class StepNodeItem(QGraphicsItem):
         return self.mapToScene(QPointF(0.0, self.node_height / 2))
 
     def output_position(self) -> QPointF:
-        return self.mapToScene(QPointF(NODE_WIDTH, self.node_height / 2))
+        return self.mapToScene(QPointF(self.node_width, self.node_height / 2))
 
     def paint(self, painter: QPainter, option, widget=None) -> None:
         painter.setRenderHint(QPainter.Antialiasing)
-        body = QRectF(0.0, 0.0, NODE_WIDTH, self.node_height)
+        body = QRectF(0.0, 0.0, self.node_width, self.node_height)
         border = QColor("#69a7ff") if self.isSelected() else QColor("#4b5262")
         painter.setPen(QPen(border, 2.0 if self.isSelected() else 1.0))
         painter.setBrush(QBrush(QColor("#292d35")))
         painter.drawRoundedRect(body, 7.0, 7.0)
 
-        header = QRectF(0.0, 0.0, NODE_WIDTH, 31.0)
+        header = QRectF(0.0, 0.0, self.node_width, 31.0)
         painter.setPen(Qt.NoPen)
         signal_type = SignalType[self.step.signal_type.upper()]
         painter.setBrush(QBrush(node_header_color(self.step.signal_type)))
         painter.drawRoundedRect(header, 7.0, 7.0)
-        painter.drawRect(QRectF(0.0, 22.0, NODE_WIDTH, 9.0))
+        painter.drawRect(QRectF(0.0, 22.0, self.node_width, 9.0))
 
         painter.setPen(QColor("#f1f3f5"))
         painter.setFont(QFont("Segoe UI", 9, QFont.Bold))
         painter.drawText(
-            QRectF(12.0, 5.0, 185.0, 22.0), Qt.AlignVCenter, f"Шаг {self.number}"
+            QRectF(12.0, 5.0, self.node_width - 24.0, 22.0),
+            Qt.AlignVCenter,
+            f"Шаг {self.number}",
         )
 
         painter.setFont(QFont("Segoe UI", 8))
@@ -170,7 +182,7 @@ class StepNodeItem(QGraphicsItem):
                 f"Смещение: {self.step.offset:g} %{trigger_text}"
             )
         painter.drawText(
-            QRectF(13.0, 39.0, 185.0, self.node_height - 48.0),
+            QRectF(13.0, 39.0, self.node_width - 26.0, self.node_height - 48.0),
             Qt.AlignLeft,
             details,
         )
@@ -182,7 +194,9 @@ class StepNodeItem(QGraphicsItem):
         )
         painter.setBrush(QBrush(QColor("#55b879")))
         painter.drawEllipse(
-            QPointF(NODE_WIDTH, self.node_height / 2), SOCKET_RADIUS, SOCKET_RADIUS
+            QPointF(self.node_width, self.node_height / 2),
+            SOCKET_RADIUS,
+            SOCKET_RADIUS,
         )
 
     def itemChange(self, change, value):  # noqa: N802
@@ -197,7 +211,7 @@ class StepNodeItem(QGraphicsItem):
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.LeftButton:
             local = event.pos()
-            output = QPointF(NODE_WIDTH, self.node_height / 2)
+            output = QPointF(self.node_width, self.node_height / 2)
             if abs(local.x() - output.x()) <= 14 and abs(local.y() - output.y()) <= 14:
                 self.graph_scene.begin_connection(self)
                 event.accept()
@@ -267,7 +281,7 @@ class ScenarioGraphScene(QGraphicsScene):
                 QRectF(
                     node.pos().x(),
                     node.pos().y() + node.node_height + 7.0,
-                    NODE_WIDTH,
+                    node.node_width,
                     7.0,
                 )
             )
@@ -347,7 +361,8 @@ class ScenarioGraphScene(QGraphicsScene):
                 continue
             duration = max(step.duration, 0.001)
             step_progress = min(1.0, max(0.0, (elapsed - start_time) / duration))
-            positions.append(self.nodes[step.id].pos().x() + NODE_WIDTH * step_progress)
+            node = self.nodes[step.id]
+            positions.append(node.pos().x() + node.node_width * step_progress)
         if positions:
             return sum(positions) / len(positions)
         return min(node.pos().x() for node in self.nodes.values())
