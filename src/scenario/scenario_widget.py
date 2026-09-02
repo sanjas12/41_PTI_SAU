@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Optional
+from typing import Optional, Sequence
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QKeySequence
@@ -149,12 +149,6 @@ class ScenarioWidget(QWidget):
 
         title_layout.addStretch()
 
-        # Кнопка добавления шага
-        self.add_step_btn = QPushButton("＋ Добавить шаг")
-        self.add_step_btn.setToolTip("Добавить новый шаг в конец сценария")
-        self.add_step_btn.clicked.connect(self.add_step)
-        title_layout.addWidget(self.add_step_btn)
-
         # Кнопка клонирования шага
         self.clone_step_btn = QPushButton("📋 Клонировать шаг")
         self.clone_step_btn.setToolTip("Клонировать выбранный шаг (Shift+D)")
@@ -162,12 +156,32 @@ class ScenarioWidget(QWidget):
         self.clone_step_btn.setEnabled(False)
         title_layout.addWidget(self.clone_step_btn)
 
-        self.add_step_action = QAction("Добавить шаг", self)
+        self.add_step_action = QAction("Аналоговый сигнал", self)
         self.add_step_action.setShortcut(QKeySequence("Shift+A"))
         self.add_step_action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
-        self.add_step_action.setToolTip("Добавить шаг (Shift+A)")
-        self.add_step_action.triggered.connect(self.add_step)
+        self.add_step_action.setToolTip("Добавить аналоговый шаг (Shift+A)")
+        self.add_step_action.triggered.connect(
+            lambda checked=False: self.add_step("analog")
+        )
         self.addAction(self.add_step_action)
+
+        self.add_discrete_step_action = QAction("Дискретный сигнал", self)
+        self.add_discrete_step_action.setToolTip("Добавить дискретный шаг")
+        self.add_discrete_step_action.triggered.connect(
+            lambda checked=False: self.add_step("discrete")
+        )
+        self.addAction(self.add_discrete_step_action)
+
+        add_step_menu = QMenu(self)
+        add_step_menu.addAction(self.add_step_action)
+        add_step_menu.addAction(self.add_discrete_step_action)
+
+        self.add_step_btn = QToolButton()
+        self.add_step_btn.setText("＋ Добавить шаг ▾")
+        self.add_step_btn.setToolTip("Выбрать категорию нового шага")
+        self.add_step_btn.setPopupMode(QToolButton.InstantPopup)
+        self.add_step_btn.setMenu(add_step_menu)
+        title_layout.addWidget(self.add_step_btn)
 
         self.clone_step_action = QAction("Клонировать шаг", self)
         self.clone_step_action.setShortcut(QKeySequence("Shift+D"))
@@ -190,6 +204,7 @@ class ScenarioWidget(QWidget):
 
         settings_menu = QMenu(self)
         settings_menu.addAction(self.add_step_action)
+        settings_menu.addAction(self.add_discrete_step_action)
         settings_menu.addAction(self.clone_step_action)
 
         self.settings_btn = QToolButton()
@@ -285,9 +300,14 @@ class ScenarioWidget(QWidget):
     def _emit_scenario_changed(self) -> None:
         self.scenario_changed.emit(self.scenario)
 
-    def add_step(self):
-        """Добавить новый шаг"""
-        dialog = StepEditDialog(self.generator, self)
+    def add_step(self, signal_family: str = "analog") -> None:
+        """Добавить шаг выбранной категории сигнала."""
+        signal_types = (
+            SignalType.get_discrete_types()
+            if signal_family == "discrete"
+            else SignalType.get_analog_types()
+        )
+        dialog = StepEditDialog(self.generator, self, signal_types=signal_types)
         if dialog.exec_() == QDialog.Accepted:
             step = dialog.get_step()
             if step:
@@ -695,10 +715,12 @@ class StepEditDialog(QDialog):
         generator: SignalGenerator,
         parent=None,
         step: Optional[ScenarioStep] = None,
+        signal_types: Optional[Sequence[SignalType]] = None,
     ):
         super().__init__(parent)
         self.generator = generator
         self.step = step or ScenarioStep(channel_id=0, signal_type="Sine")
+        self.signal_types = list(signal_types) if signal_types else list(SignalType)
         self.setWindowTitle("Редактирование шага" if step else "Добавление шага")
         self.setModal(True)
         self.setup_ui()
@@ -726,7 +748,7 @@ class StepEditDialog(QDialog):
         # Тип сигнала
         self.type_combo = QComboBox()
         # Добавляем аналоговые и дискретные типы
-        for signal_type in SignalType:
+        for signal_type in self.signal_types:
             serialized_name = signal_type.name.capitalize()
             display_name = SIGNAL_TYPE_NAMES.get(serialized_name, serialized_name)
             self.type_combo.addItem(display_name, serialized_name)

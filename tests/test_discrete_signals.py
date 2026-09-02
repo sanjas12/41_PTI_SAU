@@ -1,4 +1,5 @@
 import pytest
+from PyQt5.QtWidgets import QApplication
 
 from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
@@ -6,6 +7,7 @@ from core.signal_types import SignalType
 from scenario.scenario_engine import ScenarioEngine
 from scenario.scenario_graph import node_header_color
 from scenario.scenario_model import Scenario, ScenarioStep
+from scenario.scenario_widget import ScenarioWidget, StepEditDialog
 
 
 def make_channel(signal_type: SignalType, time: float) -> AnalogChannel:
@@ -55,6 +57,34 @@ def test_pulse_width_may_use_the_whole_period():
 def test_discrete_scenario_node_has_a_distinct_header_color():
     assert node_header_color("Pwm").name() == "#4f5f9f"
     assert node_header_color("Sine").name() == "#315f4a"
+
+
+def test_add_step_menu_separates_analog_and_discrete_signals():
+    app = QApplication.instance() or QApplication([])
+    generator = SignalGenerator([make_channel(SignalType.SINE, 0.0)])
+    widget = ScenarioWidget(generator, ScenarioEngine(generator))
+
+    action_names = [action.text() for action in widget.add_step_btn.menu().actions()]
+
+    assert action_names == ["Аналоговый сигнал", "Дискретный сигнал"]
+    widget.close()
+    app.processEvents()
+
+
+def test_discrete_step_dialog_contains_only_discrete_types():
+    app = QApplication.instance() or QApplication([])
+    generator = SignalGenerator([make_channel(SignalType.SINE, 0.0)])
+    dialog = StepEditDialog(generator, signal_types=SignalType.get_discrete_types())
+
+    available_types = {
+        dialog.type_combo.itemData(index) for index in range(dialog.type_combo.count())
+    }
+
+    assert available_types == {
+        signal_type.name.capitalize() for signal_type in SignalType.get_discrete_types()
+    }
+    dialog.close()
+    app.processEvents()
 
 
 def test_scenario_applies_discrete_parameters_to_channel():
