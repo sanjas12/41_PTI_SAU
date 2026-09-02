@@ -5,7 +5,7 @@ from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 from scenario.scenario_engine import ScenarioEngine
-from scenario.scenario_graph import node_header_color
+from scenario.scenario_graph import NODE_WIDTH, ScenarioGraphScene, node_header_color
 from scenario.scenario_model import Scenario, ScenarioStep
 from scenario.scenario_widget import ScenarioWidget, StepEditDialog
 
@@ -104,3 +104,20 @@ def test_scenario_applies_discrete_parameters_to_channel():
     assert channel.signal_type == SignalType.PWM
     assert channel.duty_cycle == 35.0
     assert channel.pulse_width == 0.2
+
+
+def test_scenario_playhead_tracks_progress_between_steps():
+    app = QApplication.instance() or QApplication([])
+    first = ScenarioStep(channel_id=0, signal_type="Sine", position_x=0.0)
+    second = ScenarioStep(channel_id=0, signal_type="Sine", position_x=250.0)
+    scene = ScenarioGraphScene()
+    scene.set_scenario(Scenario(steps=[first, second]))
+
+    scene.set_playhead(50.0, 65.0)
+
+    assert scene.playhead_line is not None
+    assert scene.playhead_label is not None
+    expected_x = (250.0 + NODE_WIDTH) / 2.0
+    assert scene.playhead_line.line().x1() == pytest.approx(expected_x)
+    assert scene.playhead_label.text() == "01:05"
+    app.processEvents()

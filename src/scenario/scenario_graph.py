@@ -4,9 +4,11 @@ from PyQt5.QtCore import QObject, QPointF, QRectF, Qt, pyqtSignal
 from PyQt5.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PyQt5.QtWidgets import (
     QGraphicsItem,
+    QGraphicsLineItem,
     QGraphicsPathItem,
     QGraphicsPolygonItem,
     QGraphicsScene,
+    QGraphicsSimpleTextItem,
     QGraphicsView,
     QWidget,
 )
@@ -221,6 +223,10 @@ class ScenarioGraphScene(QGraphicsScene):
         self.connection_source: Optional[StepNodeItem] = None
         self.preview: Optional[QGraphicsPathItem] = None
         self.scenario: Optional[Scenario] = None
+        self.playhead_progress = 0.0
+        self.playhead_time = 0.0
+        self.playhead_line: Optional[QGraphicsLineItem] = None
+        self.playhead_label: Optional[QGraphicsSimpleTextItem] = None
 
     def set_scenario(self, scenario: Scenario) -> None:
         self.scenario = scenario
@@ -239,6 +245,59 @@ class ScenarioGraphScene(QGraphicsScene):
                 item = ConnectionItem(source, target)
                 self.connections[connection] = item
                 self.addItem(item)
+        self._create_playhead()
+
+    def _create_playhead(self) -> None:
+        """Создать вертикальный указатель текущего момента сценария."""
+        self.playhead_line = QGraphicsLineItem()
+        self.playhead_line.setPen(QPen(QColor("#ffb347"), 2.0, Qt.DashLine))
+        self.playhead_line.setZValue(10.0)
+        self.playhead_line.setAcceptedMouseButtons(Qt.NoButton)
+        self.addItem(self.playhead_line)
+
+        self.playhead_label = QGraphicsSimpleTextItem()
+        self.playhead_label.setBrush(QBrush(QColor("#ffcf87")))
+        self.playhead_label.setFont(QFont("Segoe UI", 8, QFont.Bold))
+        self.playhead_label.setZValue(10.0)
+        self.playhead_label.setAcceptedMouseButtons(Qt.NoButton)
+        self.addItem(self.playhead_label)
+        self._update_playhead()
+
+    def set_playhead(self, progress: float, elapsed_seconds: float) -> None:
+        """Переместить указатель согласно прогрессу выполнения сценария."""
+        self.playhead_progress = max(0.0, min(100.0, progress))
+        self.playhead_time = max(0.0, elapsed_seconds)
+        self._update_playhead()
+
+    def _update_playhead(self) -> None:
+        if not self.playhead_line or not self.playhead_label or not self.nodes:
+            if self.playhead_line:
+                self.playhead_line.hide()
+            if self.playhead_label:
+                self.playhead_label.hide()
+            return
+
+        left = min(node.pos().x() for node in self.nodes.values())
+        right = max(node.pos().x() + NODE_WIDTH for node in self.nodes.values())
+        top = min(node.pos().y() for node in self.nodes.values()) - 34.0
+        bottom = (
+            max(node.pos().y() + node.node_height for node in self.nodes.values())
+            + 20.0
+        )
+        x = left + (right - left) * self.playhead_progress / 100.0
+
+        self.playhead_line.setLine(x, top, x, bottom)
+        self.playhead_line.show()
+        minutes, seconds = divmod(int(self.playhead_time), 60)
+        hours, minutes = divmod(minutes, 60)
+        time_text = (
+            f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            if hours
+            else f"{minutes:02d}:{seconds:02d}"
+        )
+        self.playhead_label.setText(time_text)
+        self.playhead_label.setPos(x + 5.0, top - 2.0)
+        self.playhead_label.show()
 
     def begin_connection(self, source: StepNodeItem) -> None:
         self.connection_source = source
@@ -290,6 +349,7 @@ class ScenarioGraphScene(QGraphicsScene):
         for item in self.connections.values():
             if item.source is node or item.target is node:
                 item.update_path()
+        self._update_playhead()
 
 
 class ScenarioGraphView(QGraphicsView):

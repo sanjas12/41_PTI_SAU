@@ -111,6 +111,7 @@ class ScenarioWidget(QWidget):
         self.engine = engine
         self.scenario = Scenario()
         self.current_file = None
+        self._elapsed_scenario_time = 0.0
 
         # Подключаем сигналы двигателя
         self.engine.scenario_started.connect(self.on_scenario_started)
@@ -119,6 +120,7 @@ class ScenarioWidget(QWidget):
         self.engine.step_changed.connect(self.on_step_changed)
         self.engine.active_steps_changed.connect(self.on_active_steps_changed)
         self.engine.progress_changed.connect(self.on_progress_changed)
+        self.engine.time_updated.connect(self.on_time_updated)
         self.engine.mode_changed.connect(self.on_mode_changed)
 
         self.setup_ui()
@@ -606,16 +608,23 @@ class ScenarioWidget(QWidget):
         return False
 
     def on_scenario_started(self, name: str):
+        self._elapsed_scenario_time = 0.0
+        self.graph_scene.set_playhead(0.0, 0.0)
         self.status_label.setText(f"Выполняется: {name[:15]}")
         self.status_label.setStyleSheet(
             "color: #4CAF50; font-weight: bold; font-size: 8px;"
         )
 
     def on_scenario_stopped(self):
+        self._elapsed_scenario_time = 0.0
+        self.graph_scene.set_playhead(0.0, 0.0)
         self.status_label.setText("Остановлен")
         self.status_label.setStyleSheet("color: #f44336; font-size: 8px;")
 
     def on_scenario_finished(self):
+        total = self.scenario.get_total_duration()
+        self._elapsed_scenario_time = total
+        self.graph_scene.set_playhead(100.0, total)
         self.status_label.setText("Завершен")
         self.status_label.setStyleSheet("color: #4CAF50; font-size: 8px;")
 
@@ -632,9 +641,14 @@ class ScenarioWidget(QWidget):
             self.status_label.setText(f"Выполняется шаг {labels}")
 
     def on_progress_changed(self, progress: float):
-        # Прогресс-бар теперь в ControlPanel — MainWindow подписан на
-        # тот же сигнал engine.progress_changed напрямую.
-        pass
+        self.graph_scene.set_playhead(progress, self._elapsed_scenario_time)
+
+    def on_time_updated(self, elapsed_seconds: float) -> None:
+        """Обновить подпись времени, сохранив текущее положение курсора."""
+        self._elapsed_scenario_time = elapsed_seconds
+        self.graph_scene.set_playhead(
+            self.graph_scene.playhead_progress, elapsed_seconds
+        )
 
     def on_mode_changed(self, mode: str):
         if mode == "manual":
