@@ -110,14 +110,25 @@ def test_scenario_playhead_tracks_progress_between_steps():
     app = QApplication.instance() or QApplication([])
     first = ScenarioStep(channel_id=0, signal_type="Sine", position_x=0.0)
     second = ScenarioStep(channel_id=0, signal_type="Sine", position_x=250.0)
+    first.duration = 5.0
+    second.duration = 5.0
+    scenario = Scenario(steps=[first, second])
+    scenario.add_connection(first.id, second.id)
     scene = ScenarioGraphScene()
-    scene.set_scenario(Scenario(steps=[first, second]))
+    scene.set_scenario(scenario)
 
-    scene.set_playhead(50.0, 65.0)
+    scene.set_playhead(25.0, 2.5)
 
     assert scene.playhead_line is not None
     assert scene.playhead_label is not None
-    expected_x = (250.0 + NODE_WIDTH) / 2.0
+    expected_x = NODE_WIDTH / 2.0
     assert scene.playhead_line.line().x1() == pytest.approx(expected_x)
-    assert scene.playhead_label.text() == "01:05"
+    assert scene.playhead_label.text() == "00:02"
+    assert scene.nodes[first.id].pos().x() == 0.0
+    assert scene.nodes[second.id].pos().x() == 250.0
+    assert scene.duration_bars[first.id].rect().width() == pytest.approx(NODE_WIDTH)
+
+    scene.nodes[second.id].setPos(480.0, 30.0)
+    assert second.position_x == 480.0
+    assert scene.duration_bars[second.id].rect().x() == 480.0
     app.processEvents()

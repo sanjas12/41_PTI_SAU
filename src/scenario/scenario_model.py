@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 TRIGGER_ANY = "any"
@@ -234,12 +234,12 @@ class Scenario:
             )
         return False
 
-    def get_total_duration(self) -> float:
-        """Рассчитать время выполнения графа с учётом параллельных ветвей."""
+    def get_step_timings(self) -> Dict[str, Tuple[float, float]]:
+        """Вернуть время начала и завершения каждого шага сценария."""
         if not self.steps:
-            return 0.0
+            return {}
 
-        finish_times: Dict[str, float] = {}
+        timings: Dict[str, Tuple[float, float]] = {}
         unresolved = {step.id for step in self.steps}
 
         while unresolved:
@@ -248,8 +248,12 @@ class Scenario:
                 if step.id not in unresolved:
                     continue
                 incoming = self.incoming_ids(step.id)
-                if incoming and not incoming.issubset(finish_times):
+                if incoming and not incoming.issubset(timings):
                     continue
+
+                finish_times = {
+                    source_id: timings[source_id][1] for source_id in incoming
+                }
 
                 if not incoming:
                     start_time = 0.0
@@ -263,16 +267,29 @@ class Scenario:
                 else:
                     start_time = max(finish_times[source_id] for source_id in incoming)
 
-                finish_times[step.id] = start_time + step.duration
+                timings[step.id] = (start_time, start_time + step.duration)
                 unresolved.remove(step.id)
                 resolved_in_pass = True
 
             if not resolved_in_pass:
-                # Циклический граф не должен возникать через редактор. Для
-                # повреждённого внешнего файла возвращаем безопасную оценку.
-                return sum(step.duration for step in self.steps)
+                # Редактор не создаёт циклы. Повреждённый внешний файл
+                # отображаем последовательно, чтобы шкала оставалась определённой.
+                start_time = max((end for _, end in timings.values()), default=0.0)
+                for step in self.steps:
+                    if step.id in unresolved:
+                        timings[step.id] = (
+                            start_time,
+                            start_time + step.duration,
+                        )
+                        start_time += step.duration
+                break
 
-        return max(finish_times.values())
+        return timings
+
+    def get_total_duration(self) -> float:
+        """Рассчитать время выполнения графа с учётом параллельных ветвей."""
+        timings = self.get_step_timings()
+        return max((end for _, end in timings.values()), default=0.0)
 
     def save_to_file(self, filepath: str) -> None:
         with open(filepath, "w", encoding="utf-8") as file:

@@ -102,6 +102,24 @@ def test_total_duration_uses_longest_parallel_branch():
     assert scenario.get_total_duration() == pytest.approx(12.0)
 
 
+def test_step_timings_describe_parallel_branch_intervals():
+    first = make_step("first")
+    first.duration = 5.0
+    short = make_step("short")
+    short.duration = 3.0
+    long = make_step("long")
+    long.duration = 7.0
+    scenario = Scenario(steps=[first, short, long])
+    scenario.add_connection(first.id, short.id)
+    scenario.add_connection(first.id, long.id)
+
+    assert scenario.get_step_timings() == {
+        "first": (0.0, 5.0),
+        "short": (5.0, 8.0),
+        "long": (5.0, 12.0),
+    }
+
+
 @pytest.mark.parametrize(
     ("trigger_mode", "trigger_step_id", "expected"),
     [

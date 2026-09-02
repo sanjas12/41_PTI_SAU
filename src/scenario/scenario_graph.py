@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QGraphicsLineItem,
     QGraphicsPathItem,
     QGraphicsPolygonItem,
+    QGraphicsRectItem,
     QGraphicsScene,
     QGraphicsSimpleTextItem,
     QGraphicsView,
@@ -220,6 +221,7 @@ class ScenarioGraphScene(QGraphicsScene):
         self.setSceneRect(-2000.0, -1200.0, 4000.0, 2400.0)
         self.nodes: Dict[str, StepNodeItem] = {}
         self.connections: Dict[ScenarioConnection, ConnectionItem] = {}
+        self.duration_bars: Dict[str, QGraphicsRectItem] = {}
         self.connection_source: Optional[StepNodeItem] = None
         self.preview: Optional[QGraphicsPathItem] = None
         self.scenario: Optional[Scenario] = None
@@ -233,11 +235,13 @@ class ScenarioGraphScene(QGraphicsScene):
         self.clear()
         self.nodes.clear()
         self.connections.clear()
+        self.duration_bars.clear()
         labels = scenario.get_step_labels()
         for step in scenario.steps:
             node = StepNodeItem(self, step, labels[step.id])
             self.nodes[step.id] = node
             self.addItem(node)
+        self._create_duration_bars()
         for connection in scenario.connections:
             source = self.nodes.get(connection.source_id)
             target = self.nodes.get(connection.target_id)
@@ -246,6 +250,27 @@ class ScenarioGraphScene(QGraphicsScene):
                 self.connections[connection] = item
                 self.addItem(item)
         self._create_playhead()
+
+    def _create_duration_bars(self) -> None:
+        """Добавить под блоками полосы, по которым движется указатель времени."""
+        for step in self.scenario.steps if self.scenario else []:
+            node = self.nodes[step.id]
+            color = node_header_color(step.signal_type)
+            color.setAlpha(190)
+            bar = QGraphicsRectItem(
+                QRectF(
+                    node.pos().x(),
+                    node.pos().y() + node.node_height + 7.0,
+                    NODE_WIDTH,
+                    7.0,
+                )
+            )
+            bar.setPen(QPen(Qt.NoPen))
+            bar.setBrush(QBrush(color))
+            bar.setZValue(-0.5)
+            bar.setAcceptedMouseButtons(Qt.NoButton)
+            self.duration_bars[step.id] = bar
+            self.addItem(bar)
 
     def _create_playhead(self) -> None:
         """Создать вертикальный указатель текущего момента сценария."""
@@ -277,14 +302,12 @@ class ScenarioGraphScene(QGraphicsScene):
                 self.playhead_label.hide()
             return
 
-        left = min(node.pos().x() for node in self.nodes.values())
-        right = max(node.pos().x() + NODE_WIDTH for node in self.nodes.values())
         top = min(node.pos().y() for node in self.nodes.values()) - 34.0
         bottom = (
             max(node.pos().y() + node.node_height for node in self.nodes.values())
             + 20.0
         )
-        x = left + (right - left) * self.playhead_progress / 100.0
+        x = self._playhead_x()
 
         self.playhead_line.setLine(x, top, x, bottom)
         self.playhead_line.show()
@@ -298,6 +321,30 @@ class ScenarioGraphScene(QGraphicsScene):
         self.playhead_label.setText(time_text)
         self.playhead_label.setPos(x + 5.0, top - 2.0)
         self.playhead_label.show()
+
+    def _playhead_x(self) -> float:
+        """Вычислить положение линии внутри выполняемых в данный момент шагов."""
+        if not self.scenario:
+            return 0.0
+        timings = self.scenario.get_step_timings()
+        total_duration = self.scenario.get_total_duration()
+        elapsed = min(self.playhead_time, total_duration)
+        if elapsed <= 0.0:
+            return min(node.pos().x() for node in self.nodes.values())
+        positions = []
+        for step in self.scenario.steps:
+            start_time, finish_time = timings[step.id]
+            is_active = start_time <= elapsed < finish_time
+            if elapsed == total_duration and finish_time == total_duration:
+                is_active = True
+            if not is_active:
+                continue
+            duration = max(step.duration, 0.001)
+            step_progress = min(1.0, max(0.0, (elapsed - start_time) / duration))
+            positions.append(self.nodes[step.id].pos().x() + NODE_WIDTH * step_progress)
+        if positions:
+            return sum(positions) / len(positions)
+        return min(node.pos().x() for node in self.nodes.values())
 
     def begin_connection(self, source: StepNodeItem) -> None:
         self.connection_source = source
@@ -349,6 +396,11 @@ class ScenarioGraphScene(QGraphicsScene):
         for item in self.connections.values():
             if item.source is node or item.target is node:
                 item.update_path()
+        duration_bar = self.duration_bars.get(node.step.id)
+        if duration_bar:
+            rect = duration_bar.rect()
+            rect.moveTo(node.pos().x(), node.pos().y() + node.node_height + 7.0)
+            duration_bar.setRect(rect)
         self._update_playhead()
 
 
