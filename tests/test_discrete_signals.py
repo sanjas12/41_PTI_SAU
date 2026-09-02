@@ -1,4 +1,5 @@
 import pytest
+from PyQt5.QtCore import QPoint
 from PyQt5.QtWidgets import QApplication
 
 from core.channel import AnalogChannel
@@ -8,6 +9,7 @@ from scenario.scenario_engine import ScenarioEngine
 from scenario.scenario_graph import (
     NODE_WIDTH,
     ScenarioGraphScene,
+    ScenarioGraphView,
     node_header_color,
     node_width_for_duration,
 )
@@ -164,3 +166,21 @@ def test_step_width_grows_with_duration_and_is_limited():
     assert node_width_for_duration(5.0) == NODE_WIDTH
     assert node_width_for_duration(10.0) > node_width_for_duration(5.0)
     assert node_width_for_duration(3600.0) == 760.0
+
+
+def test_scenario_view_can_be_panned_with_pointer_delta():
+    app = QApplication.instance() or QApplication([])
+    view = ScenarioGraphView(ScenarioGraphScene())
+    horizontal = view.horizontalScrollBar()
+    vertical = view.verticalScrollBar()
+    horizontal.setValue(horizontal.maximum() // 2)
+    vertical.setValue(vertical.maximum() // 2)
+    old_horizontal = horizontal.value()
+    old_vertical = vertical.value()
+
+    view._pan_by(QPoint(40, -25))
+
+    assert horizontal.value() == old_horizontal - 40
+    assert vertical.value() == old_vertical + 25
+    view.close()
+    app.processEvents()

@@ -1,7 +1,16 @@
 from typing import Dict, Optional
 
-from PyQt5.QtCore import QObject, QPointF, QRectF, Qt, pyqtSignal
-from PyQt5.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
+from PyQt5.QtCore import QObject, QPoint, QPointF, QRectF, Qt, pyqtSignal
+from PyQt5.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPolygonF,
+)
 from PyQt5.QtWidgets import (
     QGraphicsItem,
     QGraphicsLineItem,
@@ -437,6 +446,42 @@ class ScenarioGraphView(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setBackgroundBrush(QBrush(QColor("#1c1f24")))
         self.setMinimumHeight(180)
+        self._middle_button_panning = False
+        self._last_pan_position: Optional[QPoint] = None
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if event.button() == Qt.MiddleButton:
+            self._middle_button_panning = True
+            self._last_pan_position = event.pos()
+            self.viewport().setCursor(Qt.ClosedHandCursor)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if self._middle_button_panning and self._last_pan_position is not None:
+            delta = event.pos() - self._last_pan_position
+            self._pan_by(delta)
+            self._last_pan_position = event.pos()
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if event.button() == Qt.MiddleButton and self._middle_button_panning:
+            self._middle_button_panning = False
+            self._last_pan_position = None
+            self.viewport().unsetCursor()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def _pan_by(self, delta: QPoint) -> None:
+        """Сместить вид вслед за движением указателя."""
+        horizontal = self.horizontalScrollBar()
+        vertical = self.verticalScrollBar()
+        horizontal.setValue(horizontal.value() - delta.x())
+        vertical.setValue(vertical.value() - delta.y())
 
     def wheelEvent(self, event) -> None:  # noqa: N802
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
