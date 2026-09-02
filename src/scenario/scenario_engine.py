@@ -167,6 +167,8 @@ class ScenarioEngine(QObject):
                 "frequency": channel.frequency,
                 "amplitude": channel.amplitude,
                 "offset": channel.offset,
+                "duty_cycle": channel.duty_cycle,
+                "pulse_width": channel.pulse_width,
                 "min_value": channel.min_value,
                 "max_value": channel.max_value,
             }
@@ -181,6 +183,8 @@ class ScenarioEngine(QObject):
                 channel.frequency = config["frequency"]
                 channel.amplitude = config["amplitude"]
                 channel.offset = config["offset"]
+                channel.duty_cycle = config["duty_cycle"]
+                channel.pulse_width = config["pulse_width"]
                 channel.min_value = config["min_value"]
                 channel.max_value = config["max_value"]
                 # Сбрасываем время для корректной генерации
@@ -202,6 +206,8 @@ class ScenarioEngine(QObject):
         channel.frequency = step.frequency
         channel.amplitude = step.amplitude
         channel.offset = step.offset
+        channel.duty_cycle = step.duty_cycle
+        channel.pulse_width = step.pulse_width
         channel.enabled = True
 
         # Сохраняем данные для плавного перехода
@@ -232,16 +238,18 @@ class ScenarioEngine(QObject):
             )
             self._completed_steps.add(step.id)
             return
-        
+
         # Применяем настройки
         channel.signal_type = SignalType[step.signal_type.upper()]
         channel.frequency = step.frequency
         channel.amplitude = step.amplitude
         channel.offset = step.offset
+        channel.duty_cycle = step.duty_cycle
+        channel.pulse_width = step.pulse_width
         channel.enabled = True  # ← ВКЛЮЧАЕМ КАНАЛ
         # channel.time = 0.0
         channel.current_value = 0.0
-        
+
         self._active_steps[step.id] = 0.0
         index = self.scenario.steps.index(step) + 1
         label = self.scenario.get_step_label(step.id)
@@ -265,13 +273,6 @@ class ScenarioEngine(QObject):
             return step.trigger_step_id in self._completed_steps
         # TRIGGER_ALL — все входящие шаги завершены
         return incoming <= self._completed_steps
-
-    def _start_ready_steps(self) -> None:
-        if not self.scenario:
-            return
-        for step in self.scenario.steps:
-            if self._can_start(step):
-                self._apply_graph_step(step)
 
     def _emit_active_steps(self) -> None:
         if not self.scenario:
@@ -341,7 +342,7 @@ class ScenarioEngine(QObject):
                     for step in self.scenario.steps:
                         if self._can_start(step) and step.id not in self._started_steps:
                             ready_to_start.append(step.id)
-                    
+
                     if ready_to_start:
                         # Запускаем готовые шаги
                         for step in self.scenario.steps:
@@ -422,7 +423,7 @@ class ScenarioEngine(QObject):
             channel.enabled = enabled
             if enabled:
                 channel.time = 0
-    
+
     def _start_ready_steps(self) -> None:
         if not self.scenario:
             return

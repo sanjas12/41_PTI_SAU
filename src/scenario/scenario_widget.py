@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -58,14 +59,14 @@ def describe_step(step: ScenarioStep) -> str:
     desc = f"канал {step.channel_id + 1}, {signal_name}, "
     desc += f"A={step.amplitude:g} %, f={step.frequency:g} Гц, "
     desc += f"смещение={step.offset:g} %, {step.duration:g} с"
-    
+
     # Добавляем информацию о дискретных параметрах
     signal_type = SignalType[step.signal_type.upper()] if step.signal_type else None
     if signal_type == SignalType.PWM:
         desc += f", скважность={step.duty_cycle:g}%"
     elif signal_type == SignalType.PULSE:
         desc += f", длит. импульса={step.pulse_width:g} с"
-    
+
     return desc
 
 
@@ -307,34 +308,36 @@ class ScenarioWidget(QWidget):
             if hasattr(item, "step")
         ]
         if not selected:
-            QMessageBox.information(self, "Выбор шага", "Сначала выберите шаг для клонирования")
+            QMessageBox.information(
+                self, "Выбор шага", "Сначала выберите шаг для клонирования"
+            )
             return
-        
+
         source_step = selected[0]
-        
+
         # Создаём копию шага с новым ID и смещённой позицией
         import copy
         import uuid
-        
+
         new_step = copy.deepcopy(source_step)
         new_step.id = uuid.uuid4().hex
         new_step.position_x = source_step.position_x + 30
         new_step.position_y = source_step.position_y + 30
-        
+
         # Добавляем новый шаг в сценарий
         self.scenario.steps.append(new_step)
-        
+
         # Если были связи, копируем их (но только если источник не был стартовым)
         # Для простоты — не копируем связи, пользователь может добавить их вручную
         # или через перетаскивание
-        
+
         self.update_graph()
         self._log_change(
             f"Клонирован шаг {self._step_number(source_step.id)} → "
             f"{self._step_number(new_step.id)}: {describe_step(new_step)}",
             "success",
         )
-        
+
         # Выделяем новый шаг
         for item in self.graph_scene.items():
             if hasattr(item, "step") and item.step.id == new_step.id:
@@ -686,7 +689,7 @@ class ScenarioWidget(QWidget):
 
 class StepEditDialog(QDialog):
     """Диалог редактирования шага"""
-    
+
     def __init__(
         self,
         generator: SignalGenerator,
@@ -767,23 +770,23 @@ class StepEditDialog(QDialog):
         self.discrete_group = QGroupBox("Параметры дискретного сигнала")
         discrete_layout = QFormLayout()
         self.discrete_group.setLayout(discrete_layout)
-        
+
         # Скважность (для PWM)
         self.duty_spin = QDoubleSpinBox()
         self.duty_spin.setRange(0, 100)
-        self.duty_spin.setValue(getattr(self.step, 'duty_cycle', 50.0))
+        self.duty_spin.setValue(getattr(self.step, "duty_cycle", 50.0))
         self.duty_spin.setSuffix(" %")
         self.duty_spin.setToolTip("Скважность ШИМ-сигнала (0-100%)")
         discrete_layout.addRow("Скважность (PWM):", self.duty_spin)
-        
+
         # Длительность импульса (для Pulse)
         self.pulse_width_spin = QDoubleSpinBox()
         self.pulse_width_spin.setRange(0.01, 10.0)
-        self.pulse_width_spin.setValue(getattr(self.step, 'pulse_width', 1.0))
+        self.pulse_width_spin.setValue(getattr(self.step, "pulse_width", 1.0))
         self.pulse_width_spin.setSuffix(" с")
         self.pulse_width_spin.setToolTip("Длительность импульса")
         discrete_layout.addRow("Длит. импульса:", self.pulse_width_spin)
-        
+
         form_layout.addRow(self.discrete_group)
 
         # Нарастание (не реализовано)

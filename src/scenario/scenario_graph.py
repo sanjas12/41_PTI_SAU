@@ -1,6 +1,6 @@
 from typing import Dict, Optional
 
-from PyQt5.QtCore import QPointF, QRectF, Qt, pyqtSignal
+from PyQt5.QtCore import QObject, QPointF, QRectF, Qt, pyqtSignal
 from PyQt5.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PyQt5.QtWidgets import (
     QGraphicsItem,
@@ -8,7 +8,10 @@ from PyQt5.QtWidgets import (
     QGraphicsPolygonItem,
     QGraphicsScene,
     QGraphicsView,
+    QWidget,
 )
+
+from core.signal_types import SignalType
 
 from .scenario_model import (
     TRIGGER_ALL,
@@ -22,6 +25,16 @@ NODE_WIDTH = 210.0
 NODE_HEIGHT = 144.0
 NODE_HEIGHT_WITH_TRIGGER = 166.0
 SOCKET_RADIUS = 7.0
+ANALOG_HEADER_COLOR = QColor("#315f4a")
+DISCRETE_HEADER_COLOR = QColor("#4f5f9f")
+
+
+def node_header_color(signal_type_name: str) -> QColor:
+    """Вернуть цвет заголовка для аналогового или дискретного шага."""
+    signal_type = SignalType[signal_type_name.upper()]
+    if signal_type.is_discrete():
+        return DISCRETE_HEADER_COLOR
+    return ANALOG_HEADER_COLOR
 
 
 class ConnectionItem(QGraphicsPathItem):
@@ -110,7 +123,8 @@ class StepNodeItem(QGraphicsItem):
 
         header = QRectF(0.0, 0.0, NODE_WIDTH, 31.0)
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QBrush(QColor("#315f4a")))
+        signal_type = SignalType[self.step.signal_type.upper()]
+        painter.setBrush(QBrush(node_header_color(self.step.signal_type)))
         painter.drawRoundedRect(header, 7.0, 7.0)
         painter.drawRect(QRectF(0.0, 22.0, NODE_WIDTH, 9.0))
 
@@ -133,12 +147,25 @@ class StepNodeItem(QGraphicsItem):
                 trigger_text = "\nСтарт: после всех входов"
             else:
                 trigger_text = "\nСтарт: после выбранного входа"
-        details = (
-            f"Канал {self.step.channel_id + 1}  ·  {self.step.signal_type}\n"
-            f"Длительность: {self.step.duration:g} с\n"
-            f"A: {self.step.amplitude:g} %   f: {self.step.frequency:g} Гц\n"
-            f"Смещение: {self.step.offset:g} %{trigger_text}"
-        )
+        if signal_type.is_discrete():
+            parameter_text = f"Частота: {self.step.frequency:g} Гц"
+            if signal_type == SignalType.PWM:
+                parameter_text += f"   Заполнение: {self.step.duty_cycle:g} %"
+            elif signal_type == SignalType.PULSE:
+                parameter_text += f"   Импульс: {self.step.pulse_width:g} с"
+            details = (
+                f"Канал {self.step.channel_id + 1}  ·  {signal_type}\n"
+                f"Длительность: {self.step.duration:g} с\n"
+                f"{parameter_text}\n"
+                f"Состояния: ВЫКЛ / ВКЛ{trigger_text}"
+            )
+        else:
+            details = (
+                f"Канал {self.step.channel_id + 1}  ·  {signal_type}\n"
+                f"Длительность: {self.step.duration:g} с\n"
+                f"A: {self.step.amplitude:g} %   f: {self.step.frequency:g} Гц\n"
+                f"Смещение: {self.step.offset:g} %{trigger_text}"
+            )
         painter.drawText(
             QRectF(13.0, 39.0, 185.0, self.node_height - 48.0),
             Qt.AlignLeft,
@@ -186,7 +213,7 @@ class ScenarioGraphScene(QGraphicsScene):
     connection_requested = pyqtSignal(str, str)
     graph_changed = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
         self.setSceneRect(-2000.0, -1200.0, 4000.0, 2400.0)
         self.nodes: Dict[str, StepNodeItem] = {}
@@ -268,7 +295,9 @@ class ScenarioGraphScene(QGraphicsScene):
 class ScenarioGraphView(QGraphicsView):
     """Рабочее поле со сглаживанием, масштабированием и сеткой."""
 
-    def __init__(self, scene: ScenarioGraphScene, parent=None):
+    def __init__(
+        self, scene: ScenarioGraphScene, parent: Optional[QWidget] = None
+    ) -> None:
         super().__init__(scene, parent)
         self.setRenderHint(QPainter.Antialiasing)
         self.setDragMode(QGraphicsView.RubberBandDrag)

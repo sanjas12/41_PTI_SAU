@@ -28,8 +28,6 @@ class SignalGenerator:
         # Для дискретных сигналов
         self._discrete_state: Dict[int, bool] = {}
         self._last_toggle_time: Dict[int, float] = {}
-        self._pulse_state: Dict[int, bool] = {}
-        self._pulse_timer: Dict[int, float] = {}
 
     def add_channel(self, channel: AnalogChannel):
         self.channels.append(channel)
@@ -40,8 +38,6 @@ class SignalGenerator:
         self._random_buckets.pop(channel_id, None)
         self._discrete_state.pop(channel_id, None)
         self._last_toggle_time.pop(channel_id, None)
-        self._pulse_state.pop(channel_id, None)
-        self._pulse_timer.pop(channel_id, None)
 
     def get_channel(self, channel_id: int) -> Optional[AnalogChannel]:
         for ch in self.channels:
@@ -131,34 +127,39 @@ class SignalGenerator:
         scaled = mid + (raw * amp + offset) * range_val
         return scaled
 
+    def _generate_signal(self, channel: AnalogChannel) -> float:
+        """Сгенерировать значение согласно аналоговому или дискретному типу."""
+        if channel.signal_type.is_discrete():
+            return self._generate_discrete_signal(channel)
+        return self._generate_analog_signal(channel)
+
     def _generate_discrete_signal(self, channel: AnalogChannel) -> float:
         """Генерирует дискретный сигнал (возвращает 0 или 100% от диапазона)"""
         t = channel.time
         freq = channel.frequency
         min_val = channel.min_value
         max_val = channel.max_value
-        mid = (max_val + min_val) / 2
-        
+
         # Дискретное значение по умолчанию
         discrete_value = False
-        
+
         if channel.signal_type == SignalType.DISCRETE:
             # Простой дискретный: переключается с частотой
             period = 1.0 / freq if freq > 0 else 1.0
             discrete_value = (t % period) < (period / 2)
-            
+
         elif channel.signal_type == SignalType.PULSE:
             # Импульсный: короткий импульс с периодом
             period = 1.0 / freq if freq > 0 else 1.0
-            pulse_width = min(channel.pulse_width, period / 2)
+            pulse_width = max(0.0, min(channel.pulse_width, period))
             discrete_value = (t % period) < pulse_width
-            
+
         elif channel.signal_type == SignalType.PWM:
             # ШИМ: с изменяемой скважностью
             period = 1.0 / freq if freq > 0 else 1.0
-            duty = channel.duty_cycle / 100.0
+            duty = max(0.0, min(100.0, channel.duty_cycle)) / 100.0
             discrete_value = (t % period) < (period * duty)
-            
+
         elif channel.signal_type == SignalType.STEP:
             # Ступенчатый: меняется по уровням
             # Амплитуда определяет количество уровней
@@ -167,29 +168,31 @@ class SignalGenerator:
             level = int(t / step_duration) % levels
             # Возвращаем пропорциональное значение, но дискретное (0 или 100%)
             discrete_value = (level % 2) == 0
-            
+
         elif channel.signal_type == SignalType.TOGGLE:
             # Переключающийся: меняет состояние при каждом достижении порога
             period = 1.0 / freq if freq > 0 else 1.0
             if channel.id not in self._last_toggle_time:
                 self._last_toggle_time[channel.id] = 0.0
                 self._discrete_state[channel.id] = False
-            
+
             # Переключаем при каждом периоде
             if t - self._last_toggle_time[channel.id] >= period:
-                self._discrete_state[channel.id] = not self._discrete_state.get(channel.id, False)
+                self._discrete_state[channel.id] = not self._discrete_state.get(
+                    channel.id, False
+                )
                 self._last_toggle_time[channel.id] = t
-            
+
             discrete_value = self._discrete_state.get(channel.id, False)
-        
+
         else:
             # По умолчанию: меандр
             period = 1.0 / freq if freq > 0 else 1.0
             discrete_value = (t % period) < (period / 2)
-        
+
         # Сохраняем дискретное состояние
         channel.discrete_value = discrete_value
-        
+
         # Возвращаем 0 или 100% от диапазона
         return max_val if discrete_value else min_val
 
@@ -203,16 +206,20 @@ class SignalGenerator:
     def get_channel_info(self) -> List[Dict[str, Any]]:
         info = []
         for ch in self.channels:
-            info.append({
-                "id": ch.id,
-                "name": ch.name,
-                "type": str(ch.signal_type),
-                "frequency": ch.frequency,
-                "amplitude": ch.amplitude,
-                "enabled": ch.enabled,
-                "current_value": ch.current_value,
-                "is_analog": ch.signal_type.is_analog(),
-                "is_discrete": ch.signal_type.is_discrete(),
-                "discrete_value": ch.discrete_value if ch.signal_type.is_discrete() else None,
-            })
+            info.append(
+                {
+                    "id": ch.id,
+                    "name": ch.name,
+                    "type": str(ch.signal_type),
+                    "frequency": ch.frequency,
+                    "amplitude": ch.amplitude,
+                    "enabled": ch.enabled,
+                    "current_value": ch.current_value,
+                    "is_analog": ch.signal_type.is_analog(),
+                    "is_discrete": ch.signal_type.is_discrete(),
+                    "discrete_value": ch.discrete_value
+                    if ch.signal_type.is_discrete()
+                    else None,
+                }
+            )
         return info

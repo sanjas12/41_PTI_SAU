@@ -137,6 +137,8 @@ class MainWindow(QMainWindow):
                     min_value=cfg.get("min_value", (i % 5) * 10),
                     max_value=cfg.get("max_value", 100 - (i % 3) * 5),
                     enabled=cfg.get("enabled", True),
+                    duty_cycle=cfg.get("duty_cycle", 50.0),
+                    pulse_width=cfg.get("pulse_width", 1.0),
                 )
             else:
                 min_val = (i % 5) * 10
@@ -179,6 +181,8 @@ class MainWindow(QMainWindow):
                     "min_value": channel.min_value,
                     "max_value": channel.max_value,
                     "enabled": channel.enabled,
+                    "duty_cycle": channel.duty_cycle,
+                    "pulse_width": channel.pulse_width,
                 }
 
             with open(self.config_path, "w", encoding="utf-8") as f:
@@ -551,7 +555,7 @@ class MainWindow(QMainWindow):
             channel_ids = self._get_scenario_channel_ids()
             for channel_id in channel_ids:
                 self.plot_window.add_channel_to_plot(channel_id)
-            
+
             # Устанавливаем время окна = общая длительность сценария
             scenario = getattr(self.scenario_widget, "scenario", None)
             if scenario:
@@ -564,14 +568,19 @@ class MainWindow(QMainWindow):
                     # Обновляем спинбокс и применяем к графикам
                     self.plot_window.time_window_spin.setValue(time_window)
                     self.plot_window.on_time_window_changed(time_window)
-                    
+
                     # Обновляем подпись в информационной панели
-                    self.status_label.setText(f"⏱ Окно: {time_window:.1f} с (по сценарию)")
+                    self.status_label.setText(
+                        f"⏱ Окно: {time_window:.1f} с (по сценарию)"
+                    )
                     self.status_label.setStyleSheet(
                         "color: #4CAF50; font-weight: bold; font-size: 12px;"
                     )
-                    self.log(f"Время окна графиков установлено: {time_window:.1f} с "
-                            f"(общая длительность сценария: {total_duration:.1f} с)", "info")
+                    self.log(
+                        f"Время окна графиков установлено: {time_window:.1f} с "
+                        f"(общая длительность сценария: {total_duration:.1f} с)",
+                        "info",
+                    )
         else:
             # --- РУЧНОЙ РЕЖИМ ---
             channel_ids = [ch.id for ch in self.generator.channels if ch.enabled]
@@ -746,7 +755,7 @@ class MainWindow(QMainWindow):
     def on_scenario_started(self, name: str):
         self._update_scenario_time(0.0)
         self._refresh_control_buttons()
-        
+
         # Показываем прогресс в окне графиков
         if self.plot_window and self.plot_window.isVisible():
             self.plot_window.set_scenario_progress(0)
@@ -757,7 +766,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "control_panel"):
             self.control_panel.set_progress(0)
             self._update_scenario_time(0.0)
-        
+
         # Скрываем прогресс в окне графиков
         if self.plot_window and self.plot_window.isVisible():
             self.plot_window.set_scenario_progress(0)
@@ -769,7 +778,7 @@ class MainWindow(QMainWindow):
             self.control_panel.set_progress(100)
             self._update_scenario_time(scenario.get_total_duration())
         self._refresh_control_buttons()
-    
+
         # Показываем завершение в окне графиков
         if self.plot_window and self.plot_window.isVisible():
             self.plot_window.set_scenario_progress(100)
@@ -778,7 +787,7 @@ class MainWindow(QMainWindow):
         """Обновить прогресс сценария."""
         if hasattr(self, "control_panel"):
             self.control_panel.set_progress(int(progress))
-        
+
         # Передаём прогресс в окно графиков
         if self.plot_window and self.plot_window.isVisible():
             self.plot_window.set_scenario_progress(int(progress))
@@ -892,14 +901,14 @@ class MainWindow(QMainWindow):
         for channel in self.generator.channels:
             channel.time = 0
             channel.current_value = 0
-        
+
         # Очищаем графики, если окно открыто
         if self.plot_window and self.plot_window.isVisible():
             for plot in self.plot_window.plot_widgets:
                 plot.clear_plot()
             self.plot_window._update_channels_list()
             self.log("Графики очищены", "info")
-        
+
         self.update_signals()
         self.log("Сигналы сброшены", "info")
 
