@@ -683,7 +683,11 @@ class PlotWindow(QMainWindow):
         main_layout.setContentsMargins(6, 6, 6, 5)
         main_layout.setSpacing(5)
 
-        header_layout = QHBoxLayout()
+        header = QWidget()
+        header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        header.setFixedHeight(36)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
         title = QLabel("Графики сигналов")
         title.setObjectName("pageTitle")
         header_layout.addWidget(title)
@@ -715,7 +719,7 @@ class PlotWindow(QMainWindow):
         self.fps_label = QLabel("Обновлений: 0")
         self.fps_label.setObjectName("statusPill")
         header_layout.addWidget(self.fps_label)
-        main_layout.addLayout(header_layout)
+        main_layout.addWidget(header)
 
         # Верхняя панель
         main_layout.addWidget(self._create_control_panel())
@@ -743,7 +747,7 @@ class PlotWindow(QMainWindow):
             ]
         )
 
-        main_layout.addWidget(splitter)
+        main_layout.addWidget(splitter, 1)
 
         # Нижняя панель
         main_layout.addWidget(self._create_info_panel())
@@ -813,6 +817,8 @@ class PlotWindow(QMainWindow):
 
         toolbar = QFrame()
         toolbar.setObjectName("toolbar")
+        toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        toolbar.setMaximumHeight(46)
         layout = QHBoxLayout(toolbar)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(6)
@@ -1014,6 +1020,8 @@ class PlotWindow(QMainWindow):
 
         panel = QFrame()
         panel.setObjectName("statusBar")
+        panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        panel.setMaximumHeight(34)
         layout = QHBoxLayout(panel)
         layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(5)

@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 import pytest
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QFrame, QSizePolicy
 
 from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
@@ -33,6 +33,23 @@ def test_plot_acquisition_follows_running_state():
     window.update_plots()
     assert buffer.count == 1
     assert window._acquisition_time == 0.05
+
+    window.close()
+    app.processEvents()
+
+
+def test_plot_window_keeps_service_panels_compact():
+    app = QApplication.instance() or QApplication([])
+    window = PlotWindow(SignalGenerator([AnalogChannel(id=0, name="channel")]))
+
+    toolbar = window.findChild(QFrame, "toolbar")
+    status_bar = window.findChild(QFrame, "statusBar")
+    assert toolbar is not None
+    assert status_bar is not None
+    assert toolbar.sizePolicy().verticalPolicy() == QSizePolicy.Fixed
+    assert status_bar.sizePolicy().verticalPolicy() == QSizePolicy.Fixed
+    assert toolbar.maximumHeight() == 46
+    assert status_bar.maximumHeight() == 34
 
     window.close()
     app.processEvents()
