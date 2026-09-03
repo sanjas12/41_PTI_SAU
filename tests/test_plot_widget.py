@@ -64,3 +64,26 @@ def test_discrete_channel_is_added_to_plot_as_step_curve(signal_type: SignalType
     assert np.array_equal(curve_y, np.array([0.0, 0.0, 1.0]))
     window.close()
     app.processEvents()
+
+
+def test_plot_acquisition_uses_scenario_time():
+    app = QApplication.instance() or QApplication([])
+    channel = AnalogChannel(id=3, name="scenario channel")
+    generator = SignalGenerator([channel])
+    window = PlotWindow(generator)
+    window.add_channel_to_plot(channel.id)
+
+    window.begin_scenario_acquisition()
+    window.set_scenario_time(2.75)
+    window.update_plots()
+
+    timestamps, _values = window.plot_widgets[0].channel_data[channel.id].get_data()
+    assert window._acquisition_time == 2.75
+    assert np.array_equal(timestamps, np.array([2.75]))
+
+    window.end_scenario_acquisition()
+    window.update_plots()
+    assert window._acquisition_time == 2.80
+
+    window.close()
+    app.processEvents()

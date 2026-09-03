@@ -580,7 +580,7 @@ class PlotWindow(QMainWindow):
 
         self.time_window = 10.0
         self.max_points = 2000
-        self.plot_height = 230
+        self.plot_height = 320
 
         # --------------------------------------------------------------
         # Графики
@@ -610,6 +610,7 @@ class PlotWindow(QMainWindow):
 
         self.is_running = True
         self._acquisition_time = 0.0
+        self._scenario_time: Optional[float] = None
         self.update_counter = 0
 
         # --------------------------------------------------------------
@@ -1497,6 +1498,24 @@ class PlotWindow(QMainWindow):
         """Синхронизировать запись графиков с кнопками управления."""
         self.is_running = running
 
+    def begin_scenario_acquisition(self) -> None:
+        """Начать запись по единой временной шкале сценария."""
+        self._scenario_time = 0.0
+        self._acquisition_time = 0.0
+        for plot in self.plot_widgets:
+            for buffer in plot.channel_data.values():
+                buffer.clear()
+            for curve in plot.curves.values():
+                curve.setData([], [])
+
+    def set_scenario_time(self, elapsed_seconds: float) -> None:
+        """Синхронизировать временную шкалу графиков с движком сценария."""
+        self._scenario_time = max(0.0, elapsed_seconds)
+
+    def end_scenario_acquisition(self) -> None:
+        """Вернуть графики к собственной шкале времени."""
+        self._scenario_time = None
+
     def set_scenario_progress(self, progress: int) -> None:
         """Обновить индикатор выполнения сценария."""
         if progress > 0:
@@ -1522,7 +1541,10 @@ class PlotWindow(QMainWindow):
             return
 
         self.update_counter += 1
-        self._acquisition_time += self.UPDATE_INTERVAL_MS / 1000.0
+        if self._scenario_time is None:
+            self._acquisition_time += self.UPDATE_INTERVAL_MS / 1000.0
+        else:
+            self._acquisition_time = self._scenario_time
 
         # --------------------------------------------------------------
         # 1. Записываем данные ТОЛЬКО ДЛЯ ВКЛЮЧЁННЫХ каналов

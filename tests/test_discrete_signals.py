@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QApplication
 from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
-from scenario.scenario_engine import ScenarioEngine
+from scenario.scenario_engine import ScenarioEngine, ScenarioMode
 from scenario.scenario_graph import (
     NODE_WIDTH,
     ScenarioGraphScene,
@@ -111,6 +111,55 @@ def test_scenario_applies_discrete_parameters_to_channel():
     assert channel.signal_type == SignalType.PWM
     assert channel.duty_cycle == 35.0
     assert channel.pulse_width == 0.2
+
+
+def test_completed_scenario_step_disables_its_channel():
+    first_channel = make_channel(SignalType.DISCRETE, 0.0)
+    second_channel = AnalogChannel(id=1, name="second")
+    first_step = ScenarioStep(channel_id=0, signal_type="Discrete", duration=0.05)
+    second_step = ScenarioStep(channel_id=1, signal_type="Sine", duration=1.0)
+    engine = ScenarioEngine(SignalGenerator([first_channel, second_channel]))
+    engine.scenario = Scenario(steps=[first_step, second_step])
+    engine.mode = ScenarioMode.SCENARIO
+    engine._is_running = True
+    engine._start_ready_steps()
+
+    engine._update()
+
+    assert first_channel.enabled is False
+    assert first_channel.current_value == first_channel.min_value
+    assert second_channel.enabled is True
+
+
+def test_channel_stays_enabled_while_parallel_step_for_it_is_active():
+    channel = make_channel(SignalType.DISCRETE, 0.0)
+    short_step = ScenarioStep(channel_id=0, signal_type="Discrete", duration=0.05)
+    long_step = ScenarioStep(channel_id=0, signal_type="Pwm", duration=1.0)
+    engine = ScenarioEngine(SignalGenerator([channel]))
+    engine.scenario = Scenario(steps=[short_step, long_step])
+    engine.mode = ScenarioMode.SCENARIO
+    engine._is_running = True
+    engine._start_ready_steps()
+
+    engine._update()
+
+    assert channel.enabled is True
+
+
+def test_channel_stays_off_after_scenario_finishes():
+    channel = make_channel(SignalType.DISCRETE, 0.0)
+    step = ScenarioStep(channel_id=0, signal_type="Discrete", duration=0.05)
+    engine = ScenarioEngine(SignalGenerator([channel]))
+    engine.scenario = Scenario(steps=[step])
+    engine.mode = ScenarioMode.SCENARIO
+    engine._is_running = True
+    engine._start_ready_steps()
+
+    engine._update()
+
+    assert engine.mode == ScenarioMode.MANUAL
+    assert channel.enabled is False
+    assert channel.current_value == channel.min_value
 
 
 def test_scenario_playhead_tracks_progress_between_steps():

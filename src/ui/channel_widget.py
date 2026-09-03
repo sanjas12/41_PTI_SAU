@@ -124,12 +124,20 @@ class ChannelWidget(QFrame):
         layout.setSpacing(2)
         layout.setContentsMargins(5, 5, 5, 5)
 
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        self.type_badge = QLabel()
+        self.type_badge.setAlignment(Qt.AlignCenter)
+        self.type_badge.setFixedWidth(22)
+        header_layout.addWidget(self.type_badge)
+
         self.name_label = QLabel(f"Ch{self.channel.id + 1}: {self.channel.name}")
         self.name_label.setObjectName("channelName")
         self.name_label.setAlignment(Qt.AlignCenter)
         self.name_label.setFont(QFont("Arial", 8, QFont.Bold))
         self.name_label.mousePressEvent = self.on_name_click
-        layout.addWidget(self.name_label)
+        header_layout.addWidget(self.name_label, 1)
+        layout.addLayout(header_layout)
 
         self.value_label = QLabel("0.00")
         self.value_label.setObjectName("channelValue")
@@ -191,6 +199,20 @@ class ChannelWidget(QFrame):
         self.setLayout(layout)
         self.setMinimumSize(112, 154)
         self.setMaximumWidth(148)
+        self.update_type_designation()
+
+    def update_type_designation(self) -> None:
+        """Показать обозначение аналогового или дискретного канала."""
+        is_discrete = self.channel.signal_type.is_discrete()
+        designation = "D" if is_discrete else "A"
+        color = "#3b82f6" if is_discrete else "#22a06b"
+        kind = "Дискретный" if is_discrete else "Аналоговый"
+        self.type_badge.setText(designation)
+        self.type_badge.setToolTip(f"{kind} канал")
+        self.type_badge.setStyleSheet(
+            f"background: {color}; color: white; border-radius: 4px; "
+            "font-weight: bold; padding: 2px;"
+        )
 
     def on_name_click(self, event):
         self.channel_selected.emit(self.channel.id)
@@ -199,6 +221,7 @@ class ChannelWidget(QFrame):
         try:
             signal_type = SignalType[text.upper()]
             self.channel.signal_type = signal_type
+            self.update_type_designation()
             self.channel_type_changed.emit(self.channel.id, text)
         except KeyError:
             pass

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, Optional, Set
+from typing import Dict, List, Optional, Set
 
 from PyQt5.QtCore import QMutex, QMutexLocker, QObject, QTimer, pyqtSignal
 
@@ -323,6 +323,7 @@ class ScenarioEngine(QObject):
             if completed_now:
                 # Проверяем, какие шаги готовы к запуску
                 self._start_ready_steps()
+                self._disable_channels_without_active_steps(completed_now, step_by_id)
                 self._emit_active_steps()
 
             if not self._active_steps:
@@ -357,6 +358,25 @@ class ScenarioEngine(QObject):
         # Обновляем значения сигналов
         self._apply_ramp()
 
+    def _disable_channels_without_active_steps(
+        self,
+        completed_step_ids: List[str],
+        step_by_id: Dict[str, ScenarioStep],
+    ) -> None:
+        """Выключить каналы, для которых больше нет активного шага."""
+        active_channel_ids = {
+            step_by_id[step_id].channel_id for step_id in self._active_steps
+        }
+        completed_channel_ids = {
+            step_by_id[step_id].channel_id for step_id in completed_step_ids
+        }
+        for channel_id in completed_channel_ids - active_channel_ids:
+            channel = self.generator.get_channel(channel_id)
+            if channel is None:
+                continue
+            channel.current_value = channel.min_value
+            channel.enabled = False
+
     def _apply_ramp(self):
         """Применить плавный переход (ramp)"""
         for channel_id, _data in self._ramp_data.items():
@@ -373,14 +393,23 @@ class ScenarioEngine(QObject):
         self._is_running = False
         self.timer.stop()
 
+        scenario_channel_ids = (
+            {step.channel_id for step in self.scenario.steps}
+            if self.scenario
+            else set()
+        )
+
         # Восстанавливаем настройки каналов
         self._restore_channel_configs()
 
-        # Включаем все каналы
-        for channel in self.generator.channels:
-            channel.enabled = True
-            channel.time = 0
-            channel.current_value = 0
+        # После штатного завершения выходы сценария должны оставаться выключенными.
+        for channel_id in scenario_channel_ids:
+            channel = self.generator.get_channel(channel_id)
+            if channel is None:
+                continue
+            channel.enabled = False
+            channel.time = 0.0
+            channel.current_value = channel.min_value
 
         self.mode = ScenarioMode.MANUAL
         self.mode_changed.emit("manual")

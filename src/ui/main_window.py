@@ -316,22 +316,32 @@ class MainWindow(QMainWindow):
         self.channel_grid_scroll.setWidgetResizable(True)
 
         self.channel_grid_widget = QWidget()
-        grid_layout = QGridLayout()
-        grid_layout.setContentsMargins(4, 4, 4, 4)
-        grid_layout.setSpacing(6)
-        self.channel_grid_widget.setLayout(grid_layout)
+        channel_sections_layout = QVBoxLayout()
+        channel_sections_layout.setContentsMargins(4, 4, 4, 4)
+        channel_sections_layout.setSpacing(8)
+        self.channel_grid_widget.setLayout(channel_sections_layout)
+
+        self.analog_channels_group = QGroupBox("Аналоговые каналы · A")
+        self.analog_channels_layout = QGridLayout()
+        self.analog_channels_layout.setSpacing(6)
+        self.analog_channels_group.setLayout(self.analog_channels_layout)
+        channel_sections_layout.addWidget(self.analog_channels_group)
+
+        self.discrete_channels_group = QGroupBox("Дискретные каналы · D")
+        self.discrete_channels_layout = QGridLayout()
+        self.discrete_channels_layout.setSpacing(6)
+        self.discrete_channels_group.setLayout(self.discrete_channels_layout)
+        channel_sections_layout.addWidget(self.discrete_channels_group)
+        channel_sections_layout.addStretch()
 
         self.channel_widgets = []
-        cols = 4
-        for i, channel in enumerate(self.generator.channels):
+        for channel in self.generator.channels:
             widget = ChannelWidget(channel)
             widget.channel_selected.connect(self.on_channel_selected)
             widget.channel_type_changed.connect(self.on_channel_type_changed)
             widget.channel_settings_changed.connect(self.on_channel_settings_changed)
-            row = i // cols
-            col = i % cols
-            grid_layout.addWidget(widget, row, col)
             self.channel_widgets.append(widget)
+        self._rebuild_manual_channel_layout()
 
         self.channel_grid_scroll.setWidget(self.channel_grid_widget)
 
@@ -424,7 +434,38 @@ class MainWindow(QMainWindow):
                     f"{channel.min_value:.0f} - {channel.max_value:.0f}"
                 )
 
+    def _rebuild_manual_channel_layout(self) -> None:
+        """Разнести карточки по секциям аналоговых и дискретных каналов."""
+        for layout in (self.analog_channels_layout, self.discrete_channels_layout):
+            while layout.count():
+                item = layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.setParent(self.channel_grid_widget)
+
+        analog_widgets = [
+            widget
+            for widget in self.channel_widgets
+            if widget.channel.signal_type.is_analog()
+        ]
+        discrete_widgets = [
+            widget
+            for widget in self.channel_widgets
+            if widget.channel.signal_type.is_discrete()
+        ]
+        columns = 4
+        for widgets, layout in (
+            (analog_widgets, self.analog_channels_layout),
+            (discrete_widgets, self.discrete_channels_layout),
+        ):
+            for index, widget in enumerate(widgets):
+                layout.addWidget(widget, index // columns, index % columns)
+
+        self.analog_channels_group.setVisible(bool(analog_widgets))
+        self.discrete_channels_group.setVisible(bool(discrete_widgets))
+
     def on_channel_type_changed(self, channel_id: int, type_name: str):
+        self._rebuild_manual_channel_layout()
         channel = self.generator.get_channel(channel_id)
         if channel:
             self.log(
@@ -758,6 +799,7 @@ class MainWindow(QMainWindow):
 
         # Показываем прогресс в окне графиков
         if self.plot_window and self.plot_window.isVisible():
+            self.plot_window.begin_scenario_acquisition()
             self.plot_window.set_scenario_progress(0)
             self.plot_window.progress_bar.setVisible(True)
 
@@ -769,6 +811,7 @@ class MainWindow(QMainWindow):
 
         # Скрываем прогресс в окне графиков
         if self.plot_window and self.plot_window.isVisible():
+            self.plot_window.end_scenario_acquisition()
             self.plot_window.set_scenario_progress(0)
             self.plot_window.progress_bar.setVisible(False)
 
@@ -781,6 +824,7 @@ class MainWindow(QMainWindow):
 
         # Показываем завершение в окне графиков
         if self.plot_window and self.plot_window.isVisible():
+            self.plot_window.end_scenario_acquisition()
             self.plot_window.set_scenario_progress(100)
 
     def on_scenario_progress_changed(self, progress: float):
@@ -794,6 +838,8 @@ class MainWindow(QMainWindow):
 
     def on_scenario_time_updated(self, elapsed: float) -> None:
         self._update_scenario_time(elapsed)
+        if self.plot_window and self.plot_window.isVisible():
+            self.plot_window.set_scenario_time(elapsed)
 
     def on_scenario_definition_changed(self, scenario: Scenario) -> None:
         """Показать расчётное время ещё до запуска сценария."""
