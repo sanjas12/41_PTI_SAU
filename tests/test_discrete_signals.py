@@ -15,6 +15,7 @@ from scenario.scenario_graph import (
 )
 from scenario.scenario_model import Scenario, ScenarioStep
 from scenario.scenario_widget import ScenarioWidget, StepEditDialog
+from ui.channel_widget import ChannelSettingsDialog, ChannelWidget
 
 
 def make_channel(signal_type: SignalType, time: float) -> AnalogChannel:
@@ -111,6 +112,39 @@ def test_scenario_applies_discrete_parameters_to_channel():
     assert channel.signal_type == SignalType.PWM
     assert channel.duty_cycle == 35.0
     assert channel.pulse_width == 0.2
+
+
+def test_manual_channel_can_be_switched_to_discrete_type():
+    app = QApplication.instance() or QApplication([])
+    channel = make_channel(SignalType.SINE, 0.0)
+    widget = ChannelWidget(channel)
+
+    widget.type_combo.setCurrentIndex(
+        widget.type_combo.findData(SignalType.DISCRETE.name)
+    )
+
+    assert channel.signal_type == SignalType.DISCRETE
+    assert widget.type_badge.text() == "D"
+    widget.close()
+    app.processEvents()
+
+
+def test_manual_discrete_settings_show_type_specific_parameters():
+    app = QApplication.instance() or QApplication([])
+    channel = make_channel(SignalType.SINE, 0.0)
+    dialog = ChannelSettingsDialog(channel)
+
+    dialog.kind_combo.setCurrentIndex(1)
+    dialog.type_combo.setCurrentIndex(dialog.type_combo.findData(SignalType.PWM.name))
+    dialog.duty_spin.setValue(35.0)
+
+    settings = dialog.get_settings()
+    assert settings["signal_type"] == SignalType.PWM.name
+    assert settings["duty_cycle"] == 35.0
+    assert dialog.duty_spin.isHidden() is False
+    assert dialog.pulse_width_spin.isHidden() is True
+    dialog.close()
+    app.processEvents()
 
 
 def test_completed_scenario_step_disables_its_channel():

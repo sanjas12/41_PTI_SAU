@@ -69,13 +69,35 @@ class ChannelSettingsDialog(QDialog):
         self.offset_spin.setSingleStep(1)
         form_layout.addRow("Смещение (%):", self.offset_spin)
 
+        self.kind_combo = QComboBox()
+        self.kind_combo.addItem("Аналоговый", "analog")
+        self.kind_combo.addItem("Дискретный", "discrete")
+        self.kind_combo.setCurrentIndex(
+            1 if self.channel.signal_type.is_discrete() else 0
+        )
+        self.kind_combo.currentIndexChanged.connect(self._populate_signal_types)
+        form_layout.addRow("Категория канала:", self.kind_combo)
+
         self.type_combo = QComboBox()
-        self.type_combo.addItems([st.name.capitalize() for st in SignalType])
-        current_type = self.channel.signal_type.name.capitalize()
-        index = self.type_combo.findText(current_type)
-        if index >= 0:
-            self.type_combo.setCurrentIndex(index)
+        self.type_combo.currentIndexChanged.connect(self._update_parameter_visibility)
         form_layout.addRow("Тип сигнала:", self.type_combo)
+
+        self.duty_label = QLabel("Скважность (%):")
+        self.duty_spin = QDoubleSpinBox()
+        self.duty_spin.setRange(0.0, 100.0)
+        self.duty_spin.setValue(self.channel.duty_cycle)
+        self.duty_spin.setSuffix(" %")
+        form_layout.addRow(self.duty_label, self.duty_spin)
+
+        self.pulse_width_label = QLabel("Длительность импульса:")
+        self.pulse_width_spin = QDoubleSpinBox()
+        self.pulse_width_spin.setRange(0.001, 10.0)
+        self.pulse_width_spin.setDecimals(3)
+        self.pulse_width_spin.setValue(self.channel.pulse_width)
+        self.pulse_width_spin.setSuffix(" с")
+        form_layout.addRow(self.pulse_width_label, self.pulse_width_spin)
+
+        self._populate_signal_types()
 
         self.enabled_check = QCheckBox()
         self.enabled_check.setChecked(self.channel.enabled)
@@ -90,6 +112,33 @@ class ChannelSettingsDialog(QDialog):
 
         self.setMinimumWidth(350)
 
+    def _populate_signal_types(self) -> None:
+        """Заполнить типы сигналов выбранной категории."""
+        current_name = self.channel.signal_type.name
+        signal_types = (
+            SignalType.get_discrete_types()
+            if self.kind_combo.currentData() == "discrete"
+            else SignalType.get_analog_types()
+        )
+        self.type_combo.blockSignals(True)
+        self.type_combo.clear()
+        for signal_type in signal_types:
+            self.type_combo.addItem(str(signal_type), signal_type.name)
+        index = self.type_combo.findData(current_name)
+        self.type_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.type_combo.blockSignals(False)
+        self._update_parameter_visibility()
+
+    def _update_parameter_visibility(self) -> None:
+        """Показывать только параметры выбранного типа сигнала."""
+        signal_name = self.type_combo.currentData()
+        is_pwm = signal_name == SignalType.PWM.name
+        is_pulse = signal_name == SignalType.PULSE.name
+        self.duty_label.setVisible(is_pwm)
+        self.duty_spin.setVisible(is_pwm)
+        self.pulse_width_label.setVisible(is_pulse)
+        self.pulse_width_spin.setVisible(is_pulse)
+
     def get_settings(self) -> dict:
         """Получить измененные настройки"""
         return {
@@ -99,8 +148,10 @@ class ChannelSettingsDialog(QDialog):
             "frequency": self.freq_spin.value(),
             "amplitude": self.amp_spin.value(),
             "offset": self.offset_spin.value(),
-            "signal_type": self.type_combo.currentText().upper(),
+            "signal_type": self.type_combo.currentData(),
             "enabled": self.enabled_check.isChecked(),
+            "duty_cycle": self.duty_spin.value(),
+            "pulse_width": self.pulse_width_spin.value(),
         }
 
 
@@ -172,9 +223,9 @@ class ChannelWidget(QFrame):
         layout.addWidget(self.bar_frame)
 
         self.type_combo = QComboBox()
-        self.type_combo.addItems([st.name.capitalize() for st in SignalType])
-        current_type = self.channel.signal_type.name.capitalize()
-        index = self.type_combo.findText(current_type)
+        for signal_type in SignalType:
+            self.type_combo.addItem(str(signal_type), signal_type.name)
+        index = self.type_combo.findData(self.channel.signal_type.name)
         if index >= 0:
             self.type_combo.setCurrentIndex(index)
         self.type_combo.currentTextChanged.connect(self.on_type_changed)
@@ -219,11 +270,12 @@ class ChannelWidget(QFrame):
 
     def on_type_changed(self, text: str):
         try:
-            signal_type = SignalType[text.upper()]
+            signal_name = self.type_combo.currentData()
+            signal_type = SignalType[signal_name]
             self.channel.signal_type = signal_type
             self.update_type_designation()
-            self.channel_type_changed.emit(self.channel.id, text)
-        except KeyError:
+            self.channel_type_changed.emit(self.channel.id, str(signal_type))
+        except (KeyError, TypeError):
             pass
 
     def open_settings(self):
@@ -239,17 +291,19 @@ class ChannelWidget(QFrame):
             self.channel.offset = settings["offset"]
             self.channel.signal_type = SignalType[settings["signal_type"]]
             self.channel.enabled = settings["enabled"]
+            self.channel.duty_cycle = settings["duty_cycle"]
+            self.channel.pulse_width = settings["pulse_width"]
 
             self.name_label.setText(f"Ch{self.channel.id + 1}: {self.channel.name}")
             self.min_label.setText(f"{self.channel.min_value:.0f}")
             self.max_label.setText(f"{self.channel.max_value:.0f}")
 
-            current_type = self.channel.signal_type.name.capitalize()
-            index = self.type_combo.findText(current_type)
+            index = self.type_combo.findData(self.channel.signal_type.name)
             if index >= 0:
                 self.type_combo.setCurrentIndex(index)
 
             self.enabled_check.setChecked(self.channel.enabled)
+            self.update_type_designation()
             self.update_display()
 
             self.channel_settings_changed.emit(self.channel.id)
@@ -317,10 +371,10 @@ class ChannelWidget(QFrame):
         self.min_label.setText(f"{channel.min_value:.0f}")
         self.max_label.setText(f"{channel.max_value:.0f}")
 
-        current_type = channel.signal_type.name.capitalize()
-        index = self.type_combo.findText(current_type)
+        index = self.type_combo.findData(channel.signal_type.name)
         if index >= 0:
             self.type_combo.setCurrentIndex(index)
 
         self.enabled_check.setChecked(channel.enabled)
+        self.update_type_designation()
         self.update_display()
