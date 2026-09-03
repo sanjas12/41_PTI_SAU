@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pyqtgraph as pg
@@ -371,6 +371,10 @@ class PlotWidget(pg.PlotWidget):
 
             x, y = buffer.get_data()
 
+            channel = self.generator.get_channel(channel_id)
+            if channel is not None and channel.signal_type.is_discrete():
+                x, y = self._build_step_curve(x, y)
+
             curve.setData(
                 x,
                 y,
@@ -379,24 +383,35 @@ class PlotWidget(pg.PlotWidget):
         if not self.channel_data:
             return
 
+        resolved_current_time: float = 0.0 if current_time is None else current_time
         if current_time is None:
             # Получаем максимальное время из каналов
-            current_time = 0.0
             for channel_id in self.get_channel_ids():
                 channel = self.generator.get_channel(channel_id)
-                if channel is not None and channel.time > current_time:
-                    current_time = channel.time
+                if channel is not None and channel.time > resolved_current_time:
+                    resolved_current_time = channel.time
 
         min_time = max(
             0.0,
-            current_time - self.time_window,
+            resolved_current_time - self.time_window,
         )
 
         self.setXRange(
             min_time,
-            max(current_time, self.time_window),
+            max(resolved_current_time, self.time_window),
             padding=0.02,
         )
+
+    @staticmethod
+    def _build_step_curve(
+        x: np.ndarray, y: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Преобразовать точки в ступенчатую линию с вертикальными фронтами."""
+        if x.size < 2:
+            return x, y
+        step_x = np.repeat(x, 2)[1:]
+        step_y = np.repeat(y, 2)[:-1]
+        return step_x, step_y
 
     # ------------------------------------------------------------------
     # Легенда
@@ -672,7 +687,7 @@ class PlotWindow(QMainWindow):
         title.setObjectName("pageTitle")
         header_layout.addWidget(title)
         header_layout.addStretch()
-        
+
         # Прогресс-бар выполнения сценария
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
@@ -695,7 +710,7 @@ class PlotWindow(QMainWindow):
             }
         """)
         header_layout.addWidget(self.progress_bar)
-        
+
         self.fps_label = QLabel("Обновлений: 0")
         self.fps_label.setObjectName("statusPill")
         header_layout.addWidget(self.fps_label)
@@ -1507,8 +1522,7 @@ class PlotWindow(QMainWindow):
             return
 
         self.update_counter += 1
-
-        values = self.generator.get_values()
+        self._acquisition_time += self.UPDATE_INTERVAL_MS / 1000.0
 
         # --------------------------------------------------------------
         # 1. Записываем данные ТОЛЬКО ДЛЯ ВКЛЮЧЁННЫХ каналов
@@ -1516,9 +1530,6 @@ class PlotWindow(QMainWindow):
 
         for plot in self.plot_widgets:
             for channel_id in plot.get_channel_ids():
-                if not (0 <= channel_id < len(values)):
-                    continue
-
                 channel = self.generator.get_channel(channel_id)
                 if channel is None:
                     continue
@@ -1528,24 +1539,18 @@ class PlotWindow(QMainWindow):
                     # Канал отключён — не добавляем новые данные
                     continue
 
-                timestamp = channel.time
                 plot.append_value(
                     channel_id,
-                    values[channel_id],
-                    timestamp,
+                    channel.current_value,
+                    self._acquisition_time,
                 )
 
         # --------------------------------------------------------------
         # 2. Обновляем отображение
         # --------------------------------------------------------------
 
-        # Вычисляем текущее время для оси X (максимальное время среди всех каналов)
+        # Все графики используют единую шкалу времени сбора данных.
         current_time = self._acquisition_time
-        for plot in self.plot_widgets:
-            for channel_id in plot.get_channel_ids():
-                channel = self.generator.get_channel(channel_id)
-                if channel is not None and channel.time > current_time:
-                    current_time = channel.time
 
         for plot in self.plot_widgets:
             plot.update_plot(current_time)
@@ -1580,7 +1585,7 @@ class PlotWindow(QMainWindow):
     def get_active_channels(self) -> List[int]:
         """Получить список ID активных (включенных) каналов."""
         return [ch.id for ch in self.generator.channels if ch.enabled]
-    
+
     def clear_all_plots_data(self) -> None:
         """Очистить данные всех графиков без подтверждения (для сброса)."""
         for plot in self.plot_widgets:
