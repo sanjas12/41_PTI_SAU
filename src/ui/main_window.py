@@ -438,9 +438,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(6)
 
         self.status_label = QLabel("● Работает")
-        self.status_label.setStyleSheet(
-            "color: #00CC00; font-weight: bold; font-size: 12px;"
-        )
+        self.status_label.setStyleSheet("color: #00CC00; font-weight: bold;")
         layout.addWidget(self.status_label)
 
         layout.addWidget(QLabel("Режим:"))
@@ -581,9 +579,7 @@ class MainWindow(QMainWindow):
         )
 
         self.status_label.setText(f"⏱ Сигналы: {interval:.3f} с")
-        self.status_label.setStyleSheet(
-            "color: #FF9800; font-weight: bold; font-size: 12px;"
-        )
+        self.status_label.setStyleSheet("color: #FF9800; font-weight: bold;")
 
         from PyQt5.QtCore import QTimer
 
@@ -591,7 +587,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(
             2000,
             lambda: self.status_label.setStyleSheet(
-                "color: #00CC00; font-weight: bold; font-size: 12px;"
+                "color: #00CC00; font-weight: bold;"
             ),
         )
 
@@ -659,9 +655,7 @@ class MainWindow(QMainWindow):
                 f"{channel.min_value:.0f} - {channel.max_value:.0f}"
             )
             self.status_label.setText(f"📊 {designation}: {channel.name}")
-            self.status_label.setStyleSheet(
-                "color: #0066CC; font-weight: bold; font-size: 12px;"
-            )
+            self.status_label.setStyleSheet("color: #0066CC; font-weight: bold;")
 
     def open_plot_window(self):
         if self.plot_window is None or not self.plot_window.isVisible():
@@ -711,7 +705,7 @@ class MainWindow(QMainWindow):
                         f"⏱ Окно: {time_window:.1f} с (по сценарию)"
                     )
                     self.status_label.setStyleSheet(
-                        "color: #4CAF50; font-weight: bold; font-size: 12px;"
+                        "color: #4CAF50; font-weight: bold;"
                     )
                     self.log(
                         f"Время окна графиков установлено: {time_window:.1f} с "
@@ -995,9 +989,7 @@ class MainWindow(QMainWindow):
         self.is_paused = False
         self._sync_generation_timer()
         self.status_label.setText("● Работает")
-        self.status_label.setStyleSheet(
-            "color: #00CC00; font-weight: bold; font-size: 12px;"
-        )
+        self.status_label.setStyleSheet("color: #00CC00; font-weight: bold;")
         self._refresh_control_buttons()
 
     def stop_generation(self):
@@ -1007,9 +999,7 @@ class MainWindow(QMainWindow):
         self.is_paused = False
         self._sync_generation_timer()
         self.status_label.setText("● Остановлен")
-        self.status_label.setStyleSheet(
-            "color: #FF4444; font-weight: bold; font-size: 12px;"
-        )
+        self.status_label.setStyleSheet("color: #FF4444; font-weight: bold;")
         self._refresh_control_buttons()
 
     def pause_generation(self):
@@ -1021,9 +1011,7 @@ class MainWindow(QMainWindow):
         self.is_paused = True
         self._sync_generation_timer()
         self.status_label.setText("⏸ Пауза")
-        self.status_label.setStyleSheet(
-            "color: #FF9800; font-weight: bold; font-size: 12px;"
-        )
+        self.status_label.setStyleSheet("color: #FF9800; font-weight: bold;")
         self._refresh_control_buttons()
 
     def resume_generation(self):
@@ -1032,9 +1020,7 @@ class MainWindow(QMainWindow):
         self.is_paused = False
         self._sync_generation_timer()
         self.status_label.setText("● Работает")
-        self.status_label.setStyleSheet(
-            "color: #00CC00; font-weight: bold; font-size: 12px;"
-        )
+        self.status_label.setStyleSheet("color: #00CC00; font-weight: bold;")
         self._refresh_control_buttons()
 
     def reset_signals(self):

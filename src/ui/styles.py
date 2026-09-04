@@ -105,7 +105,12 @@ def app_stylesheet() -> str:
             color: {color["primary"]};
             font-weight: 600;
         }}
-        QLabel#channelBound, QLabel#secondaryText {{ color: {color["muted"]}; }}
+        QLabel#channelName {{ font-size: {cfg.FONT_SIZE + 1}pt; }}
+        QLabel#channelValue {{ font-size: {cfg.FONT_SIZE + 3}pt; }}
+        QLabel#channelBound, QLabel#secondaryText {{
+            color: {color["muted"]};
+            font-size: {max(7, cfg.FONT_SIZE - 1)}pt;
+        }}
         QPushButton#iconButton {{
             min-width: 24px;
             max-width: 24px;
@@ -140,7 +145,6 @@ def app_stylesheet() -> str:
             background-color: {color["surface_alt"]};
             border: 1px solid {color["border"]};
             border-radius: 2px;
-            font-family: Consolas;
         }}
         QToolTip {{
             color: {color["text"]};

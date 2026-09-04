@@ -151,7 +151,7 @@ class ScenarioWidget(QWidget):
         title_layout.setSpacing(3)
 
         title = QLabel("Редактор сценария")
-        title.setStyleSheet("font-size: 10px; font-weight: bold;")
+        title.setStyleSheet("font-weight: 600;")
         title_layout.addWidget(title)
 
         title_layout.addStretch()
@@ -286,15 +286,13 @@ class ScenarioWidget(QWidget):
         status_layout.setSpacing(5)
 
         self.steps_count_label = QLabel("0 шагов")
-        self.steps_count_label.setStyleSheet(
-            "color: #46515c; font-size: 10pt; font-weight: 600;"
-        )
+        self.steps_count_label.setStyleSheet("color: #46515c; font-weight: 600;")
         status_layout.addWidget(self.steps_count_label)
 
         status_layout.addStretch()
 
         self.status_label = QLabel("Режим: Ручной")
-        self.status_label.setStyleSheet("color: #4CAF50; font-size: 8px;")
+        self.status_label.setStyleSheet("color: #4CAF50;")
         status_layout.addWidget(self.status_label)
 
         layout.addLayout(status_layout)
@@ -634,22 +632,20 @@ class ScenarioWidget(QWidget):
         self._elapsed_scenario_time = 0.0
         self.graph_scene.set_playhead(0.0, 0.0)
         self.status_label.setText(f"Выполняется: {name[:15]}")
-        self.status_label.setStyleSheet(
-            "color: #4CAF50; font-weight: bold; font-size: 8px;"
-        )
+        self.status_label.setStyleSheet("color: #4CAF50; font-weight: 600;")
 
     def on_scenario_stopped(self):
         self._elapsed_scenario_time = 0.0
         self.graph_scene.set_playhead(0.0, 0.0)
         self.status_label.setText("Остановлен")
-        self.status_label.setStyleSheet("color: #f44336; font-size: 8px;")
+        self.status_label.setStyleSheet("color: #f44336;")
 
     def on_scenario_finished(self):
         total = self.scenario.get_total_duration()
         self._elapsed_scenario_time = total
         self.graph_scene.set_playhead(100.0, total)
         self.status_label.setText("Завершен")
-        self.status_label.setStyleSheet("color: #4CAF50; font-size: 8px;")
+        self.status_label.setStyleSheet("color: #4CAF50;")
 
     def on_step_changed(self, current: int, total: int):
         if current > 0:
@@ -676,13 +672,13 @@ class ScenarioWidget(QWidget):
     def on_mode_changed(self, mode: str):
         if mode == "manual":
             self.status_label.setText("Режим: Ручной")
-            self.status_label.setStyleSheet("color: #4CAF50; font-size: 8px;")
+            self.status_label.setStyleSheet("color: #4CAF50;")
         elif mode == "scenario":
             self.status_label.setText("Режим: Сценарий")
-            self.status_label.setStyleSheet("color: #FF9800; font-size: 8px;")
+            self.status_label.setStyleSheet("color: #FF9800;")
         elif mode == "paused":
             self.status_label.setText("Режим: Пауза")
-            self.status_label.setStyleSheet("color: #2196F3; font-size: 8px;")
+            self.status_label.setStyleSheet("color: #2196F3;")
 
     def save_scenario(self):
         if not self.scenario.steps:

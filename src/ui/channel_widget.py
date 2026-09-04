@@ -1,5 +1,4 @@
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -189,7 +188,6 @@ class ChannelWidget(QFrame):
 
         self.name_label = QLabel(self.channel.name)
         self.name_label.setObjectName("channelName")
-        self.name_label.setFont(QFont("Arial", 9, QFont.Bold))
         self.name_label.mousePressEvent = self.on_name_click
         header_layout.addWidget(self.name_label, 1)
         layout.addLayout(header_layout)
@@ -204,7 +202,6 @@ class ChannelWidget(QFrame):
         self.value_label = QLabel("0.00")
         self.value_label.setObjectName("channelValue")
         self.value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.value_label.setFont(QFont("Arial", 11, QFont.Bold))
         self.value_label.setMinimumWidth(72)
         signal_layout.addWidget(self.value_label)
         layout.addLayout(signal_layout)
