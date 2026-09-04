@@ -125,6 +125,12 @@ class PLCInterface(QObject):
 
             return False
 
+    def open(self) -> bool:
+        """Открыть соединение без запуска Qt-таймера."""
+        if not self._is_configured:
+            raise RuntimeError("PLC не настроен")
+        return self.modbus.open()
+
     def start_polling(self) -> None:
         """Принять открытое соединение и запустить запись из GUI-потока."""
         self._connected = self.modbus.is_connected()

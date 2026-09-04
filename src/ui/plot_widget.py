@@ -581,7 +581,7 @@ class PlotWindow(QMainWindow):
 
         self.time_window = 10.0
         self.max_points = 2000
-        self.plot_height = 320
+        self.plot_height = 400
 
         # --------------------------------------------------------------
         # Графики

@@ -79,3 +79,45 @@ def test_mu210_writes_all_outputs_in_one_modbus_request():
 
     assert interface._write_outputs([100] * 8) is True
     assert calls == [(3000, [100] * 8)]
+
+
+def test_mu210_distributes_analog_channels_between_modules():
+    channels = [
+        AnalogChannel(
+            id=index,
+            name=f"A{index + 1}",
+            min_value=0.0,
+            max_value=100.0,
+            current_value=float(index + 1),
+        )
+        for index in range(20)
+    ]
+    interface = make_interface(channels)
+    interface.configure("192.168.1.99, 192.168.1.100;192.168.1.101", 502, 1)
+    interface.set_output_enabled(True)
+
+    assert interface.prepare_module_output_values() == [
+        [10, 20, 30, 40, 50, 60, 70, 80],
+        [90, 100, 110, 120, 130, 140, 150, 160],
+        [170, 180, 190, 200, 0, 0, 0, 0],
+    ]
+    assert interface.get_device_labels() == [
+        "МУ210 #1 (192.168.1.99)",
+        "МУ210 #2 (192.168.1.100)",
+        "МУ210 #3 (192.168.1.101)",
+    ]
+
+
+def test_mu210_writes_each_module_separately():
+    interface = make_interface([])
+    interface.configure("192.168.1.99,192.168.1.100", 502, 1)
+    calls = []
+
+    for module_index, client in enumerate(interface.modbus_clients):
+        client.write_multiple_registers = lambda address, values, index=module_index: (
+            calls.append((index, address, values)) or True
+        )
+
+    values = [[100] * 8, [200] * 8]
+    assert interface._write_all_outputs(values) is True
+    assert calls == [(0, 3000, values[0]), (1, 3000, values[1])]

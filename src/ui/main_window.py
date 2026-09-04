@@ -699,7 +699,7 @@ class MainWindow(QMainWindow):
                     self.log("Не удалось подключиться", "error")
                     self.connection_panel.set_connection_status(False)
 
-            self._submit(active_interface.modbus.open, after_connect)
+            self._submit(active_interface.open, after_connect)
         else:
             self.active_output_interface.disconnect()
             self.log("Соединение закрыто", "info")

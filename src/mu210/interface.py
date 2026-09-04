@@ -10,7 +10,7 @@ from modbus.worker import Runnable
 
 
 class MU210Interface(QObject):
-    """Передаёт восемь аналоговых каналов напрямую в ОВЕН МУ210-501."""
+    """Распределяет аналоговые каналы по цепочке ОВЕН МУ210-501."""
 
     OUTPUT_VALUE_START = 3000
     OUTPUT_COUNT = 8
@@ -24,7 +24,9 @@ class MU210Interface(QObject):
     def __init__(self, generator: SignalGenerator, parent=None) -> None:
         super().__init__(parent)
         self.generator = generator
-        self.modbus = ModbusClientWrapper()
+        self.modbus_clients = [ModbusClientWrapper()]
+        self.modbus = self.modbus_clients[0]
+        self.hosts: List[str] = []
         self.write_interval = 0.2
         self.write_count = 0
         self.last_written_data: Dict[str, object] = {}
@@ -38,8 +40,17 @@ class MU210Interface(QObject):
         self.update_timer.timeout.connect(self.update_output_data)
 
     def configure(self, host: str, port: int, unit_id: int = 1) -> None:
-        """Настроить сетевые параметры модуля."""
-        self.modbus.configure(host, port, unit_id)
+        """Настроить модули; IP разделяются запятыми или точками с запятой."""
+        hosts = [item.strip() for item in host.replace(";", ",").split(",")]
+        self.hosts = [item for item in hosts if item]
+        if not self.hosts:
+            raise ValueError("Не указан IP-адрес МУ210-501")
+        self.modbus_clients = []
+        for module_host in self.hosts:
+            client = ModbusClientWrapper()
+            client.configure(module_host, port, unit_id)
+            self.modbus_clients.append(client)
+        self.modbus = self.modbus_clients[0]
         self._configured = True
         self._connected = False
 
@@ -47,12 +58,27 @@ class MU210Interface(QObject):
         """Открыть TCP-соединение без запуска Qt-таймера."""
         if not self._configured:
             raise RuntimeError("МУ210-501 не настроен")
-        self._connected = self.modbus.open()
-        return self._connected
+        opened_clients = []
+        try:
+            for module_host, client in zip(self.hosts, self.modbus_clients):
+                if not client.open():
+                    raise RuntimeError(
+                        f"МУ210-501 с адресом {module_host} отклонил соединение"
+                    )
+                opened_clients.append(client)
+        except Exception:
+            for client in opened_clients:
+                client.close()
+            self._connected = False
+            raise
+        self._connected = True
+        return True
 
     def start_polling(self) -> None:
         """Запустить периодическую передачу после успешного подключения."""
-        self._connected = self.modbus.is_connected()
+        self._connected = bool(self.modbus_clients) and all(
+            client.is_connected() for client in self.modbus_clients
+        )
         if not self._connected:
             return
         self.write_count = 0
@@ -65,8 +91,15 @@ class MU210Interface(QObject):
         self.update_timer.stop()
         self._connected = False
         self._write_pending = False
-        self.modbus.close()
+        errors = []
+        for module_host, client in zip(self.hosts, self.modbus_clients):
+            try:
+                client.close()
+            except Exception as exc:
+                errors.append(f"{module_host}: {exc}")
         self.connection_status.emit(False)
+        if errors:
+            self.error_occurred.emit("Ошибки отключения МУ210: " + "; ".join(errors))
 
     def is_connected(self) -> bool:
         return self._configured and self._connected
@@ -80,21 +113,30 @@ class MU210Interface(QObject):
 
     def prepare_output_values(self) -> List[int]:
         """Преобразовать первые 8 аналоговых каналов в 0...1000 промилле."""
+        return self.prepare_module_output_values()[0]
+
+    def prepare_module_output_values(self) -> List[List[int]]:
+        """Разложить аналоговые каналы по восьми выходам каждого модуля."""
         analog_channels = [
             channel
             for channel in self.generator.channels
             if channel.signal_type.is_analog()
-        ][: self.OUTPUT_COUNT]
-        values: List[int] = []
-        for channel in analog_channels:
-            span = channel.max_value - channel.min_value
-            if not self._output_enabled or not channel.enabled or span <= 0.0:
-                values.append(0)
-                continue
-            normalized = (channel.current_value - channel.min_value) / span
-            values.append(round(max(0.0, min(1.0, normalized)) * 1000.0))
-        values.extend([0] * (self.OUTPUT_COUNT - len(values)))
-        return values
+        ]
+        module_values: List[List[int]] = []
+        for module_index in range(len(self.modbus_clients)):
+            start = module_index * self.OUTPUT_COUNT
+            channels = analog_channels[start : start + self.OUTPUT_COUNT]
+            values: List[int] = []
+            for channel in channels:
+                span = channel.max_value - channel.min_value
+                if not self._output_enabled or not channel.enabled or span <= 0.0:
+                    values.append(0)
+                    continue
+                normalized = (channel.current_value - channel.min_value) / span
+                values.append(round(max(0.0, min(1.0, normalized)) * 1000.0))
+            values.extend([0] * (self.OUTPUT_COUNT - len(values)))
+            module_values.append(values)
+        return module_values
 
     def _write_outputs(self, values: List[int]) -> bool:
         result = self.modbus.write_multiple_registers(self.OUTPUT_VALUE_START, values)
@@ -102,22 +144,37 @@ class MU210Interface(QObject):
             raise RuntimeError("МУ210-501 отклонил запись выходов")
         return True
 
+    def _write_all_outputs(self, module_values: List[List[int]]) -> bool:
+        errors = []
+        for index, values in enumerate(module_values):
+            try:
+                result = self.modbus_clients[index].write_multiple_registers(
+                    self.OUTPUT_VALUE_START, values
+                )
+                if not result:
+                    errors.append(f"МУ210 #{index + 1}: запись отклонена")
+            except Exception as exc:
+                errors.append(f"МУ210 #{index + 1}: {exc}")
+        if errors:
+            raise RuntimeError("; ".join(errors))
+        return True
+
     def update_output_data(self) -> None:
         """Поставить одну пакетную запись в фоновый пул без накопления очереди."""
         if not self.is_connected() or self._write_pending:
             return
-        values = self.prepare_output_values()
+        module_values = self.prepare_module_output_values()
         self._write_pending = True
-        task = Runnable(self._write_outputs, values)
+        task = Runnable(self._write_all_outputs, module_values)
         task.signals.result.connect(
-            lambda result, sent_values=values: self._on_write_finished(
+            lambda result, sent_values=module_values: self._on_write_finished(
                 bool(result), sent_values
             )
         )
         task.signals.error.connect(self._on_write_error)
         self.thread_pool.start(task)
 
-    def _on_write_finished(self, result: bool, values: List[int]) -> None:
+    def _on_write_finished(self, result: bool, values: List[List[int]]) -> None:
         with self._lock:
             self._write_pending = False
             if result:
@@ -126,10 +183,14 @@ class MU210Interface(QObject):
                     "write_count": self.write_count,
                     "timestamp": time.time(),
                     "start_address": self.OUTPUT_VALUE_START,
-                    "values": list(values),
+                    "values": [list(module) for module in values],
                 }
         self.write_completed.emit(result)
-        if result and not self._output_enabled and any(values):
+        if (
+            result
+            and not self._output_enabled
+            and any(any(module) for module in values)
+        ):
             self.update_output_data()
         if result and self.write_count % 10 == 0:
             self.debug_data.emit(dict(self.last_written_data))
@@ -139,11 +200,17 @@ class MU210Interface(QObject):
         self.error_occurred.emit(f"Ошибка записи МУ210-501: {message}")
         self.write_completed.emit(False)
 
-    def read_plc_data(self, address: int, count: int) -> Optional[List[int]]:
+    def read_plc_data(
+        self, address: int, count: int, module_index: int = 0
+    ) -> Optional[List[int]]:
         """Прочитать holding-регистры для диагностического окна."""
         if not self.is_connected():
             return None
-        return self.modbus.read_holding(address, count)
+        return self.modbus_clients[module_index].read_holding(address, count)
+
+    def get_device_labels(self) -> List[str]:
+        """Вернуть подписи модулей для окна диагностики."""
+        return [f"МУ210 #{index + 1} ({host})" for index, host in enumerate(self.hosts)]
 
     def get_register_map(self) -> dict:
         """Вернуть карту оперативных регистров МУ210-501."""

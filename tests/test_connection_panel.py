@@ -23,5 +23,9 @@ def test_connection_panel_offers_all_supported_device_types(tmp_path, monkeypatc
     assert params["device_type"] == "simulator"
     assert params["host"] == "127.0.0.1"
 
+    panel.device_combo.setCurrentIndex(panel.device_combo.findData("owen"))
+    panel.ip_edit.setText("192.168.1.99, 192.168.1.100")
+    assert panel.get_connection_params()["host"] == ("192.168.1.99, 192.168.1.100")
+
     panel.close()
     app.processEvents()

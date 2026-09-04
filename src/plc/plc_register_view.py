@@ -171,17 +171,35 @@ class PLCRegisterView(QMainWindow):
             register_map = self.plc.get_register_map()
 
             rows = []
-            for group_name, group in register_map.items():
-                start_addr = group["start"]
-                count = group["end"] - start_addr + 1
-                data = self.plc.read_plc_data(start_addr, count)
-                if data is None:
-                    raise RuntimeError(f"не удалось прочитать группу {group_name}")
-                value_type = "REAL" if "REAL" in group["description"] else "UINT16"
-                rows.extend(
-                    (group_name, start_addr + index, value_type, value)
-                    for index, value in enumerate(data)
-                )
+            device_labels = (
+                self.plc.get_device_labels()
+                if hasattr(self.plc, "get_device_labels")
+                else [self.device_name]
+            )
+            for module_index, device_label in enumerate(device_labels):
+                for group_name, group in register_map.items():
+                    start_addr = group["start"]
+                    count = group["end"] - start_addr + 1
+                    if hasattr(self.plc, "get_device_labels"):
+                        data = self.plc.read_plc_data(
+                            start_addr, count, module_index=module_index
+                        )
+                    else:
+                        data = self.plc.read_plc_data(start_addr, count)
+                    if data is None:
+                        raise RuntimeError(
+                            f"не удалось прочитать {device_label}, группа {group_name}"
+                        )
+                    value_type = "REAL" if "REAL" in group["description"] else "UINT16"
+                    rows.extend(
+                        (
+                            f"{device_label} / {group_name}",
+                            start_addr + index,
+                            value_type,
+                            value,
+                        )
+                        for index, value in enumerate(data)
+                    )
             self.populate_table(rows)
             self.status_label.setText(f"✅ Обновлено: {len(rows)} регистров")
             self.status_label.setStyleSheet("color: #4CAF50;")

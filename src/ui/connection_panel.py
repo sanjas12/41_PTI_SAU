@@ -183,10 +183,11 @@ class ConnectionPanel(CollapsibleGroupBox):
         grid.addWidget(self.preset_combo, 1, 1, 1, 2)
 
         # IP Address
-        grid.addWidget(QLabel("IP:"), 2, 0)
+        self.ip_label = QLabel("IP-адреса:")
+        grid.addWidget(self.ip_label, 2, 0)
         self.ip_edit = QLineEdit("192.168.1.99")
-        self.ip_edit.setPlaceholderText("Введите IP адрес")
-        self.ip_edit.setMaximumWidth(150)
+        self.ip_edit.setPlaceholderText("192.168.1.99, 192.168.1.100")
+        self.ip_edit.setMaximumWidth(320)
         grid.addWidget(self.ip_edit, 2, 1)
 
         # Порт
@@ -553,6 +554,12 @@ class ConnectionPanel(CollapsibleGroupBox):
             "simulator": "127.0.0.1",
             "owen": "192.168.1.99",
         }
+        if device_type == "owen":
+            self.ip_label.setText("IP-адреса:")
+            self.ip_edit.setPlaceholderText("192.168.1.99, 192.168.1.100")
+        else:
+            self.ip_label.setText("IP:")
+            self.ip_edit.setPlaceholderText("Введите IP адрес")
         self.ip_edit.setText(default_hosts[device_type])
         self.on_params_changed()
 
