@@ -42,6 +42,8 @@ def test_connection_that_creates_cycle_is_rejected():
 
 def test_graph_settings_survive_serialization():
     first = make_step("first")
+    first.mu210_module = 2
+    first.mu210_register = 3006
     second = make_step("second")
     second.position_x = 250.0
     second.position_y = 80.0
@@ -52,6 +54,13 @@ def test_graph_settings_survive_serialization():
     restored = Scenario.from_dict(scenario.to_dict())
 
     assert restored.to_dict() == scenario.to_dict()
+
+
+def test_legacy_step_inherits_channel_mu210_mapping():
+    step = ScenarioStep.from_dict({"channel_id": 0, "signal_type": "Sine"})
+
+    assert step.mu210_module is None
+    assert step.mu210_register is None
 
 
 def test_parallel_steps_receive_branch_numbers():

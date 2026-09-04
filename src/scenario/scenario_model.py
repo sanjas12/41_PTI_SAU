@@ -29,6 +29,8 @@ class ScenarioStep:
     # Дискретные параметры
     duty_cycle: float = 50.0  # Для PWM
     pulse_width: float = 1.0  # Для Pulse
+    mu210_module: Optional[int] = None
+    mu210_register: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -46,6 +48,8 @@ class ScenarioStep:
             "trigger_step_id": self.trigger_step_id,
             "duty_cycle": self.duty_cycle,
             "pulse_width": self.pulse_width,
+            "mu210_module": self.mu210_module,
+            "mu210_register": self.mu210_register,
         }
 
     @classmethod
@@ -70,6 +74,16 @@ class ScenarioStep:
             trigger_step_id=data.get("trigger_step_id"),
             duty_cycle=float(data.get("duty_cycle", 50.0)),
             pulse_width=float(data.get("pulse_width", 1.0)),
+            mu210_module=(
+                int(data["mu210_module"])
+                if data.get("mu210_module") is not None
+                else None
+            ),
+            mu210_register=(
+                int(data["mu210_register"])
+                if data.get("mu210_register") is not None
+                else None
+            ),
         )
 
 

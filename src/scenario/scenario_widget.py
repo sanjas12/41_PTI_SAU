@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -71,6 +72,13 @@ def describe_step(step: ScenarioStep) -> str:
         desc += f", скважность={step.duty_cycle:g}%"
     elif signal_type == SignalType.PULSE:
         desc += f", длит. импульса={step.pulse_width:g} с"
+    if (
+        signal_type is not None
+        and signal_type.is_analog()
+        and step.mu210_module is not None
+        and step.mu210_register is not None
+    ):
+        desc += f", МУ210 №{step.mu210_module}/R{step.mu210_register}"
 
     return desc
 
@@ -800,6 +808,30 @@ class StepEditDialog(QDialog):
         self.type_combo.currentIndexChanged.connect(self.update_discrete_visibility)
         form_layout.addRow("Тип сигнала:", self.type_combo)
 
+        selected_channel = self.generator.get_channel(self.channel_combo.currentData())
+        default_module = selected_channel.mu210_module if selected_channel else 1
+        default_register = selected_channel.mu210_register if selected_channel else 3000
+
+        self.mu210_module_label = QLabel("Модуль МУ210:")
+        self.mu210_module_spin = QSpinBox()
+        self.mu210_module_spin.setRange(1, 32)
+        self.mu210_module_spin.setValue(self.step.mu210_module or default_module)
+        form_layout.addRow(self.mu210_module_label, self.mu210_module_spin)
+
+        self.mu210_register_label = QLabel("Выход МУ210:")
+        self.mu210_register_combo = QComboBox()
+        for output_index in range(8):
+            register = 3000 + output_index
+            self.mu210_register_combo.addItem(
+                f"AO{output_index + 1} — регистр {register}", register
+            )
+        register_index = self.mu210_register_combo.findData(
+            self.step.mu210_register or default_register
+        )
+        self.mu210_register_combo.setCurrentIndex(max(0, register_index))
+        form_layout.addRow(self.mu210_register_label, self.mu210_register_combo)
+        self.channel_combo.currentIndexChanged.connect(self._load_channel_mu210_mapping)
+
         # Амплитуда
         self.amp_spin = QDoubleSpinBox()
         self.amp_spin.setRange(0, 100)
@@ -901,10 +933,25 @@ class StepEditDialog(QDialog):
                 self.pulse_width_spin.setVisible(signal_type == SignalType.PULSE)
             else:
                 self.discrete_group.setVisible(False)
+            is_analog = bool(signal_type and signal_type.is_analog())
+            self.mu210_module_label.setVisible(is_analog)
+            self.mu210_module_spin.setVisible(is_analog)
+            self.mu210_register_label.setVisible(is_analog)
+            self.mu210_register_combo.setVisible(is_analog)
+
+    def _load_channel_mu210_mapping(self) -> None:
+        """Подставить ручную привязку выбранного аналогового канала."""
+        channel = self.generator.get_channel(self.channel_combo.currentData())
+        if channel is None:
+            return
+        self.mu210_module_spin.setValue(channel.mu210_module)
+        register_index = self.mu210_register_combo.findData(channel.mu210_register)
+        self.mu210_register_combo.setCurrentIndex(max(0, register_index))
 
     def get_step(self) -> ScenarioStep:
         """Получить настроенный шаг с поддержкой дискретных параметров"""
         signal_type = self.type_combo.currentData()
+        is_analog = SignalType[signal_type.upper()].is_analog()
         return ScenarioStep(
             id=self.step.id,
             channel_id=self.channel_combo.currentData(),
@@ -921,4 +968,8 @@ class StepEditDialog(QDialog):
             trigger_step_id=self.step.trigger_step_id,
             duty_cycle=self.duty_spin.value(),
             pulse_width=self.pulse_width_spin.value(),
+            mu210_module=self.mu210_module_spin.value() if is_analog else None,
+            mu210_register=(
+                self.mu210_register_combo.currentData() if is_analog else None
+            ),
         )

@@ -150,6 +150,55 @@ def test_scenario_applies_discrete_parameters_to_channel():
     assert channel.pulse_width == 0.2
 
 
+def test_analog_scenario_step_overrides_and_restores_mu210_mapping():
+    channel = AnalogChannel(
+        id=0,
+        name="analog",
+        mu210_module=1,
+        mu210_register=3000,
+    )
+    generator = SignalGenerator([channel])
+    step = ScenarioStep(
+        channel_id=0,
+        signal_type="Sine",
+        mu210_module=3,
+        mu210_register=3007,
+    )
+    engine = ScenarioEngine(generator)
+    engine.scenario = Scenario(steps=[step])
+    engine._save_channel_configs()
+
+    engine._apply_graph_step(step)
+    assert channel.mu210_module == 3
+    assert channel.mu210_register == 3007
+
+    engine._restore_channel_configs()
+    assert channel.mu210_module == 1
+    assert channel.mu210_register == 3000
+
+
+def test_analog_step_dialog_edits_mu210_mapping():
+    app = QApplication.instance() or QApplication([])
+    channel = AnalogChannel(
+        id=0,
+        name="analog",
+        mu210_module=2,
+        mu210_register=3004,
+    )
+    dialog = StepEditDialog(
+        SignalGenerator([channel]), signal_types=SignalType.get_analog_types()
+    )
+
+    assert dialog.mu210_module_spin.value() == 2
+    assert dialog.mu210_register_combo.currentData() == 3004
+    assert dialog.mu210_module_spin.isHidden() is False
+    step = dialog.get_step()
+    assert step.mu210_module == 2
+    assert step.mu210_register == 3004
+    dialog.close()
+    app.processEvents()
+
+
 def test_manual_channel_card_uses_category_number():
     app = QApplication.instance() or QApplication([])
     channel = AnalogChannel(id=4, name="analog", signal_type=SignalType.SINE)

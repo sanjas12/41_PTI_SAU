@@ -171,6 +171,8 @@ class ScenarioEngine(QObject):
                 "pulse_width": channel.pulse_width,
                 "min_value": channel.min_value,
                 "max_value": channel.max_value,
+                "mu210_module": channel.mu210_module,
+                "mu210_register": channel.mu210_register,
             }
 
     def _restore_channel_configs(self):
@@ -187,6 +189,8 @@ class ScenarioEngine(QObject):
                 channel.pulse_width = config["pulse_width"]
                 channel.min_value = config["min_value"]
                 channel.max_value = config["max_value"]
+                channel.mu210_module = config["mu210_module"]
+                channel.mu210_register = config["mu210_register"]
                 # Сбрасываем время для корректной генерации
                 channel.time = 0
         self._original_channel_configs.clear()
@@ -208,6 +212,10 @@ class ScenarioEngine(QObject):
         channel.offset = step.offset
         channel.duty_cycle = step.duty_cycle
         channel.pulse_width = step.pulse_width
+        if step.mu210_module is not None:
+            channel.mu210_module = step.mu210_module
+        if step.mu210_register is not None:
+            channel.mu210_register = step.mu210_register
         channel.enabled = True
 
         # Сохраняем данные для плавного перехода
@@ -246,6 +254,10 @@ class ScenarioEngine(QObject):
         channel.offset = step.offset
         channel.duty_cycle = step.duty_cycle
         channel.pulse_width = step.pulse_width
+        if step.mu210_module is not None:
+            channel.mu210_module = step.mu210_module
+        if step.mu210_register is not None:
+            channel.mu210_register = step.mu210_register
         channel.enabled = True  # ← ВКЛЮЧАЕМ КАНАЛ
         # channel.time = 0.0
         channel.current_value = 0.0
@@ -256,7 +268,8 @@ class ScenarioEngine(QObject):
         self.step_changed.emit(index, len(self.scenario.steps))
         self.log_signal.emit(
             f"Запущен шаг {label}: Канал {step.channel_id + 1} - "
-            f"{step.signal_type} ({step.duration:.1f}с)",
+            f"{step.signal_type} ({step.duration:.1f}с), "
+            f"МУ210 №{channel.mu210_module}/R{channel.mu210_register}",
             "info",
         )
 

@@ -37,8 +37,8 @@ NODE_WIDTH = 210.0
 MIN_NODE_WIDTH = 160.0
 MAX_NODE_WIDTH = 760.0
 NODE_WIDTH_PER_SECOND = 10.0
-NODE_HEIGHT = 144.0
-NODE_HEIGHT_WITH_TRIGGER = 166.0
+NODE_HEIGHT = 160.0
+NODE_HEIGHT_WITH_TRIGGER = 182.0
 SOCKET_RADIUS = 7.0
 ANALOG_HEADER_COLOR = QColor("#315f4a")
 DISCRETE_HEADER_COLOR = QColor("#4f5f9f")
@@ -185,12 +185,20 @@ class StepNodeItem(QGraphicsItem):
                 f"Состояния: ВЫКЛ / ВКЛ{trigger_text}"
             )
         else:
+            routing_text = ""
+            if (
+                self.step.mu210_module is not None
+                and self.step.mu210_register is not None
+            ):
+                routing_text = (
+                    f"\nМУ210 №{self.step.mu210_module} · R{self.step.mu210_register}"
+                )
             details = (
                 f"{signal_type.channel_designation(self.step.channel_id)}  ·  "
                 f"{signal_type}\n"
                 f"Длительность: {self.step.duration:g} с\n"
                 f"A: {self.step.amplitude:g} %   f: {self.step.frequency:g} Гц\n"
-                f"Смещение: {self.step.offset:g} %{trigger_text}"
+                f"Смещение: {self.step.offset:g} %{routing_text}{trigger_text}"
             )
         painter.drawText(
             QRectF(13.0, 39.0, self.node_width - 26.0, self.node_height - 48.0),
