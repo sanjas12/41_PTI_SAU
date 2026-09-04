@@ -14,7 +14,7 @@ from scenario.scenario_graph import (
     node_width_for_duration,
 )
 from scenario.scenario_model import Scenario, ScenarioStep
-from scenario.scenario_widget import ScenarioWidget, StepEditDialog
+from scenario.scenario_widget import ScenarioWidget, StepEditDialog, describe_step
 from ui.channel_widget import ChannelSettingsDialog, ChannelWidget
 
 
@@ -127,6 +127,14 @@ def test_manual_channel_can_be_switched_to_discrete_type():
     assert widget.type_badge.text() == "D"
     widget.close()
     app.processEvents()
+
+
+def test_scenario_steps_use_analog_and_discrete_designations():
+    analog_step = ScenarioStep(channel_id=0, signal_type="Sine")
+    discrete_step = ScenarioStep(channel_id=1, signal_type="Discrete")
+
+    assert describe_step(analog_step).startswith("A01,")
+    assert describe_step(discrete_step).startswith("D02,")
 
 
 def test_manual_discrete_settings_show_type_specific_parameters():

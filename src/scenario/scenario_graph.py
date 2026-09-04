@@ -178,14 +178,16 @@ class StepNodeItem(QGraphicsItem):
             elif signal_type == SignalType.PULSE:
                 parameter_text += f"   Импульс: {self.step.pulse_width:g} с"
             details = (
-                f"Канал {self.step.channel_id + 1}  ·  {signal_type}\n"
+                f"{signal_type.channel_designation(self.step.channel_id)}  ·  "
+                f"{signal_type}\n"
                 f"Длительность: {self.step.duration:g} с\n"
                 f"{parameter_text}\n"
                 f"Состояния: ВЫКЛ / ВКЛ{trigger_text}"
             )
         else:
             details = (
-                f"Канал {self.step.channel_id + 1}  ·  {signal_type}\n"
+                f"{signal_type.channel_designation(self.step.channel_id)}  ·  "
+                f"{signal_type}\n"
                 f"Длительность: {self.step.duration:g} с\n"
                 f"A: {self.step.amplitude:g} %   f: {self.step.frequency:g} Гц\n"
                 f"Смещение: {self.step.offset:g} %{trigger_text}"

@@ -222,7 +222,8 @@ class PlotWidget(pg.PlotWidget):
         if channel is None:
             return f"Ch{channel_id + 1}"
 
-        return channel.name
+        designation = channel.signal_type.channel_designation(channel.id)
+        return f"{designation} · {channel.name}"
 
     # ------------------------------------------------------------------
     # Работа с каналами
@@ -518,7 +519,7 @@ class PlotWidget(pg.PlotWidget):
 
             for channel_id in self.get_channel_ids():
                 action = QAction(
-                    f"Ch{channel_id + 1}: {self.get_channel_name(channel_id)}",
+                    self.get_channel_name(channel_id),
                     self,
                 )
 
@@ -1057,7 +1058,7 @@ class PlotWindow(QMainWindow):
         self.channels_list.clear()
 
         for channel in self.generator.channels:
-            channel_kind = "D" if channel.signal_type.is_discrete() else "A"
+            designation = channel.signal_type.channel_designation(channel.id)
             plot_indices = []
 
             for index, plot in enumerate(self.plot_widgets):
@@ -1070,7 +1071,7 @@ class PlotWindow(QMainWindow):
                 status = f" [Гр.{', '.join(plot_indices)}]"
 
             text = (
-                f"[{channel_kind}] Ch{channel.id + 1:02d}: "
+                f"{designation}: "
                 f"{channel.name[:12]} "
                 f"({str(channel.signal_type)})"
                 f"{status}"
@@ -1441,7 +1442,10 @@ class PlotWindow(QMainWindow):
         channel_ids = [channel.id for channel in self.generator.channels]
 
         channel_names = [
-            (f"Ch{channel.id + 1}: {channel.name} ({str(channel.signal_type)})")
+            (
+                f"{channel.signal_type.channel_designation(channel.id)}: "
+                f"{channel.name} ({str(channel.signal_type)})"
+            )
             for channel in self.generator.channels
         ]
 

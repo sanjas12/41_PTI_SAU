@@ -66,7 +66,7 @@ def test_discrete_channel_is_visible_in_list_while_disabled():
     window = PlotWindow(SignalGenerator([channel]))
 
     assert window.channels_list.count() == 1
-    assert window.channels_list.item(0).text().startswith("[D] Ch05:")
+    assert window.channels_list.item(0).text().startswith("D05:")
 
     window.close()
     app.processEvents()
@@ -86,6 +86,7 @@ def test_discrete_channel_is_added_to_plot_as_step_curve(signal_type: SignalType
     window = PlotWindow(generator)
     window.add_channel_to_plot(channel.id)
     plot = window.plot_widgets[0]
+    assert plot.get_channel_name(channel.id) == "D08 · discrete"
 
     channel.current_value = 0.0
     window.update_plots()

@@ -56,12 +56,17 @@ SIGNAL_TYPE_NAMES = {
 def describe_step(step: ScenarioStep) -> str:
     """Вернуть краткое понятное описание шага для UI и журнала."""
     signal_name = SIGNAL_TYPE_NAMES.get(step.signal_type, step.signal_type)
-    desc = f"канал {step.channel_id + 1}, {signal_name}, "
+    signal_type = SignalType[step.signal_type.upper()] if step.signal_type else None
+    designation = (
+        signal_type.channel_designation(step.channel_id)
+        if signal_type is not None
+        else f"Канал {step.channel_id + 1}"
+    )
+    desc = f"{designation}, {signal_name}, "
     desc += f"A={step.amplitude:g} %, f={step.frequency:g} Гц, "
     desc += f"смещение={step.offset:g} %, {step.duration:g} с"
 
     # Добавляем информацию о дискретных параметрах
-    signal_type = SignalType[step.signal_type.upper()] if step.signal_type else None
     if signal_type == SignalType.PWM:
         desc += f", скважность={step.duty_cycle:g}%"
     elif signal_type == SignalType.PULSE:
@@ -767,9 +772,17 @@ class StepEditDialog(QDialog):
 
         # Канал
         self.channel_combo = QComboBox()
+        default_signal_type = (
+            SignalType[self.step.signal_type.upper()]
+            if self.step and self.step.signal_type
+            else self.signal_types[0]
+            if self.signal_types
+            else SignalType.SINE
+        )
         for channel in self.generator.channels:
             self.channel_combo.addItem(
-                f"Канал {channel.id + 1}: {channel.name}", channel.id
+                f"{default_signal_type.channel_designation(channel.id)}: {channel.name}",
+                channel.id,
             )
         if self.step:
             index = self.channel_combo.findData(self.step.channel_id)
@@ -878,6 +891,12 @@ class StepEditDialog(QDialog):
         if current_data:
             # Проверяем, является ли тип дискретным
             signal_type = SignalType[current_data.upper()] if current_data else None
+            if signal_type is not None:
+                for index, channel in enumerate(self.generator.channels):
+                    designation = signal_type.channel_designation(channel.id)
+                    self.channel_combo.setItemText(
+                        index, f"{designation}: {channel.name}"
+                    )
             if signal_type and signal_type.is_discrete():
                 self.discrete_group.setVisible(True)
                 # Для PWM показываем скважность

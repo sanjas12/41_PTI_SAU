@@ -56,6 +56,11 @@ class SignalType(Enum):
             SignalType.TOGGLE,
         ]
 
+    def channel_designation(self, channel_id: int) -> str:
+        """Вернуть единое обозначение канала: A01 или D01."""
+        prefix = "D" if self.is_discrete() else "A"
+        return f"{prefix}{channel_id + 1:02d}"
+
     @staticmethod
     def get_analog_types():
         """Получить список аналоговых типов"""
