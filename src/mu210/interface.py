@@ -52,6 +52,7 @@ class MU210Interface(QObject):
 
     def start_polling(self) -> None:
         """Запустить периодическую передачу после успешного подключения."""
+        self._connected = self.modbus.is_connected()
         if not self._connected:
             return
         self.write_count = 0

@@ -163,7 +163,7 @@ class IntervalControl(CollapsibleGroupBox):
         plc_layout = QVBoxLayout()
         plc_tab.setLayout(plc_layout)
         self._setup_plc_interval_ui(plc_layout)
-        tabs.addTab(plc_tab, "🔌 МУ210")
+        tabs.addTab(plc_tab, "🔌 Устройство")
 
         layout.addWidget(tabs)
 
@@ -171,7 +171,7 @@ class IntervalControl(CollapsibleGroupBox):
         info_layout = QHBoxLayout()
 
         self.status_label = QLabel(
-            "✅ Сигналы: 0.010 с (100 Гц) | МУ210: 0.200 с (5 Гц)"
+            "✅ Сигналы: 0.010 с (100 Гц) | Устройство: 0.200 с (5 Гц)"
         )
         self.status_label.setStyleSheet("color: #666666;")
         info_layout.addWidget(self.status_label)
@@ -309,7 +309,7 @@ class IntervalControl(CollapsibleGroupBox):
 
         # Значение в секундах
         value_layout = QVBoxLayout()
-        value_layout.addWidget(QLabel("Интервал записи в МУ210:"))
+        value_layout.addWidget(QLabel("Интервал записи в устройство:"))
 
         # DoubleSpinBox для точной настройки
         self.plc_interval_spin = QDoubleSpinBox()
@@ -561,7 +561,7 @@ class IntervalControl(CollapsibleGroupBox):
         )
         self.status_label.setText(
             f"✅ Сигналы: {self._current_interval:.3f} с ({signal_freq:.0f} Гц) | "
-            f"МУ210: {self._current_plc_interval:.3f} с ({plc_freq:.1f} Гц)"
+            f"Устройство: {self._current_plc_interval:.3f} с ({plc_freq:.1f} Гц)"
         )
         self.status_label.setStyleSheet("color: #666666;")
 

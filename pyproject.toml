@@ -1,7 +1,7 @@
 [project]
 name = "pti_sau"
 version = "0.0.1"
-description = "Программа генерации сигналов и прямого управления ОВЕН МУ210-501 по Modbus TCP"
+description = "Программа генерации сигналов и обмена с PLC, симулятором и ОВЕН МУ210-501"
 readme = "README.md"
 requires-python = ">=3.8, <3.9"
 authors = [

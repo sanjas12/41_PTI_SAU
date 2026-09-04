@@ -173,7 +173,7 @@ class ControlPanel(CollapsibleGroupBox):
         layout.addWidget(self.plot_btn)
 
         # Кнопка PLC Регистры
-        self.plc_btn = QPushButton("📋 Регистры МУ210")
+        self.plc_btn = QPushButton("📋 Регистры устройства")
         self.plc_btn.clicked.connect(self.plc_clicked.emit)
         self.plc_btn.setStyleSheet("""
             QPushButton {

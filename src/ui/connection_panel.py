@@ -23,7 +23,13 @@ from .collapsible_groupbox import CollapsibleGroupBox
 
 
 class ConnectionPanel(CollapsibleGroupBox):
-    """Панель прямого подключения к ОВЕН МУ210-501 по Modbus TCP."""
+    """Панель выбора устройства и подключения по Modbus TCP."""
+
+    DEVICE_LABELS = {
+        "plc": "PLC Modicon Premium",
+        "simulator": "Simulator",
+        "owen": "ОВЕН МУ210-501",
+    }
 
     # Сигналы для внешнего использования
     connected = pyqtSignal(bool)  # True - подключено, False - отключено
@@ -33,14 +39,19 @@ class ConnectionPanel(CollapsibleGroupBox):
     CONFIG_FILE = "connections.json"
 
     def __init__(self, parent=None):
-        super().__init__("Подключение к МУ210-501", parent)
+        super().__init__("Подключение", parent)
 
         # Путь к файлу конфигурации в папке пользователя
         self.config_path = self._get_config_path()
 
         # ИНИЦИАЛИЗИРУЕМ АТРИБУТЫ
         self._is_connected = False
-        self._connection_params = {"host": "192.168.1.99", "port": 502, "unit_id": 1}
+        self._connection_params = {
+            "device_type": "owen",
+            "host": "192.168.1.99",
+            "port": 502,
+            "unit_id": 1,
+        }
 
         # Список сохраненных подключений (загружаем из файла)
         self.saved_connections = []
@@ -49,9 +60,23 @@ class ConnectionPanel(CollapsibleGroupBox):
         # Если нет сохраненных, добавляем стандартные
         if not self.saved_connections:
             self.saved_connections = [
-                {"name": "Simulator", "host": "127.0.0.1", "port": 502, "unit_id": 1},
+                {
+                    "name": "PLC",
+                    "device_type": "plc",
+                    "host": "192.168.0.1",
+                    "port": 502,
+                    "unit_id": 1,
+                },
+                {
+                    "name": "Simulator",
+                    "device_type": "simulator",
+                    "host": "127.0.0.1",
+                    "port": 502,
+                    "unit_id": 1,
+                },
                 {
                     "name": "МУ210-501",
+                    "device_type": "owen",
                     "host": "192.168.1.99",
                     "port": 502,
                     "unit_id": 1,
@@ -125,6 +150,9 @@ class ConnectionPanel(CollapsibleGroupBox):
     def _apply_last_connection(self):
         """Применить последнее использованное подключение"""
         if self._last_connection:
+            device_type = self._last_connection.get("device_type", "plc")
+            index = self.device_combo.findData(device_type)
+            self.device_combo.setCurrentIndex(max(0, index))
             self.ip_edit.setText(self._last_connection.get("host", "192.168.1.99"))
             self.port_spin.setValue(self._last_connection.get("port", 502))
             self.unit_spin.setValue(self._last_connection.get("unit_id", 1))
@@ -139,36 +167,43 @@ class ConnectionPanel(CollapsibleGroupBox):
         # Основная сетка параметров
         grid = QGridLayout()
 
+        self.device_combo = QComboBox()
+        for device_type, label in self.DEVICE_LABELS.items():
+            self.device_combo.addItem(label, device_type)
+        self.device_combo.setCurrentIndex(self.device_combo.findData("owen"))
+        grid.addWidget(QLabel("Устройство:"), 0, 0)
+        grid.addWidget(self.device_combo, 0, 1, 1, 2)
+
         # Быстрый выбор сохраненных подключений
         self.preset_combo = QComboBox()
         self.preset_combo.addItem("-- Выберите сохраненное --")
         for conn in self.saved_connections:
             self.preset_combo.addItem(f"{conn['name']} ({conn['host']}:{conn['port']})")
-        grid.addWidget(QLabel("Быстрый выбор:"), 0, 0)
-        grid.addWidget(self.preset_combo, 0, 1, 1, 2)
+        grid.addWidget(QLabel("Быстрый выбор:"), 1, 0)
+        grid.addWidget(self.preset_combo, 1, 1, 1, 2)
 
         # IP Address
-        grid.addWidget(QLabel("IP:"), 1, 0)
+        grid.addWidget(QLabel("IP:"), 2, 0)
         self.ip_edit = QLineEdit("192.168.1.99")
         self.ip_edit.setPlaceholderText("Введите IP адрес")
         self.ip_edit.setMaximumWidth(150)
-        grid.addWidget(self.ip_edit, 1, 1)
+        grid.addWidget(self.ip_edit, 2, 1)
 
         # Порт
-        grid.addWidget(QLabel("Порт:"), 1, 2)
+        grid.addWidget(QLabel("Порт:"), 2, 2)
         self.port_spin = QSpinBox()
         self.port_spin.setRange(1, 65535)
         self.port_spin.setValue(502)
         self.port_spin.setMaximumWidth(80)
-        grid.addWidget(self.port_spin, 1, 3)
+        grid.addWidget(self.port_spin, 2, 3)
 
         # Unit ID
-        grid.addWidget(QLabel("Unit ID:"), 2, 0)
+        grid.addWidget(QLabel("Unit ID:"), 3, 0)
         self.unit_spin = QSpinBox()
         self.unit_spin.setRange(0, 255)
         self.unit_spin.setValue(1)
         self.unit_spin.setMaximumWidth(80)
-        grid.addWidget(self.unit_spin, 2, 1)
+        grid.addWidget(self.unit_spin, 3, 1)
 
         # Кнопки управления
         button_layout = QHBoxLayout()
@@ -259,7 +294,7 @@ class ConnectionPanel(CollapsibleGroupBox):
         button_layout.addWidget(self.delete_btn)
 
         # Добавляем кнопки в сетку
-        grid.addLayout(button_layout, 3, 0, 1, 4)
+        grid.addLayout(button_layout, 4, 0, 1, 4)
 
         # Статус подключения
         status_layout = QHBoxLayout()
@@ -285,7 +320,7 @@ class ConnectionPanel(CollapsibleGroupBox):
         self.connection_time_label.setStyleSheet("color: #666666;")
         status_layout.addWidget(self.connection_time_label)
 
-        grid.addLayout(status_layout, 4, 0, 1, 4)
+        grid.addLayout(status_layout, 5, 0, 1, 4)
 
         layout.addLayout(grid)
 
@@ -376,6 +411,7 @@ class ConnectionPanel(CollapsibleGroupBox):
         self.save_btn.clicked.connect(self.on_save_clicked)
         self.delete_btn.clicked.connect(self.on_delete_clicked)
         self.preset_combo.currentIndexChanged.connect(self.on_preset_selected)
+        self.device_combo.currentIndexChanged.connect(self.on_device_changed)
 
         # Автоматическое обновление при изменении параметров
         self.ip_edit.textChanged.connect(self.on_params_changed)
@@ -394,7 +430,12 @@ class ConnectionPanel(CollapsibleGroupBox):
             return
 
         # Сохраняем параметры
-        self._connection_params = {"host": host, "port": port, "unit_id": unit_id}
+        self._connection_params = {
+            "device_type": self.device_combo.currentData(),
+            "host": host,
+            "port": port,
+            "unit_id": unit_id,
+        }
 
         # Сохраняем последнее подключение
         self._last_connection = self._connection_params.copy()
@@ -419,6 +460,7 @@ class ConnectionPanel(CollapsibleGroupBox):
         host = self.ip_edit.text().strip()
         port = self.port_spin.value()
         unit_id = self.unit_spin.value()
+        device_type = self.device_combo.currentData()
 
         if not host:
             QMessageBox.warning(self, "Предупреждение", "Введите IP адрес")
@@ -426,7 +468,11 @@ class ConnectionPanel(CollapsibleGroupBox):
 
         # Проверяем, есть ли уже такое подключение
         for conn in self.saved_connections:
-            if conn["host"] == host and conn["port"] == port:
+            if (
+                conn["host"] == host
+                and conn["port"] == port
+                and conn.get("device_type", "plc") == device_type
+            ):
                 # Обновляем существующее
                 conn["unit_id"] = unit_id
                 self._save_connections()
@@ -437,9 +483,15 @@ class ConnectionPanel(CollapsibleGroupBox):
                 return
 
         # Добавляем новое подключение
-        name = f"МУ210-{len(self.saved_connections) + 1}"
+        name = f"{self.DEVICE_LABELS[device_type]}-{len(self.saved_connections) + 1}"
         self.saved_connections.append(
-            {"name": name, "host": host, "port": port, "unit_id": unit_id}
+            {
+                "name": name,
+                "device_type": device_type,
+                "host": host,
+                "port": port,
+                "unit_id": unit_id,
+            }
         )
         self._save_connections()
         self.update_preset_combo()
@@ -476,6 +528,9 @@ class ConnectionPanel(CollapsibleGroupBox):
             return
 
         conn = self.saved_connections[index - 1]
+        device_type = conn.get("device_type", "plc")
+        device_index = self.device_combo.findData(device_type)
+        self.device_combo.setCurrentIndex(max(0, device_index))
         self.ip_edit.setText(conn["host"])
         self.port_spin.setValue(conn["port"])
         self.unit_spin.setValue(conn["unit_id"])
@@ -487,7 +542,19 @@ class ConnectionPanel(CollapsibleGroupBox):
         """Параметры подключения изменены"""
         if self._is_connected:
             self._is_connected = False
+            self.connected.emit(False)
             self.update_connection_status()
+
+    def on_device_changed(self):
+        """Подставить типовой адрес и отключить прежнее устройство."""
+        device_type = self.device_combo.currentData()
+        default_hosts = {
+            "plc": "192.168.0.1",
+            "simulator": "127.0.0.1",
+            "owen": "192.168.1.99",
+        }
+        self.ip_edit.setText(default_hosts[device_type])
+        self.on_params_changed()
 
     def update_connection_status(self):
         """Обновить статус подключения"""
@@ -505,7 +572,8 @@ class ConnectionPanel(CollapsibleGroupBox):
             self.disconnect_btn.setEnabled(True)
 
             self.connection_info.setText(
-                f"🔗 {self._connection_params['host']}:{self._connection_params['port']} "
+                f"🔗 {self.DEVICE_LABELS[self._connection_params['device_type']]} · "
+                f"{self._connection_params['host']}:{self._connection_params['port']} "
                 f"(Unit ID: {self._connection_params['unit_id']})"
             )
             self.connection_info.setStyleSheet("color: #4CAF50;")
@@ -543,6 +611,7 @@ class ConnectionPanel(CollapsibleGroupBox):
     def get_connection_params(self) -> Dict[str, Any]:
         """Получить текущие параметры подключения"""
         return {
+            "device_type": self.device_combo.currentData(),
             "host": self.ip_edit.text().strip(),
             "port": self.port_spin.value(),
             "unit_id": self.unit_spin.value(),
