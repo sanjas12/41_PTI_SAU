@@ -32,3 +32,20 @@ def test_main_window_starts_in_stopped_state(tmp_path, monkeypatch):
 
     window.close()
     app.processEvents()
+
+
+def test_manual_plots_include_only_enabled_channels(tmp_path, monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    config_path = tmp_path / "channels.json"
+    monkeypatch.setattr(MainWindow, "_get_config_path", lambda _self: str(config_path))
+    window = MainWindow()
+    window.generator.channels[0].enabled = True
+    window.generator.channels[1].enabled = False
+
+    channel_ids = window._get_enabled_manual_channel_ids()
+
+    assert window.generator.channels[0].id in channel_ids
+    assert window.generator.channels[1].id not in channel_ids
+
+    window.close()
+    app.processEvents()

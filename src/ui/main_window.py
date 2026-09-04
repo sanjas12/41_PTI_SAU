@@ -761,9 +761,8 @@ class MainWindow(QMainWindow):
     def _auto_populate_plot_window(self):
         """При открытии окна графиков сразу выводим на него каналы,
         релевантные текущему режиму:
-        - "Ручной" — все настроенные аналоговые и дискретные каналы,
-        КАЖДЫЙ на своём отдельном графике. Выключенный канал остаётся
-        доступен на графике, но новые значения для него не записываются;
+        - "Ручной" — только включённые аналоговые и дискретные каналы,
+        каждый на своём отдельном графике;
         - "Сценарий" — все каналы, задействованные хоть в одном шаге
         текущего загруженного сценария, все на одном общем графике.
         При этом время окна автоматически выставляется равным общей
@@ -805,7 +804,7 @@ class MainWindow(QMainWindow):
                     )
         else:
             # --- РУЧНОЙ РЕЖИМ ---
-            channel_ids = [channel.id for channel in self.generator.channels]
+            channel_ids = self._get_enabled_manual_channel_ids()
             for i, channel_id in enumerate(channel_ids):
                 if i == 0 and self.plot_window.plot_widgets:
                     # Переиспользуем пустой график, который PlotWindow
@@ -816,6 +815,10 @@ class MainWindow(QMainWindow):
                     plot = self.plot_window.add_plot()
                     plot_index = plot.plot_index
                 self.plot_window.add_channel_to_plot(channel_id, plot_index=plot_index)
+
+    def _get_enabled_manual_channel_ids(self) -> List[int]:
+        """Вернуть включённые ручные каналы в порядке отображения."""
+        return [channel.id for channel in self.generator.channels if channel.enabled]
 
     def _get_scenario_channel_ids(self):
         """ID каналов, задействованных хоть в одном шаге текущего
