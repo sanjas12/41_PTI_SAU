@@ -121,3 +121,64 @@ def test_mu210_writes_each_module_separately():
     values = [[100] * 8, [200] * 8]
     assert interface._write_all_outputs(values) is True
     assert calls == [(0, 3000, values[0]), (1, 3000, values[1])]
+
+
+def test_mu210_uses_manual_channel_mapping():
+    channels = [
+        AnalogChannel(
+            id=0,
+            name="first",
+            min_value=0.0,
+            max_value=100.0,
+            current_value=25.0,
+            mu210_module=2,
+            mu210_register=3007,
+        ),
+        AnalogChannel(
+            id=1,
+            name="second",
+            min_value=0.0,
+            max_value=100.0,
+            current_value=50.0,
+            mu210_module=1,
+            mu210_register=3003,
+        ),
+    ]
+    interface = make_interface(channels)
+    interface.configure("192.168.1.99,192.168.1.100", 502, 1)
+    interface.set_output_enabled(True)
+
+    assert interface.prepare_module_output_values() == [
+        [0, 0, 0, 500, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 250],
+    ]
+
+
+def test_mu210_rejects_duplicate_active_output_mapping():
+    channels = [
+        AnalogChannel(id=0, name="first", mu210_module=1, mu210_register=3000),
+        AnalogChannel(id=1, name="second", mu210_module=1, mu210_register=3000),
+    ]
+    interface = make_interface(channels)
+    interface.set_output_enabled(True)
+
+    try:
+        interface.prepare_module_output_values()
+    except ValueError as exc:
+        assert "Несколько активных каналов" in str(exc)
+    else:
+        raise AssertionError("Конфликт выходов должен быть обнаружен")
+
+
+def test_channel_serialization_preserves_mu210_mapping():
+    channel = AnalogChannel(
+        id=2,
+        name="mapped",
+        mu210_module=3,
+        mu210_register=3006,
+    )
+
+    restored = AnalogChannel.from_dict(channel.to_dict())
+
+    assert restored.mu210_module == 3
+    assert restored.mu210_register == 3006

@@ -144,6 +144,8 @@ class MainWindow(QMainWindow):
                     enabled=cfg.get("enabled", True),
                     duty_cycle=cfg.get("duty_cycle", 50.0),
                     pulse_width=cfg.get("pulse_width", 1.0),
+                    mu210_module=cfg.get("mu210_module", i // 8 + 1),
+                    mu210_register=cfg.get("mu210_register", 3000 + i % 8),
                 )
             else:
                 min_val = (i % 5) * 10
@@ -184,6 +186,8 @@ class MainWindow(QMainWindow):
                 enabled=cfg.get("enabled", True),
                 duty_cycle=cfg.get("duty_cycle", 50.0),
                 pulse_width=cfg.get("pulse_width", 0.1),
+                mu210_module=cfg.get("mu210_module", channel_id // 8 + 1),
+                mu210_register=cfg.get("mu210_register", 3000 + channel_id % 8),
             )
             self.generator.add_channel(channel)
 
@@ -249,6 +253,8 @@ class MainWindow(QMainWindow):
                     "enabled": channel.enabled,
                     "duty_cycle": channel.duty_cycle,
                     "pulse_width": channel.pulse_width,
+                    "mu210_module": channel.mu210_module,
+                    "mu210_register": channel.mu210_register,
                 }
 
             with open(self.config_path, "w", encoding="utf-8") as f:
@@ -530,7 +536,8 @@ class MainWindow(QMainWindow):
                 f"{designation}: изменены настройки "
                 f"(границы: {channel.min_value:.1f}-{channel.max_value:.1f}, "
                 f"частота: {channel.frequency:.1f} Гц, "
-                f"амплитуда: {channel.amplitude:.0f}%)",
+                f"амплитуда: {channel.amplitude:.0f}%, "
+                f"МУ210 №{channel.mu210_module}/R{channel.mu210_register})",
                 "info",
             )
             self._save_channels_config()

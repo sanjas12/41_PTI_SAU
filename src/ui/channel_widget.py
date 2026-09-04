@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
 )
 
@@ -83,6 +84,23 @@ class ChannelSettingsDialog(QDialog):
         self.type_combo.currentIndexChanged.connect(self._update_parameter_visibility)
         form_layout.addRow("Тип сигнала:", self.type_combo)
 
+        self.mu210_module_label = QLabel("Модуль МУ210:")
+        self.mu210_module_spin = QSpinBox()
+        self.mu210_module_spin.setRange(1, 32)
+        self.mu210_module_spin.setValue(self.channel.mu210_module)
+        form_layout.addRow(self.mu210_module_label, self.mu210_module_spin)
+
+        self.mu210_register_label = QLabel("Выход МУ210:")
+        self.mu210_register_combo = QComboBox()
+        for output_index in range(8):
+            register = 3000 + output_index
+            self.mu210_register_combo.addItem(
+                f"AO{output_index + 1} — регистр {register}", register
+            )
+        register_index = self.mu210_register_combo.findData(self.channel.mu210_register)
+        self.mu210_register_combo.setCurrentIndex(max(0, register_index))
+        form_layout.addRow(self.mu210_register_label, self.mu210_register_combo)
+
         self.duty_label = QLabel("Скважность (%):")
         self.duty_spin = QDoubleSpinBox()
         self.duty_spin.setRange(0.0, 100.0)
@@ -135,10 +153,17 @@ class ChannelSettingsDialog(QDialog):
         signal_name = self.type_combo.currentData()
         is_pwm = signal_name == SignalType.PWM.name
         is_pulse = signal_name == SignalType.PULSE.name
+        is_analog = signal_name in {
+            signal_type.name for signal_type in SignalType.get_analog_types()
+        }
         self.duty_label.setVisible(is_pwm)
         self.duty_spin.setVisible(is_pwm)
         self.pulse_width_label.setVisible(is_pulse)
         self.pulse_width_spin.setVisible(is_pulse)
+        self.mu210_module_label.setVisible(is_analog)
+        self.mu210_module_spin.setVisible(is_analog)
+        self.mu210_register_label.setVisible(is_analog)
+        self.mu210_register_combo.setVisible(is_analog)
 
     def get_settings(self) -> dict:
         """Получить измененные настройки"""
@@ -153,6 +178,8 @@ class ChannelSettingsDialog(QDialog):
             "enabled": self.enabled_check.isChecked(),
             "duty_cycle": self.duty_spin.value(),
             "pulse_width": self.pulse_width_spin.value(),
+            "mu210_module": self.mu210_module_spin.value(),
+            "mu210_register": self.mu210_register_combo.currentData(),
         }
 
 
@@ -259,6 +286,11 @@ class ChannelWidget(QFrame):
         kind = "Дискретный" if is_discrete else "Аналоговый"
         self.type_badge.setText(designation)
         self.type_name_label.setText(str(self.channel.signal_type))
+        if not is_discrete:
+            self.type_name_label.setText(
+                f"{self.channel.signal_type} · МУ{self.channel.mu210_module}/"
+                f"R{self.channel.mu210_register}"
+            )
         self.type_badge.setToolTip(f"{kind} канал")
         self.type_badge.setStyleSheet(
             f"background: {color}; color: white; border-radius: 4px; "
@@ -287,6 +319,8 @@ class ChannelWidget(QFrame):
             self.channel.enabled = settings["enabled"]
             self.channel.duty_cycle = settings["duty_cycle"]
             self.channel.pulse_width = settings["pulse_width"]
+            self.channel.mu210_module = settings["mu210_module"]
+            self.channel.mu210_register = settings["mu210_register"]
 
             self.name_label.setText(self.channel.name)
             self.min_label.setText(f"{self.channel.min_value:.0f}")

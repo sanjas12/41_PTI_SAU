@@ -116,26 +116,41 @@ class MU210Interface(QObject):
         return self.prepare_module_output_values()[0]
 
     def prepare_module_output_values(self) -> List[List[int]]:
-        """Разложить аналоговые каналы по восьми выходам каждого модуля."""
+        """Разложить аналоговые каналы по настроенным модулям и регистрам."""
         analog_channels = [
             channel
             for channel in self.generator.channels
             if channel.signal_type.is_analog()
         ]
-        module_values: List[List[int]] = []
-        for module_index in range(len(self.modbus_clients)):
-            start = module_index * self.OUTPUT_COUNT
-            channels = analog_channels[start : start + self.OUTPUT_COUNT]
-            values: List[int] = []
-            for channel in channels:
-                span = channel.max_value - channel.min_value
-                if not self._output_enabled or not channel.enabled or span <= 0.0:
-                    values.append(0)
-                    continue
-                normalized = (channel.current_value - channel.min_value) / span
-                values.append(round(max(0.0, min(1.0, normalized)) * 1000.0))
-            values.extend([0] * (self.OUTPUT_COUNT - len(values)))
-            module_values.append(values)
+        module_values = [[0] * self.OUTPUT_COUNT for _ in self.modbus_clients]
+        if not self._output_enabled:
+            return module_values
+        occupied = set()
+        for channel in analog_channels:
+            module_index = channel.mu210_module - 1
+            output_index = channel.mu210_register - self.OUTPUT_VALUE_START
+            if not 0 <= module_index < len(module_values):
+                continue
+            if not 0 <= output_index < self.OUTPUT_COUNT:
+                raise ValueError(
+                    f"Канал {channel.name}: неверный регистр {channel.mu210_register}"
+                )
+            target = (module_index, output_index)
+            if channel.enabled and target in occupied:
+                raise ValueError(
+                    f"Несколько активных каналов назначены на МУ210 "
+                    f"№{channel.mu210_module}, регистр {channel.mu210_register}"
+                )
+            if not channel.enabled:
+                continue
+            occupied.add(target)
+            span = channel.max_value - channel.min_value
+            if span <= 0.0:
+                continue
+            normalized = (channel.current_value - channel.min_value) / span
+            module_values[module_index][output_index] = round(
+                max(0.0, min(1.0, normalized)) * 1000.0
+            )
         return module_values
 
     def _write_outputs(self, values: List[int]) -> bool:
@@ -163,7 +178,11 @@ class MU210Interface(QObject):
         """Поставить одну пакетную запись в фоновый пул без накопления очереди."""
         if not self.is_connected() or self._write_pending:
             return
-        module_values = self.prepare_module_output_values()
+        try:
+            module_values = self.prepare_module_output_values()
+        except ValueError as exc:
+            self.error_occurred.emit(str(exc))
+            return
         self._write_pending = True
         task = Runnable(self._write_all_outputs, module_values)
         task.signals.result.connect(
