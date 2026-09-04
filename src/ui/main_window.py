@@ -24,9 +24,8 @@ from _version import __full_version__
 from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
-from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
-from plc.plc_interface import PLCInterface
+from mu210.interface import MU210Interface
 from plc.plc_register_view import PLCRegisterView
 from scenario.scenario_engine import ScenarioEngine
 from scenario.scenario_model import Scenario
@@ -58,9 +57,6 @@ class MainWindow(QMainWindow):
         self.generator = SignalGenerator()
         self._setup_channels()
 
-        # Создаем Modbus клиент
-        self.modbus = ModbusClientWrapper()
-
         # Создаем движок сценариев
         self.scenario_engine = ScenarioEngine(self.generator, self)
         self.scenario_engine.log_signal.connect(self.log)
@@ -71,13 +67,15 @@ class MainWindow(QMainWindow):
         self.scenario_engine.progress_changed.connect(self.on_scenario_progress_changed)
         self.scenario_engine.time_updated.connect(self.on_scenario_time_updated)
 
-        # Создаем интерфейс для PLC
-        self.plc_interface = PLCInterface(self.generator, self, debug=True)
-        self.plc_interface.connection_status.connect(self.on_plc_connection_status)
-        self.plc_interface.error_occurred.connect(
-            lambda e: self.log(f"PLC Error: {e}", "error")
+        # Прямой интерфейс к восьмиканальному модулю аналогового вывода.
+        self.output_interface = MU210Interface(self.generator, self)
+        self.output_interface.connection_status.connect(
+            self.on_output_connection_status
         )
-        self.plc_interface.debug_data.connect(self.on_plc_debug_data)
+        self.output_interface.error_occurred.connect(
+            lambda e: self.log(f"МУ210-501: {e}", "error")
+        )
+        self.output_interface.debug_data.connect(self.on_output_debug_data)
 
         # При запуске приложение находится в безопасном состоянии Stop.
         self.frame_count = 0
@@ -636,11 +634,11 @@ class MainWindow(QMainWindow):
         )
 
     def on_plc_interval_changed(self, interval: float):
-        if hasattr(self, "plc_interface"):
-            self.plc_interface.set_write_interval(interval)
+        if hasattr(self, "output_interface"):
+            self.output_interface.set_write_interval(interval)
             freq = 1.0 / interval if interval > 0 else 0
             self.log(
-                f"Интервал записи в PLC изменен: {interval:.3f} с ({freq:.1f} Гц)",
+                f"Интервал записи в МУ210 изменён: {interval:.3f} с ({freq:.1f} Гц)",
                 "info",
             )
 
@@ -650,11 +648,8 @@ class MainWindow(QMainWindow):
         unit_id = params["unit_id"]
 
         try:
-            self.modbus.configure(host, port, unit_id)
-            self.log(
-                f"Настроено подключение к {host}:{port} (Unit ID: {unit_id})", "info"
-            )
-            self.plc_interface.configure(host, port, unit_id)
+            self.output_interface.configure(host, port, unit_id)
+            self.log(f"Настроен МУ210-501: {host}:{port} (Unit ID: {unit_id})", "info")
         except Exception as e:
             self.log(f"Ошибка настройки подключения: {e}", "error")
 
@@ -663,17 +658,16 @@ class MainWindow(QMainWindow):
 
             def after_connect(ok):
                 if ok:
-                    self.log("Подключение установлено", "success")
+                    self.log("Подключение к МУ210-501 установлено", "success")
                     self.connection_panel.set_connection_status(True)
-                    self.plc_interface.connect()
+                    self.output_interface.start_polling()
                 else:
                     self.log("Не удалось подключиться", "error")
                     self.connection_panel.set_connection_status(False)
 
-            self._submit(self.modbus.open, after_connect)
+            self._submit(self.output_interface.open, after_connect)
         else:
-            self.modbus.close()
-            self.plc_interface.disconnect()
+            self.output_interface.disconnect()
             self.log("Соединение закрыто", "info")
 
     def _submit(self, fn, on_result, *args, **kwargs):
@@ -785,17 +779,17 @@ class MainWindow(QMainWindow):
 
     def open_plc_view(self):
         if self.plc_view is None or not self.plc_view.isVisible():
-            self.plc_view = PLCRegisterView(self.plc_interface, self)
+            self.plc_view = PLCRegisterView(self.output_interface, self)
             self.plc_view.show()
         else:
             self.plc_view.raise_()
             self.plc_view.activateWindow()
 
-    def on_plc_connection_status(self, connected):
+    def on_output_connection_status(self, connected):
         if connected:
-            self.log("PLC интерфейс активен", "success")
+            self.log("Прямой интерфейс МУ210-501 активен", "success")
         else:
-            self.log("PLC интерфейс отключен", "warning")
+            self.log("Интерфейс МУ210-501 отключен", "warning")
 
     def on_scenario_mode_changed(self, mode: str):
         """Синхронизирует UI с фактическим режимом движка сценариев.
@@ -845,6 +839,8 @@ class MainWindow(QMainWindow):
 
         if self.plot_window is not None:
             self.plot_window.set_acquisition_running(should_run)
+        if hasattr(self, "output_interface"):
+            self.output_interface.set_output_enabled(should_run)
 
     def _show_channel_mode_view(self, view: str):
         """Переключить ВИДИМУЮ панель (сетка каналов ИЛИ конструктор
@@ -1019,10 +1015,10 @@ class MainWindow(QMainWindow):
             self.scenario_widget.set_engine_mode("manual")
         self._show_channel_mode_view("manual")
 
-    def on_plc_debug_data(self, debug_info: dict):
+    def on_output_debug_data(self, debug_info: dict):
         self.log(
-            f"Запись PLC #{debug_info['write_count']}: "
-            f"{len(debug_info.get('registers', []))} регистров",
+            f"Запись МУ210 #{debug_info['write_count']}: "
+            f"AO={debug_info.get('values', [])}",
             "debug",
         )
 
@@ -1174,6 +1170,5 @@ class MainWindow(QMainWindow):
             self.plot_window.close()
         if self.plc_view:
             self.plc_view.close()
-        self.plc_interface.disconnect()
-        self.modbus.close()
+        self.output_interface.disconnect()
         event.accept()

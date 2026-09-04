@@ -23,7 +23,7 @@ from .collapsible_groupbox import CollapsibleGroupBox
 
 
 class ConnectionPanel(CollapsibleGroupBox):
-    """Панель для подключения к ПЛК через Modbus TCP"""
+    """Панель прямого подключения к ОВЕН МУ210-501 по Modbus TCP."""
 
     # Сигналы для внешнего использования
     connected = pyqtSignal(bool)  # True - подключено, False - отключено
@@ -33,14 +33,14 @@ class ConnectionPanel(CollapsibleGroupBox):
     CONFIG_FILE = "connections.json"
 
     def __init__(self, parent=None):
-        super().__init__("Подключение", parent)
+        super().__init__("Подключение к МУ210-501", parent)
 
         # Путь к файлу конфигурации в папке пользователя
         self.config_path = self._get_config_path()
 
         # ИНИЦИАЛИЗИРУЕМ АТРИБУТЫ
         self._is_connected = False
-        self._connection_params = {"host": "192.168.0.20", "port": 502, "unit_id": 1}
+        self._connection_params = {"host": "192.168.1.99", "port": 502, "unit_id": 1}
 
         # Список сохраненных подключений (загружаем из файла)
         self.saved_connections = []
@@ -50,7 +50,12 @@ class ConnectionPanel(CollapsibleGroupBox):
         if not self.saved_connections:
             self.saved_connections = [
                 {"name": "Simulator", "host": "127.0.0.1", "port": 502, "unit_id": 1},
-                {"name": "PLC-1", "host": "192.168.0.20", "port": 502, "unit_id": 1},
+                {
+                    "name": "МУ210-501",
+                    "host": "192.168.1.99",
+                    "port": 502,
+                    "unit_id": 1,
+                },
             ]
             self._save_connections()
 
@@ -120,7 +125,7 @@ class ConnectionPanel(CollapsibleGroupBox):
     def _apply_last_connection(self):
         """Применить последнее использованное подключение"""
         if self._last_connection:
-            self.ip_edit.setText(self._last_connection.get("host", "192.168.0.20"))
+            self.ip_edit.setText(self._last_connection.get("host", "192.168.1.99"))
             self.port_spin.setValue(self._last_connection.get("port", 502))
             self.unit_spin.setValue(self._last_connection.get("unit_id", 1))
 
@@ -144,7 +149,7 @@ class ConnectionPanel(CollapsibleGroupBox):
 
         # IP Address
         grid.addWidget(QLabel("IP:"), 1, 0)
-        self.ip_edit = QLineEdit("192.168.0.20")
+        self.ip_edit = QLineEdit("192.168.1.99")
         self.ip_edit.setPlaceholderText("Введите IP адрес")
         self.ip_edit.setMaximumWidth(150)
         grid.addWidget(self.ip_edit, 1, 1)
@@ -432,7 +437,7 @@ class ConnectionPanel(CollapsibleGroupBox):
                 return
 
         # Добавляем новое подключение
-        name = f"PLC-{len(self.saved_connections) + 1}"
+        name = f"МУ210-{len(self.saved_connections) + 1}"
         self.saved_connections.append(
             {"name": name, "host": host, "port": port, "unit_id": unit_id}
         )
