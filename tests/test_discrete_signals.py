@@ -16,6 +16,7 @@ from scenario.scenario_graph import (
 from scenario.scenario_model import Scenario, ScenarioStep
 from scenario.scenario_widget import ScenarioWidget, StepEditDialog, describe_step
 from ui.channel_widget import ChannelSettingsDialog, ChannelWidget
+from ui.main_window import MainWindow
 
 
 def make_channel(signal_type: SignalType, time: float) -> AnalogChannel:
@@ -28,6 +29,21 @@ def make_channel(signal_type: SignalType, time: float) -> AnalogChannel:
         max_value=1.0,
         time=time,
     )
+
+
+def test_missing_discrete_channels_are_added_up_to_ten():
+    channels = [AnalogChannel(id=index, name=f"analog_{index}") for index in range(20)]
+    channels[0].signal_type = SignalType.DISCRETE
+    generator = SignalGenerator(channels)
+
+    MainWindow._ensure_discrete_channel_count(generator, 10)
+
+    discrete_channels = [
+        channel for channel in generator.channels if channel.signal_type.is_discrete()
+    ]
+    assert len(discrete_channels) == 10
+    assert len(generator.channels) == 29
+    assert [channel.id for channel in generator.channels[-9:]] == list(range(20, 29))
 
 
 @pytest.mark.parametrize(

@@ -54,7 +54,7 @@ class MainWindow(QMainWindow):
         # Путь к файлу конфигурации
         self.config_path = self._get_config_path()
 
-        # Создаем генератор с 20 каналами
+        # Создаём базовые каналы и дополняем их дискретными до D10.
         self.generator = SignalGenerator()
         self._setup_channels()
 
@@ -157,6 +157,67 @@ class MainWindow(QMainWindow):
                 )
 
             self.generator.add_channel(channel)
+
+        # Загружаем ранее сохранённые дополнительные дискретные каналы.
+        extra_ids = sorted(
+            int(channel_id)
+            for channel_id in saved_config
+            if channel_id.isdigit() and int(channel_id) >= 20
+        )
+        discrete_types = SignalType.get_discrete_types()
+        for channel_id in extra_ids:
+            cfg = saved_config[str(channel_id)]
+            default_type = discrete_types[(channel_id - 20) % len(discrete_types)]
+            channel = AnalogChannel(
+                id=channel_id,
+                name=cfg.get("name", f"Discrete_{channel_id - 19:02d}"),
+                signal_type=SignalType[cfg.get("signal_type", default_type.name)],
+                frequency=cfg.get("frequency", 1.0),
+                amplitude=cfg.get("amplitude", 100.0),
+                offset=cfg.get("offset", 0.0),
+                min_value=cfg.get("min_value", 0.0),
+                max_value=cfg.get("max_value", 1.0),
+                enabled=cfg.get("enabled", True),
+                duty_cycle=cfg.get("duty_cycle", 50.0),
+                pulse_width=cfg.get("pulse_width", 0.1),
+            )
+            self.generator.add_channel(channel)
+
+        self._ensure_discrete_channel_count(self.generator, 10)
+
+    @staticmethod
+    def _ensure_discrete_channel_count(
+        generator: SignalGenerator, target_count: int
+    ) -> None:
+        """Добавить недостающие логические дискретные каналы."""
+        discrete_count = sum(
+            channel.signal_type.is_discrete() for channel in generator.channels
+        )
+        missing_count = max(0, target_count - discrete_count)
+        if missing_count == 0:
+            return
+
+        next_id = max((channel.id for channel in generator.channels), default=-1) + 1
+        discrete_types = SignalType.get_discrete_types()
+        for offset in range(missing_count):
+            category_number = discrete_count + offset + 1
+            generator.add_channel(
+                AnalogChannel(
+                    id=next_id + offset,
+                    name=f"Discrete_{category_number:02d}",
+                    signal_type=discrete_types[
+                        (category_number - 1) % len(discrete_types)
+                    ],
+                    frequency=1.0,
+                    amplitude=100.0,
+                    offset=0.0,
+                    min_value=0.0,
+                    max_value=1.0,
+                    enabled=True,
+                    duty_cycle=50.0,
+                    pulse_width=0.1,
+                )
+            )
 
     def _load_channels_config(self) -> dict:
         """Загрузить конфигурацию каналов из файла"""
@@ -413,7 +474,11 @@ class MainWindow(QMainWindow):
         self.selected_bounds_label.setObjectName("secondaryText")
         layout.addWidget(self.selected_bounds_label)
 
-        self.stats_label = QLabel("Каналов: 20 · Активных: 20")
+        channel_count = len(self.generator.channels)
+        active_count = sum(channel.enabled for channel in self.generator.channels)
+        self.stats_label = QLabel(
+            f"Каналов: {channel_count} · Активных: {active_count}"
+        )
         self.stats_label.setObjectName("secondaryText")
         layout.addWidget(self.stats_label)
         layout.addStretch()
