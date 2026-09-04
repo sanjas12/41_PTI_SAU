@@ -79,25 +79,22 @@ class MainWindow(QMainWindow):
         )
         self.plc_interface.debug_data.connect(self.on_plc_debug_data)
 
-        # Настраиваем UI
-        self.setup_ui()
-
-        # Таймер для обновления
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_signals)
-        self.timer.start(10)  # 100 Гц
-
-        # Счетчик
+        # При запуске приложение находится в безопасном состоянии Stop.
         self.frame_count = 0
-        self.is_running = True
+        self.is_running = False
         self.is_paused = False
+        self._engine_mode = "manual"
         self.plot_window = None
         self.plc_view = None
 
-        # Генерация уже запущена (см. self.timer.start(10) выше) — приводим
-        # кнопки ControlPanel в соответствие, иначе они остались бы в
-        # состоянии по умолчанию из конструктора (Play доступен, Stop и
-        # Пауза — нет).
+        # Настраиваем UI
+        self.setup_ui()
+
+        # Таймер запускается только после явного нажатия Play.
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_signals)
+
+        # Play доступен, Stop и Пауза недоступны до начала генерации.
         self._refresh_control_buttons()
 
         # Потоковый пул для Modbus операций
@@ -457,8 +454,8 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(6)
 
-        self.status_label = QLabel("● Работает")
-        self.status_label.setStyleSheet("color: #00CC00; font-weight: bold;")
+        self.status_label = QLabel("● Остановлен")
+        self.status_label.setStyleSheet("color: #FF4444; font-weight: bold;")
         layout.addWidget(self.status_label)
 
         layout.addWidget(QLabel("Режим:"))
