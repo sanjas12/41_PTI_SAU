@@ -1,12 +1,16 @@
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from PyQt5.QtCore import QObject, QThreadPool, QTimer, pyqtSignal
 
 from core.signal_generator import SignalGenerator
+from core.signal_types import SignalType
 from modbus.modbus_client import ModbusClientWrapper
 from modbus.worker import Runnable
+
+if TYPE_CHECKING:
+    from scenario.scenario_model import Scenario
 
 
 class MU210Interface(QObject):
@@ -103,6 +107,103 @@ class MU210Interface(QObject):
 
     def is_connected(self) -> bool:
         return self._configured and self._connected
+
+    def validate_manual_output_map(self) -> List[str]:
+        """Проверить назначения активных аналоговых каналов перед запуском."""
+        targets: Dict[Tuple[int, int], str] = {}
+        errors: List[str] = []
+        for channel in self.generator.channels:
+            if not channel.enabled or not channel.signal_type.is_analog():
+                continue
+            self._validate_output_target(
+                channel.mu210_module,
+                channel.mu210_register,
+                channel.name,
+                targets,
+                errors,
+            )
+        return errors
+
+    def validate_scenario_output_map(self, scenario: "Scenario") -> List[str]:
+        """Проверить физические выходы аналоговых шагов с учётом их времени."""
+        channels = {channel.id: channel for channel in self.generator.channels}
+        timings = scenario.get_step_timings()
+        assignments: Dict[Tuple[int, int], List[Tuple[float, float, str]]] = {}
+        errors: List[str] = []
+
+        for index, step in enumerate(scenario.steps, start=1):
+            try:
+                is_analog = SignalType[step.signal_type.upper()].is_analog()
+            except KeyError:
+                continue
+            if not is_analog:
+                continue
+
+            channel = channels.get(step.channel_id)
+            if channel is None:
+                errors.append(f"Шаг {index}: канал {step.channel_id} не найден")
+                continue
+            module = (
+                step.mu210_module
+                if step.mu210_module is not None
+                else channel.mu210_module
+            )
+            register = (
+                step.mu210_register
+                if step.mu210_register is not None
+                else channel.mu210_register
+            )
+            label = f"шаг {index} ({channel.name})"
+            if not self._validate_output_target(module, register, label, {}, errors):
+                continue
+
+            start, end = timings.get(step.id, (0.0, step.duration))
+            target = (module, register)
+            for other_start, other_end, other_label in assignments.get(target, []):
+                if start < other_end and other_start < end:
+                    errors.append(
+                        f"{label} и {other_label} одновременно используют "
+                        f"МУ210 №{module}, регистр {register}"
+                    )
+            assignments.setdefault(target, []).append((start, end, label))
+        return errors
+
+    def _validate_output_target(
+        self,
+        module: int,
+        register: int,
+        label: str,
+        targets: Dict[Tuple[int, int], str],
+        errors: List[str],
+    ) -> bool:
+        module_count = len(self.hosts) if self._configured else len(self.modbus_clients)
+        if not 1 <= module <= module_count:
+            errors.append(
+                f"{label}: модуль МУ210 №{module} отсутствует "
+                f"(настроено: {module_count})"
+            )
+            return False
+        if (
+            not self.OUTPUT_VALUE_START
+            <= register
+            < (self.OUTPUT_VALUE_START + self.OUTPUT_COUNT)
+        ):
+            errors.append(
+                f"{label}: регистр {register} вне диапазона "
+                f"{self.OUTPUT_VALUE_START}–"
+                f"{self.OUTPUT_VALUE_START + self.OUTPUT_COUNT - 1}"
+            )
+            return False
+
+        target = (module, register)
+        previous = targets.get(target)
+        if previous is not None:
+            errors.append(
+                f"{label} и {previous} назначены на МУ210 №{module}, регистр {register}"
+            )
+            return False
+        targets[target] = label
+        return True
 
     def set_output_enabled(self, enabled: bool) -> None:
         """Разрешить значения генератора; при Stop передаются нули."""

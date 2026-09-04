@@ -4,6 +4,7 @@ from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 from mu210.interface import MU210Interface
+from scenario.scenario_model import Scenario, ScenarioStep
 
 
 def make_interface(channels):
@@ -182,3 +183,76 @@ def test_channel_serialization_preserves_mu210_mapping():
 
     assert restored.mu210_module == 3
     assert restored.mu210_register == 3006
+
+
+def test_mu210_manual_validation_reports_missing_module_and_invalid_register():
+    channels = [
+        AnalogChannel(id=0, name="missing", mu210_module=2, mu210_register=3000),
+        AnalogChannel(id=1, name="invalid", mu210_module=1, mu210_register=3010),
+    ]
+    interface = make_interface(channels)
+    interface.configure("192.168.1.99", 502, 1)
+
+    errors = interface.validate_manual_output_map()
+
+    assert any("модуль МУ210 №2 отсутствует" in error for error in errors)
+    assert any("регистр 3010 вне диапазона" in error for error in errors)
+
+
+def test_mu210_manual_validation_ignores_disabled_duplicate():
+    channels = [
+        AnalogChannel(id=0, name="active", mu210_module=1, mu210_register=3000),
+        AnalogChannel(
+            id=1,
+            name="disabled",
+            enabled=False,
+            mu210_module=1,
+            mu210_register=3000,
+        ),
+    ]
+    interface = make_interface(channels)
+
+    assert interface.validate_manual_output_map() == []
+
+
+def test_mu210_manual_validation_rejects_active_duplicate():
+    channels = [
+        AnalogChannel(id=0, name="first", mu210_module=1, mu210_register=3000),
+        AnalogChannel(id=1, name="second", mu210_module=1, mu210_register=3000),
+    ]
+    interface = make_interface(channels)
+
+    errors = interface.validate_manual_output_map()
+
+    assert len(errors) == 1
+    assert "назначены на МУ210 №1, регистр 3000" in errors[0]
+
+
+def test_mu210_scenario_allows_sequential_steps_on_same_output():
+    channel = AnalogChannel(id=0, name="A1", mu210_module=1, mu210_register=3000)
+    first = ScenarioStep(channel_id=0, signal_type="Sine", duration=2.0)
+    second = ScenarioStep(channel_id=0, signal_type="Sine", duration=3.0)
+    scenario = Scenario(steps=[first, second])
+    scenario.add_connection(first.id, second.id)
+    interface = make_interface([channel])
+
+    assert interface.validate_scenario_output_map(scenario) == []
+
+
+def test_mu210_scenario_rejects_parallel_steps_on_same_output():
+    channels = [
+        AnalogChannel(id=0, name="A1", mu210_module=1, mu210_register=3000),
+        AnalogChannel(id=1, name="A2", mu210_module=1, mu210_register=3000),
+    ]
+    scenario = Scenario(
+        steps=[
+            ScenarioStep(channel_id=0, signal_type="Sine", duration=2.0),
+            ScenarioStep(channel_id=1, signal_type="Square", duration=3.0),
+        ]
+    )
+    interface = make_interface(channels)
+
+    errors = interface.validate_scenario_output_map(scenario)
+
+    assert len(errors) == 1
+    assert "одновременно используют МУ210 №1, регистр 3000" in errors[0]

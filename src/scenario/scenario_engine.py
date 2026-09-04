@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set
 
 from PyQt5.QtCore import QMutex, QMutexLocker, QObject, QTimer, pyqtSignal
 
@@ -30,11 +30,13 @@ class ScenarioEngine(QObject):
     scenario_finished = pyqtSignal()  # Завершен сценарий
     active_steps_changed = pyqtSignal(str)  # Отображаемые номера активных блоков
     log_signal = pyqtSignal(str, str)  # (message, level)
+    validation_failed = pyqtSignal(str)
 
     def __init__(self, generator: SignalGenerator, parent=None):
         super().__init__(parent)
         self.generator = generator
         self.scenario: Optional[Scenario] = None
+        self.start_validator: Optional[Callable[[Scenario], List[str]]] = None
         self.mode = ScenarioMode.MANUAL
 
         self._current_step = 0
@@ -81,6 +83,14 @@ class ScenarioEngine(QObject):
         if not self.scenario or not self.scenario.steps:
             self.log_signal.emit("Сценарий пуст!", "warning")
             return
+
+        if self.start_validator is not None:
+            errors = self.start_validator(self.scenario)
+            if errors:
+                message = "Нельзя запустить сценарий:\n• " + "\n• ".join(errors)
+                self.log_signal.emit(message, "error")
+                self.validation_failed.emit(message)
+                return
 
         with QMutexLocker(self._mutex):
             # Сохраняем текущие настройки каналов

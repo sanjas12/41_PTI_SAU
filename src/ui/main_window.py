@@ -1,5 +1,6 @@
 import json
 import os
+from typing import List
 
 from PyQt5.QtCore import Qt, QThreadPool, QTimer
 from PyQt5.QtWidgets import (
@@ -70,6 +71,10 @@ class MainWindow(QMainWindow):
 
         # Прямой интерфейс к восьмиканальному модулю аналогового вывода.
         self.output_interface = MU210Interface(self.generator, self)
+        self.scenario_engine.start_validator = self._validate_scenario_output_map
+        self.scenario_engine.validation_failed.connect(
+            self._show_output_map_validation_error
+        )
         self.plc_interface = PLCInterface(self.generator, self)
         self.active_output_interface = self.output_interface
         self.active_device_type = "owen"
@@ -1081,12 +1086,31 @@ class MainWindow(QMainWindow):
     def start_generation(self):
         if self.is_running:
             return
+        if self.active_device_type == "owen" and self.output_interface.is_connected():
+            errors = self.output_interface.validate_manual_output_map()
+            if errors:
+                message = "Нельзя запустить ручной режим:\n• " + "\n• ".join(errors)
+                self.log(message.replace("\n• ", "; "), "error")
+                self._show_output_map_validation_error(message)
+                return
         self.is_running = True
         self.is_paused = False
         self._sync_generation_timer()
         self.status_label.setText("● Работает")
         self.status_label.setStyleSheet("color: #00CC00; font-weight: bold;")
         self._refresh_control_buttons()
+
+    def _validate_scenario_output_map(self, scenario: Scenario) -> List[str]:
+        """Проверять МУ210 только при активном соединении с этим устройством."""
+        if (
+            self.active_device_type != "owen"
+            or not self.output_interface.is_connected()
+        ):
+            return []
+        return self.output_interface.validate_scenario_output_map(scenario)
+
+    def _show_output_map_validation_error(self, message: str) -> None:
+        QMessageBox.warning(self, "Ошибка карты выходов", message)
 
     def stop_generation(self):
         if not self.is_running:
