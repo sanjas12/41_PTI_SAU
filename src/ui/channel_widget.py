@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
 )
 
@@ -244,7 +245,7 @@ class ChannelWidget(QFrame):
 
         self.setLayout(layout)
         self.setMinimumWidth(170)
-        self.setMaximumWidth(220)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.update_type_designation()
 
     def set_category_number(self, number: int) -> None:

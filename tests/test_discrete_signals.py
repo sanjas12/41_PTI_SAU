@@ -1,6 +1,6 @@
 import pytest
 from PyQt5.QtCore import QPoint
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QSizePolicy
 
 from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
@@ -121,7 +121,7 @@ def test_manual_channel_card_uses_category_number():
 
     widget.set_category_number(1)
     assert widget.type_badge.text() == "A01"
-    assert widget.maximumWidth() == 220
+    assert widget.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
     widget.close()
     app.processEvents()
 

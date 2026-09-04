@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSplitter,
     QStackedWidget,
     QVBoxLayout,
@@ -322,12 +323,18 @@ class MainWindow(QMainWindow):
         self.channel_grid_widget.setLayout(channel_sections_layout)
 
         self.analog_channels_group = QGroupBox("Аналоговые каналы · A")
+        self.analog_channels_group.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Maximum
+        )
         self.analog_channels_layout = QGridLayout()
         self.analog_channels_layout.setSpacing(6)
         self.analog_channels_group.setLayout(self.analog_channels_layout)
         channel_sections_layout.addWidget(self.analog_channels_group)
 
         self.discrete_channels_group = QGroupBox("Дискретные каналы · D")
+        self.discrete_channels_group.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Maximum
+        )
         self.discrete_channels_layout = QGridLayout()
         self.discrete_channels_layout.setSpacing(6)
         self.discrete_channels_group.setLayout(self.discrete_channels_layout)
