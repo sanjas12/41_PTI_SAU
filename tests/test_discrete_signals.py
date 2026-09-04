@@ -1,6 +1,6 @@
 import pytest
 from PyQt5.QtCore import QPoint
-from PyQt5.QtWidgets import QApplication, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QGridLayout, QGroupBox, QSizePolicy
 
 from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
@@ -44,6 +44,26 @@ def test_missing_discrete_channels_are_added_up_to_ten():
     assert len(discrete_channels) == 10
     assert len(generator.channels) == 29
     assert [channel.id for channel in generator.channels[-9:]] == list(range(20, 29))
+
+
+def test_channel_section_can_be_collapsed_and_expanded():
+    app = QApplication.instance() or QApplication([])
+    group = QGroupBox()
+    layout = QGridLayout(group)
+    card = ChannelWidget(make_channel(SignalType.SINE, 0.0))
+    layout.addWidget(card, 0, 0)
+
+    MainWindow._set_channel_section_expanded(group, layout, "Аналоговые", False)
+    assert card.isHidden() is True
+    assert group.title() == "▶ Аналоговые"
+    assert group.maximumHeight() == 30
+
+    MainWindow._set_channel_section_expanded(group, layout, "Аналоговые", True)
+    assert card.isHidden() is False
+    assert group.title() == "▼ Аналоговые"
+    assert group.maximumHeight() == 16777215
+    group.close()
+    app.processEvents()
 
 
 @pytest.mark.parametrize(

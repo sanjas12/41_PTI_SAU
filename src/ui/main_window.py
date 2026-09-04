@@ -383,22 +383,42 @@ class MainWindow(QMainWindow):
         channel_sections_layout.setSpacing(8)
         self.channel_grid_widget.setLayout(channel_sections_layout)
 
-        self.analog_channels_group = QGroupBox("Аналоговые каналы · A")
+        self.analog_channels_group = QGroupBox("▼ Аналоговые каналы · A")
+        self.analog_channels_group.setCheckable(True)
+        self.analog_channels_group.setChecked(True)
         self.analog_channels_group.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Maximum
         )
         self.analog_channels_layout = QGridLayout()
         self.analog_channels_layout.setSpacing(6)
         self.analog_channels_group.setLayout(self.analog_channels_layout)
+        self.analog_channels_group.toggled.connect(
+            lambda expanded: self._set_channel_section_expanded(
+                self.analog_channels_group,
+                self.analog_channels_layout,
+                "Аналоговые каналы · A",
+                expanded,
+            )
+        )
         channel_sections_layout.addWidget(self.analog_channels_group)
 
-        self.discrete_channels_group = QGroupBox("Дискретные каналы · D")
+        self.discrete_channels_group = QGroupBox("▼ Дискретные каналы · D")
+        self.discrete_channels_group.setCheckable(True)
+        self.discrete_channels_group.setChecked(True)
         self.discrete_channels_group.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Maximum
         )
         self.discrete_channels_layout = QGridLayout()
         self.discrete_channels_layout.setSpacing(6)
         self.discrete_channels_group.setLayout(self.discrete_channels_layout)
+        self.discrete_channels_group.toggled.connect(
+            lambda expanded: self._set_channel_section_expanded(
+                self.discrete_channels_group,
+                self.discrete_channels_layout,
+                "Дискретные каналы · D",
+                expanded,
+            )
+        )
         channel_sections_layout.addWidget(self.discrete_channels_group)
         channel_sections_layout.addStretch()
 
@@ -546,6 +566,33 @@ class MainWindow(QMainWindow):
 
         self.analog_channels_group.setVisible(bool(analog_widgets))
         self.discrete_channels_group.setVisible(bool(discrete_widgets))
+        self._set_channel_section_expanded(
+            self.analog_channels_group,
+            self.analog_channels_layout,
+            "Аналоговые каналы · A",
+            self.analog_channels_group.isChecked(),
+        )
+        self._set_channel_section_expanded(
+            self.discrete_channels_group,
+            self.discrete_channels_layout,
+            "Дискретные каналы · D",
+            self.discrete_channels_group.isChecked(),
+        )
+
+    @staticmethod
+    def _set_channel_section_expanded(
+        group: QGroupBox,
+        layout: QGridLayout,
+        title: str,
+        expanded: bool,
+    ) -> None:
+        """Показать или скрыть карточки одной категории каналов."""
+        group.setTitle(f"{'▼' if expanded else '▶'} {title}")
+        for index in range(layout.count()):
+            widget = layout.itemAt(index).widget()
+            if widget is not None:
+                widget.setVisible(expanded)
+        group.setMaximumHeight(16777215 if expanded else 30)
 
     def _manual_channel_designation(self, channel: AnalogChannel) -> str:
         """Получить номер канала внутри его категории в ручном режиме."""
