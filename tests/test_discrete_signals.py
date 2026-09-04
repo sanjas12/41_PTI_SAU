@@ -114,17 +114,14 @@ def test_scenario_applies_discrete_parameters_to_channel():
     assert channel.pulse_width == 0.2
 
 
-def test_manual_channel_can_be_switched_to_discrete_type():
+def test_manual_channel_card_uses_category_number():
     app = QApplication.instance() or QApplication([])
-    channel = make_channel(SignalType.SINE, 0.0)
+    channel = AnalogChannel(id=4, name="analog", signal_type=SignalType.SINE)
     widget = ChannelWidget(channel)
 
-    widget.type_combo.setCurrentIndex(
-        widget.type_combo.findData(SignalType.DISCRETE.name)
-    )
-
-    assert channel.signal_type == SignalType.DISCRETE
-    assert widget.type_badge.text() == "D01"
+    widget.set_category_number(1)
+    assert widget.type_badge.text() == "A01"
+    assert widget.maximumWidth() == 220
     widget.close()
     app.processEvents()
 

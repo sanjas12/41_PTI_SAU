@@ -383,9 +383,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("Канал:"))
         first_channel = self.generator.channels[0] if self.generator.channels else None
         if first_channel is not None:
-            first_designation = first_channel.signal_type.channel_designation(
-                first_channel.id
-            )
+            first_designation = self._manual_channel_designation(first_channel)
             selected_channel_text = f"{first_designation}: {first_channel.name}"
         else:
             selected_channel_text = "Не выбран"
@@ -433,7 +431,7 @@ class MainWindow(QMainWindow):
     def on_channel_settings_changed(self, channel_id: int):
         channel = self.generator.get_channel(channel_id)
         if channel:
-            designation = channel.signal_type.channel_designation(channel.id)
+            designation = self._manual_channel_designation(channel)
             self.log(
                 f"{designation}: изменены настройки "
                 f"(границы: {channel.min_value:.1f}-{channel.max_value:.1f}, "
@@ -473,16 +471,28 @@ class MainWindow(QMainWindow):
             (discrete_widgets, self.discrete_channels_layout),
         ):
             for index, widget in enumerate(widgets):
+                widget.set_category_number(index + 1)
                 layout.addWidget(widget, index // columns, index % columns)
 
         self.analog_channels_group.setVisible(bool(analog_widgets))
         self.discrete_channels_group.setVisible(bool(discrete_widgets))
 
+    def _manual_channel_designation(self, channel: AnalogChannel) -> str:
+        """Получить номер канала внутри его категории в ручном режиме."""
+        same_category = [
+            candidate
+            for candidate in self.generator.channels
+            if candidate.signal_type.is_discrete() == channel.signal_type.is_discrete()
+        ]
+        category_number = same_category.index(channel) + 1
+        prefix = "D" if channel.signal_type.is_discrete() else "A"
+        return f"{prefix}{category_number:02d}"
+
     def on_channel_type_changed(self, channel_id: int, type_name: str):
         self._rebuild_manual_channel_layout()
         channel = self.generator.get_channel(channel_id)
         if channel:
-            designation = channel.signal_type.channel_designation(channel.id)
+            designation = self._manual_channel_designation(channel)
             self.log(f"{designation}: тип сигнала изменён на {type_name}", "info")
             self._save_channels_config()
 
@@ -569,7 +579,7 @@ class MainWindow(QMainWindow):
     def on_channel_selected(self, channel_id):
         channel = self.generator.get_channel(channel_id)
         if channel:
-            designation = channel.signal_type.channel_designation(channel.id)
+            designation = self._manual_channel_designation(channel)
             self.selected_channel_label.setText(f"{designation}: {channel.name}")
             self.selected_channel_label.setProperty("channel_id", channel_id)
             self.selected_type_label.setText(str(channel.signal_type))

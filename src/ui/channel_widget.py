@@ -166,6 +166,7 @@ class ChannelWidget(QFrame):
     def __init__(self, channel: AnalogChannel, parent=None):
         super().__init__(parent)
         self.channel = channel
+        self._category_number = channel.id + 1
         self.setup_ui()
         self.update_display()
 
@@ -173,11 +174,13 @@ class ChannelWidget(QFrame):
         self.setObjectName("channelCard")
 
         layout = QVBoxLayout()
-        layout.setSpacing(2)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(3)
+        layout.setContentsMargins(6, 5, 6, 5)
 
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(6)
+
         self.type_badge = QLabel()
         self.type_badge.setAlignment(Qt.AlignCenter)
         self.type_badge.setFixedWidth(36)
@@ -185,20 +188,28 @@ class ChannelWidget(QFrame):
 
         self.name_label = QLabel(self.channel.name)
         self.name_label.setObjectName("channelName")
-        self.name_label.setAlignment(Qt.AlignCenter)
-        self.name_label.setFont(QFont("Arial", 8, QFont.Bold))
+        self.name_label.setFont(QFont("Arial", 9, QFont.Bold))
         self.name_label.mousePressEvent = self.on_name_click
         header_layout.addWidget(self.name_label, 1)
         layout.addLayout(header_layout)
 
+        signal_layout = QHBoxLayout()
+        signal_layout.setContentsMargins(0, 0, 0, 0)
+        self.type_name_label = QLabel(str(self.channel.signal_type))
+        self.type_name_label.setObjectName("secondaryText")
+        signal_layout.addWidget(self.type_name_label)
+        signal_layout.addStretch()
+
         self.value_label = QLabel("0.00")
         self.value_label.setObjectName("channelValue")
-        self.value_label.setAlignment(Qt.AlignCenter)
-        self.value_label.setFont(QFont("Arial", 14, QFont.Bold))
-        layout.addWidget(self.value_label)
+        self.value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.value_label.setFont(QFont("Arial", 11, QFont.Bold))
+        self.value_label.setMinimumWidth(72)
+        signal_layout.addWidget(self.value_label)
+        layout.addLayout(signal_layout)
 
         self.bar_frame = QFrame()
-        bar_layout = QVBoxLayout()
+        bar_layout = QVBoxLayout(self.bar_frame)
         bar_layout.setContentsMargins(0, 0, 0, 0)
         self.bar = QFrame()
         self.bar.setFixedHeight(4)
@@ -206,60 +217,50 @@ class ChannelWidget(QFrame):
             f"background-color: {COLORS['success']}; border-radius: 2px;"
         )
         bar_layout.addWidget(self.bar)
-
-        bounds_layout = QHBoxLayout()
-        bounds_layout.setContentsMargins(0, 0, 0, 0)
-        self.min_label = QLabel(f"{self.channel.min_value:.0f}")
-        self.min_label.setObjectName("channelBound")
-        self.min_label.setAlignment(Qt.AlignLeft)
-        bounds_layout.addWidget(self.min_label)
-        bounds_layout.addStretch()
-        self.max_label = QLabel(f"{self.channel.max_value:.0f}")
-        self.max_label.setObjectName("channelBound")
-        self.max_label.setAlignment(Qt.AlignRight)
-        bounds_layout.addWidget(self.max_label)
-
-        bar_layout.addLayout(bounds_layout)
-        self.bar_frame.setLayout(bar_layout)
         layout.addWidget(self.bar_frame)
 
-        self.type_combo = QComboBox()
-        for signal_type in SignalType:
-            self.type_combo.addItem(str(signal_type), signal_type.name)
-        index = self.type_combo.findData(self.channel.signal_type.name)
-        if index >= 0:
-            self.type_combo.setCurrentIndex(index)
-        self.type_combo.currentTextChanged.connect(self.on_type_changed)
-        layout.addWidget(self.type_combo)
+        controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(0, 0, 0, 0)
 
-        settings_layout = QHBoxLayout()
-        settings_layout.setContentsMargins(0, 0, 0, 0)
+        self.enabled_check = QCheckBox("Вкл")
+        self.enabled_check.setChecked(self.channel.enabled)
+        self.enabled_check.stateChanged.connect(self.on_enabled_changed)
+        controls_layout.addWidget(self.enabled_check)
+        controls_layout.addStretch()
+        self.min_label = QLabel(f"{self.channel.min_value:.0f}")
+        self.min_label.setObjectName("channelBound")
+        self.max_label = QLabel(f"{self.channel.max_value:.0f}")
+        self.max_label.setObjectName("channelBound")
+        controls_layout.addWidget(self.min_label)
+        controls_layout.addWidget(QLabel("—"))
+        controls_layout.addWidget(self.max_label)
 
         self.settings_btn = QPushButton("⚙")
         self.settings_btn.setObjectName("iconButton")
         self.settings_btn.setToolTip("Настройки канала")
         self.settings_btn.clicked.connect(self.open_settings)
-        settings_layout.addWidget(self.settings_btn, alignment=Qt.AlignCenter)
-
-        self.enabled_check = QCheckBox("Вкл")
-        self.enabled_check.setChecked(self.channel.enabled)
-        self.enabled_check.stateChanged.connect(self.on_enabled_changed)
-        settings_layout.addWidget(self.enabled_check, alignment=Qt.AlignCenter)
-
-        layout.addLayout(settings_layout)
+        controls_layout.addWidget(self.settings_btn)
+        layout.addLayout(controls_layout)
 
         self.setLayout(layout)
-        self.setMinimumSize(112, 154)
-        self.setMaximumWidth(148)
+        self.setMinimumWidth(170)
+        self.setMaximumWidth(220)
+        self.update_type_designation()
+
+    def set_category_number(self, number: int) -> None:
+        """Установить порядковый номер внутри категории A или D."""
+        self._category_number = number
         self.update_type_designation()
 
     def update_type_designation(self) -> None:
         """Показать обозначение аналогового или дискретного канала."""
         is_discrete = self.channel.signal_type.is_discrete()
-        designation = self.channel.signal_type.channel_designation(self.channel.id)
+        prefix = "D" if is_discrete else "A"
+        designation = f"{prefix}{self._category_number:02d}"
         color = "#3b82f6" if is_discrete else "#22a06b"
         kind = "Дискретный" if is_discrete else "Аналоговый"
         self.type_badge.setText(designation)
+        self.type_name_label.setText(str(self.channel.signal_type))
         self.type_badge.setToolTip(f"{kind} канал")
         self.type_badge.setStyleSheet(
             f"background: {color}; color: white; border-radius: 4px; "
@@ -269,20 +270,14 @@ class ChannelWidget(QFrame):
     def on_name_click(self, event):
         self.channel_selected.emit(self.channel.id)
 
-    def on_type_changed(self, text: str):
-        try:
-            signal_name = self.type_combo.currentData()
-            signal_type = SignalType[signal_name]
-            self.channel.signal_type = signal_type
-            self.update_type_designation()
-            self.channel_type_changed.emit(self.channel.id, str(signal_type))
-        except (KeyError, TypeError):
-            pass
-
     def open_settings(self):
         dialog = ChannelSettingsDialog(self.channel, self)
+        dialog.setWindowTitle(
+            f"Настройки {self.type_badge.text()}: {self.channel.name}"
+        )
         if dialog.exec_() == QDialog.Accepted:
             settings = dialog.get_settings()
+            previous_signal_type = self.channel.signal_type
 
             self.channel.name = settings["name"]
             self.channel.min_value = settings["min_value"]
@@ -299,14 +294,14 @@ class ChannelWidget(QFrame):
             self.min_label.setText(f"{self.channel.min_value:.0f}")
             self.max_label.setText(f"{self.channel.max_value:.0f}")
 
-            index = self.type_combo.findData(self.channel.signal_type.name)
-            if index >= 0:
-                self.type_combo.setCurrentIndex(index)
-
             self.enabled_check.setChecked(self.channel.enabled)
             self.update_type_designation()
             self.update_display()
 
+            if self.channel.signal_type != previous_signal_type:
+                self.channel_type_changed.emit(
+                    self.channel.id, str(self.channel.signal_type)
+                )
             self.channel_settings_changed.emit(self.channel.id)
 
     def on_enabled_changed(self, state):
@@ -316,15 +311,11 @@ class ChannelWidget(QFrame):
             self.bar.setStyleSheet(
                 f"background-color: {COLORS['disabled']}; border-radius: 2px;"
             )
-            self.type_combo.setEnabled(False)
-            self.settings_btn.setEnabled(False)
         else:
             self.value_label.setStyleSheet(f"color: {COLORS['primary']};")
             self.bar.setStyleSheet(
                 f"background-color: {COLORS['success']}; border-radius: 2px;"
             )
-            self.type_combo.setEnabled(True)
-            self.settings_btn.setEnabled(True)
 
     def update_display(self):
         """Обновить отображение значения"""
@@ -371,10 +362,6 @@ class ChannelWidget(QFrame):
         self.name_label.setText(channel.name)
         self.min_label.setText(f"{channel.min_value:.0f}")
         self.max_label.setText(f"{channel.max_value:.0f}")
-
-        index = self.type_combo.findData(channel.signal_type.name)
-        if index >= 0:
-            self.type_combo.setCurrentIndex(index)
 
         self.enabled_check.setChecked(channel.enabled)
         self.update_type_designation()
