@@ -55,6 +55,23 @@ def test_plot_window_keeps_service_panels_compact():
     app.processEvents()
 
 
+def test_discrete_channel_is_visible_in_list_while_disabled():
+    app = QApplication.instance() or QApplication([])
+    channel = AnalogChannel(
+        id=4,
+        name="discrete",
+        signal_type=SignalType.DISCRETE,
+        enabled=False,
+    )
+    window = PlotWindow(SignalGenerator([channel]))
+
+    assert window.channels_list.count() == 1
+    assert window.channels_list.item(0).text().startswith("[D] Ch05:")
+
+    window.close()
+    app.processEvents()
+
+
 @pytest.mark.parametrize("signal_type", SignalType.get_discrete_types())
 def test_discrete_channel_is_added_to_plot_as_step_curve(signal_type: SignalType):
     app = QApplication.instance() or QApplication([])

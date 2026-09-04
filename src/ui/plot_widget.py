@@ -1057,6 +1057,7 @@ class PlotWindow(QMainWindow):
         self.channels_list.clear()
 
         for channel in self.generator.channels:
+            channel_kind = "D" if channel.signal_type.is_discrete() else "A"
             plot_indices = []
 
             for index, plot in enumerate(self.plot_widgets):
@@ -1069,9 +1070,9 @@ class PlotWindow(QMainWindow):
                 status = f" [Гр.{', '.join(plot_indices)}]"
 
             text = (
-                f"Ch{channel.id + 1:02d}: "
+                f"[{channel_kind}] Ch{channel.id + 1:02d}: "
                 f"{channel.name[:12]} "
-                f"({str(channel.signal_type)[:8]})"
+                f"({str(channel.signal_type)})"
                 f"{status}"
             )
 
