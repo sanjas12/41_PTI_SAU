@@ -124,7 +124,7 @@ def test_manual_channel_can_be_switched_to_discrete_type():
     )
 
     assert channel.signal_type == SignalType.DISCRETE
-    assert widget.type_badge.text() == "D"
+    assert widget.type_badge.text() == "D01"
     widget.close()
     app.processEvents()
 

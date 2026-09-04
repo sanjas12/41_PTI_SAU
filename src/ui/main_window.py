@@ -381,12 +381,25 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.mode_label)
 
         layout.addWidget(QLabel("Канал:"))
-        self.selected_channel_label = QLabel("Канал 1")
+        first_channel = self.generator.channels[0] if self.generator.channels else None
+        if first_channel is not None:
+            first_designation = first_channel.signal_type.channel_designation(
+                first_channel.id
+            )
+            selected_channel_text = f"{first_designation}: {first_channel.name}"
+        else:
+            selected_channel_text = "Не выбран"
+        self.selected_channel_label = QLabel(selected_channel_text)
+        self.selected_channel_label.setProperty(
+            "channel_id", first_channel.id if first_channel is not None else None
+        )
         self.selected_channel_label.setStyleSheet("color: #0066CC; font-weight: bold;")
         layout.addWidget(self.selected_channel_label)
 
         layout.addWidget(QLabel("Тип:"))
-        self.selected_type_label = QLabel("Sine")
+        self.selected_type_label = QLabel(
+            str(first_channel.signal_type) if first_channel is not None else "—"
+        )
         self.selected_type_label.setObjectName("secondaryText")
         layout.addWidget(self.selected_type_label)
 
@@ -420,8 +433,9 @@ class MainWindow(QMainWindow):
     def on_channel_settings_changed(self, channel_id: int):
         channel = self.generator.get_channel(channel_id)
         if channel:
+            designation = channel.signal_type.channel_designation(channel.id)
             self.log(
-                f"Канал {channel_id + 1}: изменены настройки "
+                f"{designation}: изменены настройки "
                 f"(границы: {channel.min_value:.1f}-{channel.max_value:.1f}, "
                 f"частота: {channel.frequency:.1f} Гц, "
                 f"амплитуда: {channel.amplitude:.0f}%)",
@@ -429,7 +443,7 @@ class MainWindow(QMainWindow):
             )
             self._save_channels_config()
 
-            if self.selected_channel_label.text().startswith(f"Канал {channel_id + 1}"):
+            if self.selected_channel_label.property("channel_id") == channel_id:
                 self.selected_bounds_label.setText(
                     f"{channel.min_value:.0f} - {channel.max_value:.0f}"
                 )
@@ -468,12 +482,12 @@ class MainWindow(QMainWindow):
         self._rebuild_manual_channel_layout()
         channel = self.generator.get_channel(channel_id)
         if channel:
-            self.log(
-                f"Канал {channel_id + 1}: тип сигнала изменен на {type_name}", "info"
-            )
+            designation = channel.signal_type.channel_designation(channel.id)
+            self.log(f"{designation}: тип сигнала изменён на {type_name}", "info")
             self._save_channels_config()
 
-            if self.selected_channel_label.text().startswith(f"Канал {channel_id + 1}"):
+            if self.selected_channel_label.property("channel_id") == channel_id:
+                self.selected_channel_label.setText(f"{designation}: {channel.name}")
                 self.selected_type_label.setText(type_name)
 
     def on_signal_interval_changed(self, interval: float):
@@ -555,14 +569,14 @@ class MainWindow(QMainWindow):
     def on_channel_selected(self, channel_id):
         channel = self.generator.get_channel(channel_id)
         if channel:
-            self.selected_channel_label.setText(
-                f"Канал {channel_id + 1}: {channel.name}"
-            )
+            designation = channel.signal_type.channel_designation(channel.id)
+            self.selected_channel_label.setText(f"{designation}: {channel.name}")
+            self.selected_channel_label.setProperty("channel_id", channel_id)
             self.selected_type_label.setText(str(channel.signal_type))
             self.selected_bounds_label.setText(
                 f"{channel.min_value:.0f} - {channel.max_value:.0f}"
             )
-            self.status_label.setText(f"📊 Канал {channel_id + 1}: {channel.name}")
+            self.status_label.setText(f"📊 {designation}: {channel.name}")
             self.status_label.setStyleSheet(
                 "color: #0066CC; font-weight: bold; font-size: 12px;"
             )

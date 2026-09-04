@@ -26,7 +26,8 @@ class ChannelSettingsDialog(QDialog):
     def __init__(self, channel: AnalogChannel, parent=None):
         super().__init__(parent)
         self.channel = channel
-        self.setWindowTitle(f"Настройки канала {channel.id + 1}: {channel.name}")
+        designation = channel.signal_type.channel_designation(channel.id)
+        self.setWindowTitle(f"Настройки {designation}: {channel.name}")
         self.setModal(True)
         self.setup_ui()
 
@@ -179,10 +180,10 @@ class ChannelWidget(QFrame):
         header_layout.setContentsMargins(0, 0, 0, 0)
         self.type_badge = QLabel()
         self.type_badge.setAlignment(Qt.AlignCenter)
-        self.type_badge.setFixedWidth(22)
+        self.type_badge.setFixedWidth(36)
         header_layout.addWidget(self.type_badge)
 
-        self.name_label = QLabel(f"Ch{self.channel.id + 1}: {self.channel.name}")
+        self.name_label = QLabel(self.channel.name)
         self.name_label.setObjectName("channelName")
         self.name_label.setAlignment(Qt.AlignCenter)
         self.name_label.setFont(QFont("Arial", 8, QFont.Bold))
@@ -255,7 +256,7 @@ class ChannelWidget(QFrame):
     def update_type_designation(self) -> None:
         """Показать обозначение аналогового или дискретного канала."""
         is_discrete = self.channel.signal_type.is_discrete()
-        designation = "D" if is_discrete else "A"
+        designation = self.channel.signal_type.channel_designation(self.channel.id)
         color = "#3b82f6" if is_discrete else "#22a06b"
         kind = "Дискретный" if is_discrete else "Аналоговый"
         self.type_badge.setText(designation)
@@ -294,7 +295,7 @@ class ChannelWidget(QFrame):
             self.channel.duty_cycle = settings["duty_cycle"]
             self.channel.pulse_width = settings["pulse_width"]
 
-            self.name_label.setText(f"Ch{self.channel.id + 1}: {self.channel.name}")
+            self.name_label.setText(self.channel.name)
             self.min_label.setText(f"{self.channel.min_value:.0f}")
             self.max_label.setText(f"{self.channel.max_value:.0f}")
 
@@ -367,7 +368,7 @@ class ChannelWidget(QFrame):
 
     def update_channel(self, channel: AnalogChannel):
         self.channel = channel
-        self.name_label.setText(f"Ch{channel.id + 1}: {channel.name}")
+        self.name_label.setText(channel.name)
         self.min_label.setText(f"{channel.min_value:.0f}")
         self.max_label.setText(f"{channel.max_value:.0f}")
 
