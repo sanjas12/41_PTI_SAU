@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 
+# версия: 0.1
+
 # Назначение: собирает standalone-приложение через cx_Freeze и build.py.
 # Скрипт вычисляет номер Git-ревизии, временно записывает его в
 # src/_revision.py, полностью пересоздаёт каталог build/ и запускает сборку
-# интерпретатором из .venv/Scripts/python.exe. После успешной сборки временный
-# файл ревизии удаляется.
+# интерпретатором из .venv. В логе выводятся размеры сборки и самых крупных
+# файлов. По умолчанию зависимости не изменяются и ничего не скачивается.
+# Временный файл ревизии удаляется и после успешной сборки, и при ошибке.
 # ВАЖНО: существующее содержимое build/ удаляется перед началом сборки; скрипт
-# рассчитан на Windows-окружение с заранее подготовленной .venv.
+# рассчитан на Windows и поддерживает три режима:
+#   bash scripts/build.sh                   — сборка из готовой .venv (офлайн);
+#   bash scripts/build.sh --prepare         — установить dev + build через uv;
+#   bash scripts/build.sh --prepare-offline — установить их только из кэша uv.
 
 set -e
 set -u
@@ -24,11 +30,62 @@ if [ ! -f "$BUILD_FILE" ]; then
     exit 1
 fi
 
+PYTHON_EXE="$PROJECT_ROOT/.venv/Scripts/python.exe"
+PREPARE_MODE="${1:-}"
+
+case "$PREPARE_MODE" in
+    "")
+        ;;
+    --prepare|--prepare-offline)
+        if ! command -v uv > /dev/null 2>&1; then
+            echo "[ERROR] Для режима $PREPARE_MODE требуется uv."
+            exit 1
+        fi
+        export UV_LINK_MODE=copy
+        UV_SYNC_ARGS=(sync --frozen --group dev --group build)
+        if [ "$PREPARE_MODE" = "--prepare-offline" ]; then
+            UV_SYNC_ARGS+=(--offline)
+        fi
+        echo "Preparing dev + build environment ($PREPARE_MODE)..."
+        if ! uv "${UV_SYNC_ARGS[@]}"; then
+            echo "[ERROR] Не удалось подготовить dev + build зависимости."
+            exit 1
+        fi
+        ;;
+    *)
+        echo "[ERROR] Неизвестный параметр: $PREPARE_MODE"
+        echo "Использование: bash scripts/build.sh [--prepare|--prepare-offline]"
+        exit 1
+        ;;
+esac
+
+if [ ! -f "$PYTHON_EXE" ]; then
+    echo "[ERROR] Не найден $PYTHON_EXE"
+    echo "Подготовь .venv вручную или запусти build.sh с параметром --prepare."
+    exit 1
+fi
+
+if ! "$PYTHON_EXE" -c "import cx_Freeze" > /dev/null 2>&1; then
+    echo "[ERROR] В .venv не установлен cx-Freeze."
+    echo "Онлайн:  bash scripts/build.sh --prepare"
+    echo "Офлайн:  установи cx-Freeze 7.2.10 из локальных wheel-файлов"
+    echo "         или используй --prepare-offline, если пакет есть в кэше uv."
+    exit 1
+fi
+
 # Папка сборки
 BUILD_DIR="$PROJECT_ROOT/build"
 
 # ── Запекаем git-ревизию ────────────────────────────────────────────────────
 REVISION_FILE="$PROJECT_ROOT/src/_revision.py"
+
+cleanup_revision() {
+    if [ -f "$REVISION_FILE" ]; then
+        rm -f "$REVISION_FILE"
+        echo "Удалён временный файл: $REVISION_FILE"
+    fi
+}
+trap cleanup_revision EXIT
 
 if git rev-list --count HEAD > /dev/null 2>&1; then
     GIT_COUNT=$(git rev-list --count HEAD)
@@ -59,12 +116,10 @@ mkdir -p "$BUILD_DIR"
 # Запуск сборки
 echo "Building package..."
 cd "$PROJECT_ROOT"
-"$PROJECT_ROOT/.venv/Scripts/python.exe" build.py build -q
+"$PYTHON_EXE" build.py build -q
 
-if [ -f "$REVISION_FILE" ]; then
-    rm "$REVISION_FILE"
-    echo "Удалён временный файл: $REVISION_FILE"
-fi
+cleanup_revision
+trap - EXIT
 
 echo "Build completed successfully."
-find "$BUILD_DIR" -type d -name "TG_NALADKA.*" -print
+find "$BUILD_DIR" -type d -name "TG-Naladka-*" -print

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# версия: 0.1
+
 # Сам release.sh автоматически объединять ветки не должен: выпуск релиза и
 # решение о переносе изменений в master лучше оставлять отдельными операциями.
 # Использовать только для выпуска готовой версии из ветки master, когда все
@@ -9,8 +11,8 @@
 # а затем отправляет релиз в origin. Для обычной разработки не запускать.
 
 # 1. Логирование        — пишет лог в logs/release_ДАТА.log
-# 2. Git checkout       — переключается на master и pull
-# 3. Тесты              — unit + integration + GUI с покрытием, стоп при ошибке
+# 2. Git checkout       — переключается на master, pull и проверяет develop
+# 3. Проверки           — синтаксис, все тесты, pre-commit и mypy
 # 4. Коммиты            — показывает что войдёт в релиз
 # 5. Меню               — авто / PATCH / MINOR / MAJOR / вручную
 # 6. Bump               — cz bump с выбранным типом
@@ -43,11 +45,20 @@ log_info "Рабочая папка: $(pwd)"
 log_info "Git версия: $(git --version)"
 log_info "Log файл: $LOG_FILE"
 
+START_BRANCH=$(git branch --show-current)
+
 # ─── Кодировка ────────────────────────────────────────────────
 export PYTHONIOENCODING=utf-8
 export PYTHONUTF8=1
 # На Windows uv иногда не может создавать hardlink между кэшем и проектом.
 export UV_LINK_MODE=copy
+
+# ─── Предварительная проверка Git ─────────────────────────────
+if [ -n "$(git status --porcelain)" ]; then
+    log_error "Рабочее дерево Git содержит незакоммиченные изменения."
+    log_error "Закоммить или отложи их перед запуском release.sh."
+    exit 1
+fi
 
 # ─── Git: переключаемся на master ─────────────────────────────
 echo ""
@@ -63,6 +74,25 @@ if ! git pull origin master; then
     exit 1
 fi
 log_ok "master актуален"
+
+# release.sh не объединяет ветки автоматически, но не должен выпускать
+# устаревший master, если в локальном develop остались неслитые изменения.
+if git show-ref --verify --quiet refs/heads/develop; then
+    if ! git merge-base --is-ancestor develop master; then
+        log_error "Ветка develop содержит изменения, которых ещё нет в master."
+        log_error "Релиз из устаревшего master отменён. Выполни:"
+        log_error "  git checkout master"
+        log_error "  git merge --ff-only develop"
+        log_error "Затем повторно запусти bash scripts/release.sh."
+        exit 1
+    fi
+    log_ok "Все локальные изменения develop уже включены в master"
+elif [ "$START_BRANCH" = "develop" ]; then
+    log_error "До переключения была активна develop, но локальная ветка больше не найдена."
+    exit 1
+else
+    log_warn "Локальная ветка develop не найдена — проверка её слияния пропущена."
+fi
 
 # ─── Проверка новых коммитов ──────────────────────────────────
 # Commitizen не создаёт обычный релиз, если после последнего тега нет коммитов.
@@ -88,12 +118,32 @@ if ! uv sync --frozen --group dev; then
 fi
 log_ok "Тестовое окружение готово"
 
-log_info "Запускаем unit, integration и GUI-тесты с настройками из pyproject.toml"
-if ! uv run --frozen pytest tests/unit tests/integration tests/gui; then
+log_info "Проверяем синтаксис Python"
+if ! uv run --frozen python -m compileall -q src tests; then
+    log_error "Синтаксическая проверка не прошла! Релиз отменён."
+    exit 1
+fi
+log_ok "Синтаксис Python проверен"
+
+log_info "Запускаем все тесты из каталога tests"
+if ! uv run --frozen pytest tests; then
     log_error "Тесты не прошли! Релиз отменён."
     exit 1
 fi
 log_ok "Все тесты прошли успешно"
+
+log_info "Запускаем pre-commit, включая mypy"
+if ! uv run --frozen pre-commit run --all-files; then
+    log_error "Pre-commit-проверки не прошли! Исправь изменения и повтори релиз."
+    exit 1
+fi
+log_ok "Pre-commit-проверки прошли успешно"
+
+if [ -n "$(git status --porcelain)" ]; then
+    log_error "Проверки изменили файлы или создали незакоммиченные изменения."
+    log_error "Проверь git diff, закоммить исправления и повтори релиз."
+    exit 1
+fi
 
 # ─── Коммиты с последнего релиза ──────────────────────────────
 echo ""
@@ -111,14 +161,14 @@ fi
 echo ""
 log_info "Определяем версии"
 
-if ! CURRENT=$(uv run cz version --project 2>&1); then
+if ! CURRENT=$(uv run --frozen cz version --project 2>&1); then
     log_error "Не удалось получить текущую версию: $CURRENT"
     exit 1
 fi
 
-PATCH=$(uv run cz bump --increment PATCH --dry-run 2>&1 | grep "tag to create" | awk '{print $NF}')
-MINOR=$(uv run cz bump --increment MINOR --dry-run 2>&1 | grep "tag to create" | awk '{print $NF}')
-MAJOR=$(uv run cz bump --increment MAJOR --dry-run 2>&1 | grep "tag to create" | awk '{print $NF}')
+PATCH=$(uv run --frozen cz bump --increment PATCH --dry-run 2>&1 | grep "tag to create" | awk '{print $NF}')
+MINOR=$(uv run --frozen cz bump --increment MINOR --dry-run 2>&1 | grep "tag to create" | awk '{print $NF}')
+MAJOR=$(uv run --frozen cz bump --increment MAJOR --dry-run 2>&1 | grep "tag to create" | awk '{print $NF}')
 
 log_info "Текущая версия: $CURRENT"
 
@@ -136,10 +186,10 @@ log_info "Выбор пользователя: $choice"
 
 # ─── Bump ─────────────────────────────────────────────────────
 do_bump() {
-    local cmd=$1
-    local label=$2
-    log_info "Запускаем: $cmd"
-    if ! eval "$cmd"; then
+    local label=$1
+    shift
+    log_info "Запускаем: $*"
+    if ! "$@"; then
         log_error "Ошибка при bump: $label"
         exit 1
     fi
@@ -148,27 +198,31 @@ do_bump() {
 
 case $choice in
     1)
-        uv run cz bump --dry-run
+        uv run --frozen cz bump --dry-run
         read -p "Продолжить? (y/n): " confirm
-        [ "$confirm" = "y" ] && do_bump "uv run cz bump" "авто" || { log_info "Отменено."; exit 0; }
+        [ "$confirm" = "y" ] && do_bump "авто" uv run --frozen cz bump || { log_info "Отменено."; exit 0; }
         ;;
     2)
         read -p "Продолжить? $CURRENT → $PATCH (y/n): " confirm
-        [ "$confirm" = "y" ] && do_bump "uv run cz bump --increment PATCH" "PATCH" || { log_info "Отменено."; exit 0; }
+        [ "$confirm" = "y" ] && do_bump "PATCH" uv run --frozen cz bump --increment PATCH || { log_info "Отменено."; exit 0; }
         ;;
     3)
         read -p "Продолжить? $CURRENT → $MINOR (y/n): " confirm
-        [ "$confirm" = "y" ] && do_bump "uv run cz bump --increment MINOR" "MINOR" || { log_info "Отменено."; exit 0; }
+        [ "$confirm" = "y" ] && do_bump "MINOR" uv run --frozen cz bump --increment MINOR || { log_info "Отменено."; exit 0; }
         ;;
     4)
         read -p "Продолжить? $CURRENT → $MAJOR (y/n): " confirm
-        [ "$confirm" = "y" ] && do_bump "uv run cz bump --increment MAJOR" "MAJOR" || { log_info "Отменено."; exit 0; }
+        [ "$confirm" = "y" ] && do_bump "MAJOR" uv run --frozen cz bump --increment MAJOR || { log_info "Отменено."; exit 0; }
         ;;
     5)
         read -p "Введи версию (например 1.2.0): " manual_version
+        if [[ ! "$manual_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            log_error "Некорректный формат версии: $manual_version"
+            exit 1
+        fi
         read -p "Продолжить? $CURRENT → $manual_version (y/n): " confirm
         if [ "$confirm" = "y" ]; then
-            do_bump "uv run cz bump --version $manual_version" "manual $manual_version"
+            do_bump "manual $manual_version" uv run --frozen cz bump "$manual_version"
         else
             log_info "Отменено."
             exit 0
