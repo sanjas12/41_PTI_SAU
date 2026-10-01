@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt, QThreadPool, QTimer
 from PyQt5.QtWidgets import (
     QApplication,
     QButtonGroup,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -18,7 +19,6 @@ from PyQt5.QtWidgets import (
     QStackedWidget,
     QVBoxLayout,
     QWidget,
-    QGridLayout,
 )
 
 from _version import __full_version__
@@ -55,29 +55,27 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(__full_version__)
         self.setGeometry(100, 100, 1400, 900)
 
-        # --- Настройки UI (тема, масштаб) ---
+        # Настройки UI (тема + масштаб)
         self.ui_settings = UISettings.instance()
 
-        # --- Путь к файлу конфигурации каналов ---
+        # Путь к файлу конфигурации каналов
         self.config_path = self._get_config_path()
 
-        # --- Генератор сигналов ---
+        # Каналы
         self.generator = SignalGenerator()
         self._setup_channels()
 
-        # --- Движок сценариев ---
+        # Движок сценариев
         self.scenario_engine = ScenarioEngine(self.generator, self)
         self.scenario_engine.log_signal.connect(self.log)
         self.scenario_engine.mode_changed.connect(self.on_scenario_mode_changed)
         self.scenario_engine.scenario_started.connect(self.on_scenario_started)
         self.scenario_engine.scenario_stopped.connect(self.on_scenario_stopped)
         self.scenario_engine.scenario_finished.connect(self.on_scenario_finished)
-        self.scenario_engine.progress_changed.connect(
-            self.on_scenario_progress_changed
-        )
+        self.scenario_engine.progress_changed.connect(self.on_scenario_progress_changed)
         self.scenario_engine.time_updated.connect(self.on_scenario_time_updated)
 
-        # --- Интерфейсы устройств вывода ---
+        # Интерфейс с МУ210-501 (основной) и PLC (резервный)
         self.output_interface = MU210Interface(self.generator, self)
         self.scenario_engine.start_validator = self._validate_scenario_output_map
         self.scenario_engine.validation_failed.connect(
@@ -95,39 +93,39 @@ class MainWindow(QMainWindow):
         )
         self.output_interface.debug_data.connect(self.on_output_debug_data)
 
-        self.plc_interface.connection_status.connect(
-            self.on_output_connection_status
-        )
+        self.plc_interface.connection_status.connect(self.on_output_connection_status)
         self.plc_interface.error_occurred.connect(
             lambda e: self.log(f"PLC/Simulator: {e}", "error")
         )
         self.plc_interface.debug_data.connect(self.on_output_debug_data)
 
-        # --- Состояние приложения ---
+        # Состояние приложения
         self.frame_count = 0
         self.is_running = False
         self.is_paused = False
         self._engine_mode = "manual"
 
-        # --- Внешние окна ---
+        # Внешние окна
         self.plot_window: PlotWindow | None = None
         self.plc_view: PLCRegisterView | None = None
         self.connection_dialog: ConnectionDialog | None = None
         self.settings_dialog: SettingsDialog | None = None
 
-        # --- UI ---
+        # Собираем UI
         self.setup_ui()
 
-        # --- Таймер обновления ---
+        # Применяем сохранённую тему
+        self._apply_theme(self.ui_settings.theme)
+
+        # Таймер запускается только по Play
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_signals)
 
-        # --- Первичная синхронизация ---
-        self._apply_theme(self.ui_settings.theme)
+        # Синхронизация UI с исходным состоянием
         self._refresh_status_bar()
         self._refresh_control_buttons()
 
-        # --- Пул потоков ---
+        # Пул потоков для асинхронных операций
         self.thread_pool = QThreadPool.globalInstance()
 
     # ==================================================================
@@ -313,9 +311,8 @@ class MainWindow(QMainWindow):
         self.toolbar.save_clicked.connect(self.save_channels)
         self.toolbar.settings_clicked.connect(self.open_settings_dialog)
         self.addToolBar(self.toolbar)
-        self.toolbar.apply_theme(self.ui_settings.theme)
 
-        # --- Строка состояния ---
+        # --- StatusBar ---
         self.status_bar = AppStatusBar(self)
         self.setStatusBar(self.status_bar)
 
@@ -327,31 +324,26 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Horizontal)
         main_layout.addWidget(splitter)
 
-        # Левая панель — управление каналами
+        # Левая панель — управление + рабочая область
         left_container = QWidget()
         left_layout = QVBoxLayout()
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(6)
         left_container.setLayout(left_layout)
 
-        channels_group = QGroupBox("Управление каналами")
-        channels_group_layout = QVBoxLayout()
-        channels_group_layout.setContentsMargins(6, 10, 6, 6)
-        channels_group.setLayout(channels_group_layout)
-
-        # --- ControlPanel (общий для ручного режима и сценария) ---
-        self.control_panel = ControlPanel()
-        self.control_panel.play_clicked.connect(self.on_play_clicked)
-        self.control_panel.stop_clicked.connect(self.on_stop_clicked)
-        self.control_panel.pause_clicked.connect(self.on_pause_clicked)
-        self.control_panel.reset_clicked.connect(self.reset_signals)
-        self.control_panel.plot_clicked.connect(self.open_plot_window)
-        self.control_panel.plc_clicked.connect(self.open_plc_view)
-        self.control_panel.save_channels_clicked.connect(self.save_channels)
-        self.control_panel.toggle_all_clicked.connect(
-            self.on_toggle_all_channels_clicked
-        )
-        channels_group_layout.addWidget(self.control_panel)
+        # --- ControlPanel (сам является GroupBox — без обёртки) ---
+        # self.control_panel = ControlPanel()
+        # self.control_panel.play_clicked.connect(self.on_play_clicked)
+        # self.control_panel.stop_clicked.connect(self.on_stop_clicked)
+        # self.control_panel.pause_clicked.connect(self.on_pause_clicked)
+        # self.control_panel.reset_clicked.connect(self.reset_signals)
+        # self.control_panel.plot_clicked.connect(self.open_plot_window)
+        # self.control_panel.plc_clicked.connect(self.open_plc_view)
+        # self.control_panel.save_channels_clicked.connect(self.save_channels)
+        # self.control_panel.toggle_all_clicked.connect(
+        #     self.on_toggle_all_channels_clicked
+        # )
+        # left_layout.addWidget(self.control_panel)
 
         # --- Сегментированный тумблер: Ручной ⇄ Сценарий ---
         mode_row = QHBoxLayout()
@@ -380,7 +372,7 @@ class MainWindow(QMainWindow):
         mode_row.addWidget(self.manual_mode_btn)
         mode_row.addWidget(self.scenario_mode_btn)
         mode_row.addStretch()
-        channels_group_layout.addLayout(mode_row)
+        left_layout.addLayout(mode_row)
 
         # --- Переключаемая часть: сетка каналов ⇄ конструктор сценария ---
         scenario_group = QGroupBox("Сценарий")
@@ -466,8 +458,7 @@ class MainWindow(QMainWindow):
         self.mode_stack.addWidget(self.channel_grid_scroll)
         self.mode_stack.addWidget(scenario_group)
 
-        channels_group_layout.addWidget(self.mode_stack, 1)
-        left_layout.addWidget(channels_group, 1)
+        left_layout.addWidget(self.mode_stack, 1)
         splitter.addWidget(left_container)
 
         # Правая панель — журнал событий
@@ -539,7 +530,38 @@ class MainWindow(QMainWindow):
         )
 
     # ==================================================================
-    # Диалоги: подключение, настройки
+    # Тема и масштаб UI
+    # ==================================================================
+
+    def _apply_theme(self, theme_name: str) -> None:
+        """Применить тему ко всему приложению."""
+        self.ui_settings.theme = theme_name
+        large = self.ui_settings.is_large()
+        qss = build_stylesheet(theme_name, large=large)
+        app = QApplication.instance()
+        if app is not None:
+            app.setStyleSheet(qss)
+
+        if hasattr(self, "toolbar"):
+            self.toolbar.apply_theme(theme_name)
+        if hasattr(self, "menu_bar"):
+            self.menu_bar.sync_theme_actions(theme_name)
+
+        if self.plot_window is not None and self.plot_window.isVisible():
+            self.plot_window.apply_theme(theme_name)
+
+        self.log(f"Тема переключена: {theme_name}", "info")
+
+    def _apply_ui_scale(self, scale: str) -> None:
+        """Применить масштаб интерфейса."""
+        self.ui_settings.ui_scale = scale
+        self._apply_theme(self.ui_settings.theme)
+        if hasattr(self, "menu_bar"):
+            self.menu_bar.sync_scale_actions(scale)
+        self.log(f"Размер интерфейса: {scale}", "info")
+
+    # ==================================================================
+    # Диалоги
     # ==================================================================
 
     def open_connection_dialog(self) -> None:
@@ -558,7 +580,7 @@ class MainWindow(QMainWindow):
         self.connection_dialog.exec_()
 
     def open_settings_dialog(self) -> None:
-        """Открыть диалог настроек (тема, масштаб, интервалы)."""
+        """Открыть единый диалог настроек."""
         if self.settings_dialog is None:
             self.settings_dialog = SettingsDialog(self)
             self.settings_dialog.theme_changed.connect(self._apply_theme)
@@ -585,38 +607,6 @@ class MainWindow(QMainWindow):
                 "device_type": device_type,
             }
         )
-
-    # ==================================================================
-    # Тема и масштаб UI
-    # ==================================================================
-
-    def _apply_theme(self, theme_name: str) -> None:
-        """Применить тему ко всему приложению."""
-        self.ui_settings.theme = theme_name
-        large = self.ui_settings.is_large()
-        qss = build_stylesheet(theme_name, large=large)
-
-        app = QApplication.instance()
-        if app is not None:
-            app.setStyleSheet(qss)
-
-        if hasattr(self, "toolbar"):
-            self.toolbar.apply_theme(theme_name)
-        if hasattr(self, "menu_bar"):
-            self.menu_bar.sync_theme_actions(theme_name)
-
-        if self.plot_window is not None and self.plot_window.isVisible():
-            self.plot_window.apply_theme(theme_name)
-
-        self.log(f"Тема переключена: {theme_name}", "info")
-
-    def _apply_ui_scale(self, scale: str) -> None:
-        """Применить масштаб интерфейса (medium/large)."""
-        self.ui_settings.ui_scale = scale
-        self._apply_theme(self.ui_settings.theme)
-        if hasattr(self, "menu_bar"):
-            self.menu_bar.sync_scale_actions(scale)
-        self.log(f"Размер интерфейса: {scale}", "info")
 
     # ==================================================================
     # Строка состояния
@@ -657,7 +647,7 @@ class MainWindow(QMainWindow):
         )
 
     # ==================================================================
-    # Секции каналов
+    # Работа с секциями каналов
     # ==================================================================
 
     def _rebuild_manual_channel_layout(self) -> None:
@@ -675,8 +665,6 @@ class MainWindow(QMainWindow):
         discrete_widgets = [
             w for w in self.channel_widgets if w.channel.signal_type.is_discrete()
         ]
-
-        # Плотная сетка: 6 колонок вместо 4
         columns = 6
         for widgets, layout in (
             (analog_widgets, self.analog_channels_layout),
@@ -886,8 +874,8 @@ class MainWindow(QMainWindow):
     def open_plot_window(self) -> None:
         if self.plot_window is None or not self.plot_window.isVisible():
             self.plot_window = PlotWindow(self.generator, self)
-            self.plot_window.apply_theme(self.ui_settings.theme)
             self.plot_window.show()
+            self.plot_window.apply_theme(self.ui_settings.theme)
             self._auto_populate_plot_window()
             self._sync_generation_timer()
         else:
@@ -900,6 +888,7 @@ class MainWindow(QMainWindow):
             return
 
         if self._is_scenario_view_active():
+            # Режим сценария: один общий график для всех каналов сценария
             for channel_id in self._get_scenario_channel_ids():
                 self.plot_window.add_channel_to_plot(channel_id)
 
@@ -916,6 +905,7 @@ class MainWindow(QMainWindow):
                         "info",
                     )
         else:
+            # Ручной режим: каждый канал на своём графике
             channel_ids = self._get_enabled_manual_channel_ids()
             for i, channel_id in enumerate(channel_ids):
                 if i == 0 and self.plot_window.plot_widgets:
@@ -923,9 +913,7 @@ class MainWindow(QMainWindow):
                 else:
                     plot = self.plot_window.add_plot()
                     plot_index = plot.plot_index
-                self.plot_window.add_channel_to_plot(
-                    channel_id, plot_index=plot_index
-                )
+                self.plot_window.add_channel_to_plot(channel_id, plot_index=plot_index)
 
     def _get_enabled_manual_channel_ids(self) -> List[int]:
         return [c.id for c in self.generator.channels if c.enabled]
@@ -1015,34 +1003,30 @@ class MainWindow(QMainWindow):
         self._refresh_status_bar()
 
     def _refresh_control_buttons(self) -> None:
-        """Состояние Play/Stop/Пауза/прогресса в ControlPanel и Toolbar."""
+        """Состояние Play/Stop/Пауза/прогресса в ControlPanel и ToolBar."""
         if not (hasattr(self, "control_panel") and self.control_panel):
             return
 
         if self._is_scenario_view_active():
             engine_mode = getattr(self, "_engine_mode", "manual")
             scenario_running = engine_mode in ("scenario", "paused")
-            paused = engine_mode == "paused"
-
             self.control_panel.set_running_state(scenario_running)
             self.control_panel.set_pause_enabled(scenario_running)
-            self.control_panel.set_pause_icon(paused=paused)
+            self.control_panel.set_pause_icon(paused=(engine_mode == "paused"))
             self.control_panel.set_progress_visible(True)
             self.control_panel.set_toggle_all_enabled(False)
-
             if hasattr(self, "toolbar"):
-                self.toolbar.set_running_state(scenario_running, paused=paused)
+                self.toolbar.set_running_state(
+                    scenario_running, paused=(engine_mode == "paused")
+                )
         else:
             self.control_panel.set_running_state(self.is_running)
             self.control_panel.set_pause_enabled(self.is_running)
             self.control_panel.set_pause_icon(paused=self.is_paused)
             self.control_panel.set_progress_visible(False)
             self.control_panel.set_toggle_all_enabled(True)
-
             if hasattr(self, "toolbar"):
-                self.toolbar.set_running_state(
-                    self.is_running, paused=self.is_paused
-                )
+                self.toolbar.set_running_state(self.is_running, paused=self.is_paused)
 
     def _is_scenario_view_active(self) -> bool:
         return hasattr(self, "mode_stack") and self.mode_stack.currentIndex() == 1
@@ -1119,6 +1103,8 @@ class MainWindow(QMainWindow):
 
     def on_scenario_definition_changed(self, scenario: Scenario) -> None:
         if self.scenario_engine.is_running():
+            return
+        if not hasattr(self, "control_panel") or not self.control_panel:
             return
         self.control_panel.set_progress(0)
         self.control_panel.set_scenario_time(0.0, scenario.get_total_duration())
