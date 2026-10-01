@@ -634,6 +634,10 @@ class ConnectionPanel(CollapsibleGroupBox):
         index = self.device_combo.findData(device_type)
         if index >= 0:
             self.device_combo.setCurrentIndex(index)
+        if hasattr(self, "device_combo"):
+            index = self.device_combo.findData(device_type)
+            if index >= 0:
+                self.device_combo.setCurrentIndex(index)
 
     def log_connection_event(self, message: str, level: str = "info"):
         """Логировать событие подключения (будет связано с журналом)"""

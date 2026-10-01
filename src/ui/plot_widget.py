@@ -1626,3 +1626,26 @@ class PlotWindow(QMainWindow):
         for plot in self.plot_widgets:
             plot.clear_plot()
         self._update_channels_list()
+
+    def apply_theme(self, theme_name: str) -> None:
+        """Применить тему к окну графиков."""
+        from ui.themes import get_theme
+        c = get_theme(theme_name)
+        for plot in self.plot_widgets:
+            plot.setBackground(c.plot_bg)
+            for axis_name in ("left", "bottom"):
+                axis = plot.getAxis(axis_name)
+                axis.setPen(pg.mkPen(c.plot_axis))
+                axis.setTextPen(pg.mkPen(c.plot_text))
+            # Пересоздать легенду с новыми цветами
+            if plot._legend is not None:
+                try:
+                    plot._legend.scene().removeItem(plot._legend)
+                except Exception:
+                    pass
+            plot._legend = plot.addLegend(
+                brush=pg.mkBrush(c.plot_legend_bg),
+                pen=pg.mkPen(c.plot_legend_border),
+            )
+            for channel_id, curve in plot.curves.items():
+                plot._legend.addItem(curve, plot.get_channel_name(channel_id))

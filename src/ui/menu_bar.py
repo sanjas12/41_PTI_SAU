@@ -78,9 +78,43 @@ class AppMenuBar(QMenuBar):
         # ----------------------------------------------------------
         settings_menu = self.addMenu("Настройки")
 
-        self.intervals_action = QAction("Интервалы обновления…", self)
-        self.intervals_action.setShortcut(QKeySequence("Ctrl+I"))
-        settings_menu.addAction(self.intervals_action)
+        self.settings_action = QAction("Настройки…", self)
+        self.settings_action.setShortcut(QKeySequence("Ctrl+I"))
+        settings_menu.addAction(self.settings_action)
+
+        settings_menu.addSeparator()
+
+        # Тема
+        theme_menu = settings_menu.addMenu("Тема")
+        self.theme_group = QActionGroup(self)
+        self.theme_group.setExclusive(True)
+
+        self.theme_light_action = QAction("Светлая", self)
+        self.theme_light_action.setCheckable(True)
+        self.theme_light_action.setChecked(True)
+        self.theme_group.addAction(self.theme_light_action)
+        theme_menu.addAction(self.theme_light_action)
+
+        self.theme_dark_action = QAction("Тёмная", self)
+        self.theme_dark_action.setCheckable(True)
+        self.theme_group.addAction(self.theme_dark_action)
+        theme_menu.addAction(self.theme_dark_action)
+
+        # Размер интерфейса
+        scale_menu = settings_menu.addMenu("Размер интерфейса")
+        self.scale_group = QActionGroup(self)
+        self.scale_group.setExclusive(True)
+
+        self.scale_medium_action = QAction("Средний", self)
+        self.scale_medium_action.setCheckable(True)
+        self.scale_medium_action.setChecked(True)
+        self.scale_group.addAction(self.scale_medium_action)
+        scale_menu.addAction(self.scale_medium_action)
+
+        self.scale_large_action = QAction("Крупный", self)
+        self.scale_large_action.setCheckable(True)
+        self.scale_group.addAction(self.scale_large_action)
+        scale_menu.addAction(self.scale_large_action)
 
         settings_menu.addSeparator()
 
@@ -100,3 +134,21 @@ class AppMenuBar(QMenuBar):
         self.about_action = QAction("О программе", self)
         self.about_action.setShortcut(QKeySequence("F1"))
         help_menu.addAction(self.about_action)
+
+    # ------------------------------------------------------------------
+    # Синхронизация состояния меню с настройками
+    # ------------------------------------------------------------------
+
+    def sync_theme_actions(self, theme: str) -> None:
+        """Отметить актуальную тему в меню."""
+        if theme == "dark":
+            self.theme_dark_action.setChecked(True)
+        else:
+            self.theme_light_action.setChecked(True)
+
+    def sync_scale_actions(self, scale: str) -> None:
+        """Отметить актуальный масштаб в меню."""
+        if scale == "large":
+            self.scale_large_action.setChecked(True)
+        else:
+            self.scale_medium_action.setChecked(True)

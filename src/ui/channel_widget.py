@@ -201,16 +201,16 @@ class ChannelWidget(QFrame):
         self.setObjectName("channelCard")
 
         layout = QVBoxLayout()
-        layout.setSpacing(3)
-        layout.setContentsMargins(6, 5, 6, 5)
+        layout.setSpacing(2)
+        layout.setContentsMargins(5, 4, 5, 4)
 
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(6)
+        header_layout.setSpacing(4)
 
         self.type_badge = QLabel()
         self.type_badge.setAlignment(Qt.AlignCenter)
-        self.type_badge.setFixedWidth(36)
+        self.type_badge.setFixedWidth(30)
         header_layout.addWidget(self.type_badge)
 
         self.name_label = QLabel(self.channel.name)
@@ -223,13 +223,13 @@ class ChannelWidget(QFrame):
         signal_layout.setContentsMargins(0, 0, 0, 0)
         self.type_name_label = QLabel(str(self.channel.signal_type))
         self.type_name_label.setObjectName("secondaryText")
-        signal_layout.addWidget(self.type_name_label)
+        signal_layout.addWidget(self.type_name_label, 1)
         signal_layout.addStretch()
 
         self.value_label = QLabel("0.00")
         self.value_label.setObjectName("channelValue")
         self.value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.value_label.setMinimumWidth(72)
+        self.value_label.setMinimumWidth(60)
         signal_layout.addWidget(self.value_label)
         layout.addLayout(signal_layout)
 
@@ -237,28 +237,19 @@ class ChannelWidget(QFrame):
         bar_layout = QVBoxLayout(self.bar_frame)
         bar_layout.setContentsMargins(0, 0, 0, 0)
         self.bar = QFrame()
-        self.bar.setFixedHeight(4)
-        self.bar.setStyleSheet(
-            f"background-color: {COLORS['success']}; border-radius: 2px;"
-        )
+        self.bar.setFixedHeight(3)
         bar_layout.addWidget(self.bar)
         layout.addWidget(self.bar_frame)
 
         controls_layout = QHBoxLayout()
         controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(4)
 
         self.enabled_check = QCheckBox("Вкл")
         self.enabled_check.setChecked(self.channel.enabled)
         self.enabled_check.stateChanged.connect(self.on_enabled_changed)
         controls_layout.addWidget(self.enabled_check)
         controls_layout.addStretch()
-        self.min_label = QLabel(f"{self.channel.min_value:.0f}")
-        self.min_label.setObjectName("channelBound")
-        self.max_label = QLabel(f"{self.channel.max_value:.0f}")
-        self.max_label.setObjectName("channelBound")
-        controls_layout.addWidget(self.min_label)
-        controls_layout.addWidget(QLabel("—"))
-        controls_layout.addWidget(self.max_label)
 
         self.settings_btn = QPushButton("⚙")
         self.settings_btn.setObjectName("iconButton")
@@ -268,7 +259,7 @@ class ChannelWidget(QFrame):
         layout.addLayout(controls_layout)
 
         self.setLayout(layout)
-        self.setMinimumWidth(170)
+        self.setMinimumWidth(140)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.update_type_designation()
 
