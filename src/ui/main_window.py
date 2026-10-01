@@ -33,13 +33,13 @@ from scenario.scenario_engine import ScenarioEngine
 from scenario.scenario_model import Scenario
 from scenario.scenario_widget import ScenarioWidget
 from ui.channel_widget import ChannelWidget
-
-# Импорты для сценариев - ВЫНОСИМ В КОНЕЦ ФАЙЛА
-from ui.connection_panel import ConnectionPanel
+from ui.connection_dialog import ConnectionDialog
 from ui.control_panel import ControlPanel
 from ui.event_log_panel import EventLogPanel
-from ui.interval_control import IntervalControl
+from ui.intervals_dialog import IntervalsDialog
+from ui.menu_bar import AppMenuBar
 from ui.plot_widget import PlotWindow
+from ui.status_bar import AppStatusBar
 
 
 class MainWindow(QMainWindow):
@@ -99,6 +99,10 @@ class MainWindow(QMainWindow):
         self.plot_window = None
         self.plc_view = None
 
+        # Внешние диалоги
+        self.connection_dialog = None
+        self.intervals_dialog = None
+
         # Настраиваем UI
         self.setup_ui()
 
@@ -106,7 +110,8 @@ class MainWindow(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_signals)
 
-        # Play доступен, Stop и Пауза недоступны до начала генерации.
+        # Синхронизируем строку состояния с исходным состоянием.
+        self._refresh_status_bar()
         self._refresh_control_buttons()
 
         # Потоковый пул для Modbus операций
@@ -270,10 +275,23 @@ class MainWindow(QMainWindow):
             self.log(f"Ошибка сохранения конфигурации каналов: {e}", "error")
             return False
 
+    # ==================================================================
+    # UI
+    # ==================================================================
+
     def setup_ui(self):
         """Настройка UI"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
+
+        # --- Верхнее меню ---
+        self.menu_bar = AppMenuBar(self)
+        self.setMenuBar(self.menu_bar)
+        self._connect_menu_actions()
+
+        # --- Строка состояния ---
+        self.status_bar = AppStatusBar(self)
+        self.setStatusBar(self.status_bar)
 
         main_layout = QHBoxLayout()
         main_layout.setContentsMargins(8, 8, 8, 8)
@@ -288,44 +306,15 @@ class MainWindow(QMainWindow):
         left_container_layout.setSpacing(6)
         left_container.setLayout(left_container_layout)
 
-        # --- Общие настройки, не зависящие от режима работы ---
-        # Подключение и интервалы образуют одну верхнюю строку. Основная
-        # рабочая область каналов остаётся ниже и занимает всю ширину.
-        settings_row = QHBoxLayout()
-        settings_row.setContentsMargins(0, 0, 0, 0)
-        settings_row.setSpacing(6)
-
-        self.connection_panel = ConnectionPanel()
-        self.connection_panel.connection_changed.connect(self.on_connection_changed)
-        self.connection_panel.connected.connect(self.on_connection_status_changed)
-        settings_row.addWidget(self.connection_panel, 1, Qt.AlignTop)
-
-        self.interval_control = IntervalControl()
-        self.interval_control.signal_interval_changed.connect(
-            self.on_signal_interval_changed
-        )
-        self.interval_control.plc_interval_changed.connect(self.on_plc_interval_changed)
-        settings_row.addWidget(self.interval_control, 1, Qt.AlignTop)
-
-        left_container_layout.addLayout(settings_row)
-
         # ============================================================
-        # СЕКЦИЯ "УПРАВЛЕНИЕ КАНАЛАМИ": режим + панель режима + сетка
+        # СЕКЦИЯ "УПРАВЛЕНИЕ КАНАЛАМИ"
         # ============================================================
-        # ControlPanel управляет именно каналами (Старт/Стоп генерации,
-        # Сброс), поэтому идеологически живёт в одной секции с сеткой
-        # каналов, а не отдельным блоком наверху. Второй режим работы тех
-        # же каналов — Сценарий. Сегментированный тумблер переключает,
-        # какая панель управления показана (ControlPanel/ScenarioWidget).
-        # Сетка каналов — часть ручного режима: видна только когда
-        # выбран "Ручной", в режиме "Сценарий" скрыта целиком.
-
         channels_group = QGroupBox("Управление каналами")
         channels_group_layout = QVBoxLayout()
         channels_group_layout.setContentsMargins(6, 10, 6, 6)
         channels_group.setLayout(channels_group_layout)
 
-        # --- ControlPanel: общая для обоих режимов, не переключается ---
+        # --- ControlPanel ---
         self.control_panel = ControlPanel()
         self.control_panel.play_clicked.connect(self.on_play_clicked)
         self.control_panel.stop_clicked.connect(self.on_stop_clicked)
@@ -338,7 +327,6 @@ class MainWindow(QMainWindow):
             self.on_toggle_all_channels_clicked
         )
         channels_group_layout.addWidget(self.control_panel)
-        channels_group_layout.addWidget(self._create_info_bar())
 
         # --- Сегментированный тумблер: Ручной ⇄ Сценарий ---
         mode_row = QHBoxLayout()
@@ -370,9 +358,6 @@ class MainWindow(QMainWindow):
         channels_group_layout.addLayout(mode_row)
 
         # --- Переключаемая часть: сетка каналов (ручной) ⇄ конструктор сценария ---
-        # QStackedWidget, а не QSplitter: сетка и конструктор сценария больше
-        # никогда не видны одновременно, делить между ними место не нужно —
-        # видимая страница получает всё доступное пространство целиком.
         scenario_group = QGroupBox("Сценарий")
         scenario_layout = QVBoxLayout()
         scenario_layout.setContentsMargins(5, 5, 5, 5)
@@ -464,93 +449,161 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([1050, 350])
 
-    def _create_info_bar(self):
-        """Создать компактную строку состояния внутри управления каналами."""
-        panel = QFrame()
-        panel.setObjectName("infoBar")
-        layout = QHBoxLayout(panel)
-        layout.setContentsMargins(8, 4, 8, 4)
-        layout.setSpacing(6)
+    # ==================================================================
+    # Меню → действия
+    # ==================================================================
 
-        self.status_label = QLabel("● Остановлен")
-        self.status_label.setStyleSheet("color: #FF4444; font-weight: bold;")
-        layout.addWidget(self.status_label)
+    def _connect_menu_actions(self) -> None:
+        """Связать пункты меню с методами окна."""
+        mb = self.menu_bar
 
-        layout.addWidget(QLabel("Режим:"))
-        self.mode_label = QLabel("Ручной")
-        self.mode_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
-        layout.addWidget(self.mode_label)
-
-        layout.addWidget(QLabel("Канал:"))
-        first_channel = self.generator.channels[0] if self.generator.channels else None
-        if first_channel is not None:
-            first_designation = self._manual_channel_designation(first_channel)
-            selected_channel_text = f"{first_designation}: {first_channel.name}"
-        else:
-            selected_channel_text = "Не выбран"
-        self.selected_channel_label = QLabel(selected_channel_text)
-        self.selected_channel_label.setProperty(
-            "channel_id", first_channel.id if first_channel is not None else None
+        # Файл
+        mb.open_scenario_action.triggered.connect(
+            lambda: self._open_scenario_from_menu()
         )
-        self.selected_channel_label.setStyleSheet("color: #0066CC; font-weight: bold;")
-        layout.addWidget(self.selected_channel_label)
-
-        layout.addWidget(QLabel("Тип:"))
-        self.selected_type_label = QLabel(
-            str(first_channel.signal_type) if first_channel is not None else "—"
+        mb.save_scenario_action.triggered.connect(
+            lambda: self._save_scenario_from_menu()
         )
-        self.selected_type_label.setObjectName("secondaryText")
-        layout.addWidget(self.selected_type_label)
+        mb.save_channels_action.triggered.connect(self.save_channels)
+        mb.exit_action.triggered.connect(self.close)
 
-        layout.addWidget(QLabel("Диапазон:"))
-        self.selected_bounds_label = QLabel("0 - 100")
-        self.selected_bounds_label.setObjectName("secondaryText")
-        layout.addWidget(self.selected_bounds_label)
-
-        channel_count = len(self.generator.channels)
-        active_count = sum(channel.enabled for channel in self.generator.channels)
-        self.stats_label = QLabel(
-            f"Каналов: {channel_count} · Активных: {active_count}"
+        # Подключение
+        mb.connect_action.triggered.connect(self.open_connection_dialog)
+        mb.disconnect_action.triggered.connect(self.disconnect_device)
+        mb.device_owen_action.triggered.connect(
+            lambda: self._select_device_from_menu("owen")
         )
-        self.stats_label.setObjectName("secondaryText")
-        layout.addWidget(self.stats_label)
-        layout.addStretch()
+        mb.device_plc_action.triggered.connect(
+            lambda: self._select_device_from_menu("plc")
+        )
+        mb.device_sim_action.triggered.connect(
+            lambda: self._select_device_from_menu("simulator")
+        )
 
-        version_label = QLabel(__full_version__)
-        version_label.setObjectName("secondaryText")
-        layout.addWidget(version_label)
-        return panel
+        # Настройки
+        mb.intervals_action.triggered.connect(self.open_intervals_dialog)
+        mb.plots_action.triggered.connect(self.open_plot_window)
+        mb.registers_action.triggered.connect(self.open_plc_view)
 
-    def save_channels(self):
-        """Сохранить настройки каналов"""
-        if self._save_channels_config():
-            self.log("Настройки каналов сохранены", "success")
-            QMessageBox.information(
-                self, "Успех", f"Настройки каналов сохранены в:\n{self.config_path}"
+        # Справка
+        mb.about_action.triggered.connect(self._show_about_dialog)
+
+    # ==================================================================
+    # Окна подключения и интервалов
+    # ==================================================================
+
+    def open_connection_dialog(self) -> None:
+        """Открыть модальное окно настроек подключения."""
+        if self.connection_dialog is None:
+            self.connection_dialog = ConnectionDialog(self)
+            self.connection_dialog.connected.connect(
+                self.on_connection_status_changed
             )
-        else:
-            QMessageBox.warning(
-                self, "Ошибка", "Не удалось сохранить настройки каналов"
+            self.connection_dialog.connection_changed.connect(
+                self.on_connection_changed
             )
-
-    def on_channel_settings_changed(self, channel_id: int):
-        channel = self.generator.get_channel(channel_id)
-        if channel:
-            designation = self._manual_channel_designation(channel)
-            self.log(
-                f"{designation}: изменены настройки "
-                f"(границы: {channel.min_value:.1f}-{channel.max_value:.1f}, "
-                f"частота: {channel.frequency:.1f} Гц, "
-                f"амплитуда: {channel.amplitude:.0f}%, "
-                f"МУ210 №{channel.mu210_module}/R{channel.mu210_register})",
-                "info",
+            # Синхронизируем актуальный статус.
+            self.connection_dialog.set_connection_status(
+                self.active_output_interface.is_connected()
             )
-            self._save_channels_config()
+        self.connection_dialog.exec_()
 
-            if self.selected_channel_label.property("channel_id") == channel_id:
-                self.selected_bounds_label.setText(
-                    f"{channel.min_value:.0f} - {channel.max_value:.0f}"
-                )
+    def open_intervals_dialog(self) -> None:
+        """Открыть модальное окно настроек интервалов."""
+        if self.intervals_dialog is None:
+            self.intervals_dialog = IntervalsDialog(self)
+            self.intervals_dialog.signal_interval_changed.connect(
+                self.on_signal_interval_changed
+            )
+            self.intervals_dialog.plc_interval_changed.connect(
+                self.on_plc_interval_changed
+            )
+        self.intervals_dialog.exec_()
+
+    def _select_device_from_menu(self, device_type: str) -> None:
+        """Переключить активное устройство вывода из меню."""
+        if device_type == self.active_device_type:
+            return
+        # Синхронизируем тумблер в диалоге подключения, если он есть.
+        if self.connection_dialog is not None:
+            self.connection_dialog.connection_panel.select_device_type(device_type)
+        # Дальнейшая логика уже реализована в on_connection_changed.
+        self.on_connection_changed(
+            {
+                "host": "",
+                "port": 0,
+                "unit_id": 1,
+                "device_type": device_type,
+            }
+        )
+
+    # ==================================================================
+    # Сценарий: меню
+    # ==================================================================
+
+    def _open_scenario_from_menu(self) -> None:
+        """Открыть сценарий через меню — переключаемся на вкладку и зовём виджет."""
+        self._show_channel_mode_view("scenario")
+        self.scenario_widget.load_scenario()
+
+    def _save_scenario_from_menu(self) -> None:
+        """Сохранить сценарий через меню — переключаемся на вкладку и зовём виджет."""
+        self._show_channel_mode_view("scenario")
+        self.scenario_widget.save_scenario()
+
+    # ==================================================================
+    # Справка
+    # ==================================================================
+
+    def _show_about_dialog(self) -> None:
+        QMessageBox.information(
+            self,
+            "О программе",
+            f"<b>Analog Signal Simulator</b><br>"
+            f"Версия: {__full_version__}<br><br>"
+            f"Симулятор аналоговых и дискретных сигналов с поддержкой "
+            f"МУ210-501, PLC Modicon Premium и сценарного управления.",
+        )
+
+    # ==================================================================
+    # Строка состояния
+    # ==================================================================
+
+    def _refresh_status_bar(self) -> None:
+        """Обновить все индикаторы строки состояния."""
+        if not hasattr(self, "status_bar"):
+            return
+
+        # Режим
+        self.status_bar.set_mode(getattr(self, "_engine_mode", "manual"))
+
+        # Работа/пауза
+        scenario_running = self.scenario_engine.is_running()
+        self.status_bar.set_running(
+            self.is_running or scenario_running, paused=self.is_paused
+        )
+
+        # Устройство
+        device_names = {
+            "plc": "PLC Modicon Premium",
+            "simulator": "Simulator",
+            "owen": "ОВЕН МУ210-501",
+        }
+        self.status_bar.set_device(
+            device_names.get(self.active_device_type, "—")
+        )
+
+        # Подключение
+        params = (
+            self.connection_dialog.connection_panel.get_connection_params()
+            if self.connection_dialog is not None
+            else {"host": "", "port": 0}
+        )
+        self.status_bar.set_connection(
+            self.active_output_interface.is_connected(),
+            params.get("host", ""),
+            params.get("port", 0),
+        )
 
     def _rebuild_manual_channel_layout(self) -> None:
         """Разнести карточки по секциям аналоговых и дискретных каналов."""
@@ -621,6 +674,36 @@ class MainWindow(QMainWindow):
         prefix = "D" if channel.signal_type.is_discrete() else "A"
         return f"{prefix}{category_number:02d}"
 
+    # ==================================================================
+    # Обработчики каналов
+    # ==================================================================
+
+    def save_channels(self):
+        """Сохранить настройки каналов"""
+        if self._save_channels_config():
+            self.log("Настройки каналов сохранены", "success")
+            QMessageBox.information(
+                self, "Успех", f"Настройки каналов сохранены в:\n{self.config_path}"
+            )
+        else:
+            QMessageBox.warning(
+                self, "Ошибка", "Не удалось сохранить настройки каналов"
+            )
+
+    def on_channel_settings_changed(self, channel_id: int):
+        channel = self.generator.get_channel(channel_id)
+        if channel:
+            designation = self._manual_channel_designation(channel)
+            self.log(
+                f"{designation}: изменены настройки "
+                f"(границы: {channel.min_value:.1f}-{channel.max_value:.1f}, "
+                f"частота: {channel.frequency:.1f} Гц, "
+                f"амплитуда: {channel.amplitude:.0f}%, "
+                f"МУ210 №{channel.mu210_module}/R{channel.mu210_register})",
+                "info",
+            )
+            self._save_channels_config()
+
     def on_channel_type_changed(self, channel_id: int, type_name: str):
         self._rebuild_manual_channel_layout()
         channel = self.generator.get_channel(channel_id)
@@ -629,29 +712,18 @@ class MainWindow(QMainWindow):
             self.log(f"{designation}: тип сигнала изменён на {type_name}", "info")
             self._save_channels_config()
 
-            if self.selected_channel_label.property("channel_id") == channel_id:
-                self.selected_channel_label.setText(f"{designation}: {channel.name}")
-                self.selected_type_label.setText(type_name)
+    def on_channel_selected(self, channel_id):
+        channel = self.generator.get_channel(channel_id)
+        if channel:
+            designation = self._manual_channel_designation(channel)
+            self.log(f"Выбран {designation}: {channel.name}", "debug")
 
     def on_signal_interval_changed(self, interval: float):
         self.generator.set_update_interval(interval)
         freq = 1.0 / interval if interval > 0 else 0
         self.log(
-            f"Интервал обновления сигналов изменен: {interval:.3f} с ({freq:.1f} Гц)",
+            f"Интервал обновления сигналов изменён: {interval:.3f} с ({freq:.1f} Гц)",
             "info",
-        )
-
-        self.status_label.setText(f"⏱ Сигналы: {interval:.3f} с")
-        self.status_label.setStyleSheet("color: #FF9800; font-weight: bold;")
-
-        from PyQt5.QtCore import QTimer
-
-        QTimer.singleShot(2000, lambda: self.status_label.setText("● Работает"))
-        QTimer.singleShot(
-            2000,
-            lambda: self.status_label.setStyleSheet(
-                "color: #00CC00; font-weight: bold;"
-            ),
         )
 
     def on_plc_interval_changed(self, interval: float):
@@ -664,11 +736,21 @@ class MainWindow(QMainWindow):
                 "info",
             )
 
+    # ==================================================================
+    # Подключение / устройство
+    # ==================================================================
+
+    def disconnect_device(self) -> None:
+        """Отключиться от активного устройства."""
+        if self.active_output_interface.is_connected():
+            self.active_output_interface.disconnect()
+        self._refresh_status_bar()
+
     def on_connection_changed(self, params):
-        host = params["host"]
-        port = params["port"]
-        unit_id = params["unit_id"]
-        device_type = params.get("device_type", "plc")
+        host = params.get("host", "")
+        port = params.get("port", 0)
+        unit_id = params.get("unit_id", 1)
+        device_type = params.get("device_type", self.active_device_type)
 
         try:
             previous_interface = self.active_output_interface
@@ -683,12 +765,14 @@ class MainWindow(QMainWindow):
                     self.plc_view = None
             self.active_output_interface = selected_interface
             self.active_device_type = device_type
-            selected_interface.configure(host, port, unit_id)
-            device_name = self._active_device_name()
-            self.log(
-                f"Настроен {device_name}: {host}:{port} (Unit ID: {unit_id})",
-                "info",
-            )
+            if host and port:
+                selected_interface.configure(host, port, unit_id)
+                device_name = self._active_device_name()
+                self.log(
+                    f"Настроен {device_name}: {host}:{port} (Unit ID: {unit_id})",
+                    "info",
+                )
+            self._refresh_status_bar()
         except Exception as e:
             self.log(f"Ошибка настройки подключения: {e}", "error")
 
@@ -705,16 +789,20 @@ class MainWindow(QMainWindow):
                         f"Подключение к {self._active_device_name()} установлено",
                         "success",
                     )
-                    self.connection_panel.set_connection_status(True)
                     active_interface.start_polling()
                 else:
                     self.log("Не удалось подключиться", "error")
-                    self.connection_panel.set_connection_status(False)
+                if self.connection_dialog is not None:
+                    self.connection_dialog.set_connection_status(
+                        active_interface.is_connected()
+                    )
+                self._refresh_status_bar()
 
             self._submit(active_interface.open, after_connect)
         else:
             self.active_output_interface.disconnect()
             self.log("Соединение закрыто", "info")
+            self._refresh_status_bar()
 
     def _active_device_name(self):
         return {
@@ -735,18 +823,9 @@ class MainWindow(QMainWindow):
         else:
             print(f"[{level.upper()}] {message}")
 
-    def on_channel_selected(self, channel_id):
-        channel = self.generator.get_channel(channel_id)
-        if channel:
-            designation = self._manual_channel_designation(channel)
-            self.selected_channel_label.setText(f"{designation}: {channel.name}")
-            self.selected_channel_label.setProperty("channel_id", channel_id)
-            self.selected_type_label.setText(str(channel.signal_type))
-            self.selected_bounds_label.setText(
-                f"{channel.min_value:.0f} - {channel.max_value:.0f}"
-            )
-            self.status_label.setText(f"📊 {designation}: {channel.name}")
-            self.status_label.setStyleSheet("color: #0066CC; font-weight: bold;")
+    # ==================================================================
+    # Графики / регистры
+    # ==================================================================
 
     def open_plot_window(self):
         if self.plot_window is None or not self.plot_window.isVisible():
@@ -772,44 +851,26 @@ class MainWindow(QMainWindow):
             return
 
         if self._is_scenario_view_active():
-            # --- РЕЖИМ СЦЕНАРИЯ ---
             channel_ids = self._get_scenario_channel_ids()
             for channel_id in channel_ids:
                 self.plot_window.add_channel_to_plot(channel_id)
 
-            # Устанавливаем время окна = общая длительность сценария
             scenario = getattr(self.scenario_widget, "scenario", None)
             if scenario:
                 total_duration = scenario.get_total_duration()
                 if total_duration > 0:
-                    # Добавляем запас 10% для наглядности
-                    time_window = total_duration * 1.1
-                    # Ограничиваем максимум 60 секунд
-                    time_window = min(time_window, 60.0)
-                    # Обновляем спинбокс и применяем к графикам
+                    time_window = min(total_duration * 1.1, 60.0)
                     self.plot_window.time_window_spin.setValue(time_window)
                     self.plot_window.on_time_window_changed(time_window)
-
-                    # Обновляем подпись в информационной панели
-                    self.status_label.setText(
-                        f"⏱ Окно: {time_window:.1f} с (по сценарию)"
-                    )
-                    self.status_label.setStyleSheet(
-                        "color: #4CAF50; font-weight: bold;"
-                    )
                     self.log(
                         f"Время окна графиков установлено: {time_window:.1f} с "
                         f"(общая длительность сценария: {total_duration:.1f} с)",
                         "info",
                     )
         else:
-            # --- РУЧНОЙ РЕЖИМ ---
             channel_ids = self._get_enabled_manual_channel_ids()
             for i, channel_id in enumerate(channel_ids):
                 if i == 0 and self.plot_window.plot_widgets:
-                    # Переиспользуем пустой график, который PlotWindow
-                    # уже создал сам при открытии — иначе он повис бы
-                    # пустым первым графиком перед всеми остальными.
                     plot_index = 0
                 else:
                     plot = self.plot_window.add_plot()
@@ -821,9 +882,7 @@ class MainWindow(QMainWindow):
         return [channel.id for channel in self.generator.channels if channel.enabled]
 
     def _get_scenario_channel_ids(self):
-        """ID каналов, задействованных хоть в одном шаге текущего
-        сценария (self.scenario_widget.scenario), без повторов, в
-        порядке первого появления."""
+        """ID каналов, задействованных хоть в одном шаге текущего сценария."""
         scenario = getattr(self.scenario_widget, "scenario", None)
         if not scenario or not getattr(scenario, "steps", None):
             return []
@@ -848,6 +907,11 @@ class MainWindow(QMainWindow):
             self.log(f"Интерфейс {self._active_device_name()} активен", "success")
         else:
             self.log(f"Интерфейс {self._active_device_name()} отключен", "warning")
+        self._refresh_status_bar()
+
+    # ==================================================================
+    # Режим сценария / ручной
+    # ==================================================================
 
     def on_scenario_mode_changed(self, mode: str):
         """Синхронизирует UI с фактическим режимом движка сценариев.
@@ -863,18 +927,12 @@ class MainWindow(QMainWindow):
         переключает только явный клик по тумблеру — см. request_channel_mode.
         """
         self._engine_mode = mode
-        if hasattr(self, "mode_label"):
-            mode_names = {
-                "manual": "Ручной",
-                "scenario": "Сценарий",
-                "paused": "Пауза",
-            }
-            self.mode_label.setText(mode_names.get(mode, mode))
         if mode in ("scenario", "paused"):
             self._show_channel_mode_view("scenario")
         else:
             self._refresh_control_buttons()
         self._sync_generation_timer()
+        self._refresh_status_bar()
 
     def _sync_generation_timer(self):
         """Общий self.timer (тот, что вызывает update_signals) должен
@@ -903,16 +961,10 @@ class MainWindow(QMainWindow):
             self.active_output_interface.set_output_enabled(should_run)
 
     def _show_channel_mode_view(self, view: str):
-        """Переключить ВИДИМУЮ панель (сетка каналов ИЛИ конструктор
-        сценария) — чисто UI-действие, движок не трогает.
-
-        Используется и явным кликом по тумблеру, и синхронизацией с
-        фактическим режимом движка (on_scenario_mode_changed).
-        """
+        """Переключить ВИДИМУЮ панель (сетка каналов ИЛИ конструктор сценария)."""
         is_scenario_view = view == "scenario"
 
         if hasattr(self, "mode_stack") and self.mode_stack:
-            # mode_stack: index 0 — сетка каналов (ручной), index 1 — конструктор сценария.
             self.mode_stack.setCurrentIndex(1 if is_scenario_view else 0)
 
         if hasattr(self, "manual_mode_btn") and hasattr(self, "scenario_mode_btn"):
@@ -925,17 +977,10 @@ class MainWindow(QMainWindow):
 
         self._refresh_control_buttons()
         self._sync_generation_timer()
+        self._refresh_status_bar()
 
     def _refresh_control_buttons(self):
-        """Единая точка, решающая состояние Play/Stop/Пауза/прогресс-бара
-        в ControlPanel — общей панели для ручного режима и сценария.
-
-        Что именно отражают кнопки, зависит от того, какая вкладка сейчас
-        выбрана: в "Сценарий" — состояние ScenarioEngine, в "Ручной" —
-        self.is_running/self.is_paused. Вызывается при любой смене вида
-        или состояния — это единственное место, где выставляется иконка
-        Пауза/Возобновить, чтобы не разъезжаться с реальным состоянием.
-        """
+        """Единая точка, решающая состояние Play/Stop/Пауза/прогресс-бара."""
         if not (hasattr(self, "control_panel") and self.control_panel):
             return
 
@@ -958,8 +1003,6 @@ class MainWindow(QMainWindow):
         return hasattr(self, "mode_stack") and self.mode_stack.currentIndex() == 1
 
     def on_play_clicked(self):
-        """Play: запускает сценарий, если открыта вкладка "Сценарий",
-        иначе — обычную ручную генерацию."""
         if self._is_scenario_view_active():
             self.scenario_widget.play_scenario()
         else:
@@ -972,9 +1015,6 @@ class MainWindow(QMainWindow):
             self.stop_generation()
 
     def on_pause_clicked(self):
-        """Пауза/Возобновить — работает одинаково в обоих режимах:
-        замораживает таймер, не сбрасывая состояние (в отличие от Stop).
-        Повторный клик по той же кнопке возобновляет."""
         if self._is_scenario_view_active():
             self.scenario_widget.pause_scenario()
         else:
@@ -983,11 +1023,15 @@ class MainWindow(QMainWindow):
             else:
                 self.pause_generation()
 
+    # ==================================================================
+    # Сценарий: сигналы движка
+    # ==================================================================
+
     def on_scenario_started(self, name: str):
         self._update_scenario_time(0.0)
         self._refresh_control_buttons()
+        self._refresh_status_bar()
 
-        # Показываем прогресс в окне графиков
         if self.plot_window and self.plot_window.isVisible():
             self.plot_window.begin_scenario_acquisition()
             self.plot_window.set_scenario_progress(0)
@@ -998,8 +1042,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "control_panel"):
             self.control_panel.set_progress(0)
             self._update_scenario_time(0.0)
+        self._refresh_status_bar()
 
-        # Скрываем прогресс в окне графиков
         if self.plot_window and self.plot_window.isVisible():
             self.plot_window.end_scenario_acquisition()
             self.plot_window.set_scenario_progress(0)
@@ -1012,7 +1056,6 @@ class MainWindow(QMainWindow):
             self._update_scenario_time(scenario.get_total_duration())
         self._refresh_control_buttons()
 
-        # Показываем завершение в окне графиков
         if self.plot_window and self.plot_window.isVisible():
             self.plot_window.end_scenario_acquisition()
             self.plot_window.set_scenario_progress(100)
@@ -1070,10 +1113,13 @@ class MainWindow(QMainWindow):
             self._show_channel_mode_view("scenario")
             return
 
-        # target_mode == "manual"
         if getattr(self, "_engine_mode", "manual") in ("scenario", "paused"):
             self.scenario_widget.set_engine_mode("manual")
         self._show_channel_mode_view("manual")
+
+    # ==================================================================
+    # Отладка
+    # ==================================================================
 
     def on_output_debug_data(self, debug_info: dict):
         if "values" in debug_info:
@@ -1085,6 +1131,10 @@ class MainWindow(QMainWindow):
             f"#{debug_info['write_count']}: {details}",
             "debug",
         )
+
+    # ==================================================================
+    # Старт / стоп / пауза
+    # ==================================================================
 
     def start_generation(self):
         if self.is_running:
@@ -1099,9 +1149,8 @@ class MainWindow(QMainWindow):
         self.is_running = True
         self.is_paused = False
         self._sync_generation_timer()
-        self.status_label.setText("● Работает")
-        self.status_label.setStyleSheet("color: #00CC00; font-weight: bold;")
         self._refresh_control_buttons()
+        self._refresh_status_bar()
 
     def _validate_scenario_output_map(self, scenario: Scenario) -> List[str]:
         """Проверять МУ210 только при активном соединении с этим устройством."""
@@ -1121,30 +1170,24 @@ class MainWindow(QMainWindow):
         self.is_running = False
         self.is_paused = False
         self._sync_generation_timer()
-        self.status_label.setText("● Остановлен")
-        self.status_label.setStyleSheet("color: #FF4444; font-weight: bold;")
         self._refresh_control_buttons()
+        self._refresh_status_bar()
 
     def pause_generation(self):
-        """Заморозить таймер, не сбрасывая is_running — в отличие от
-        stop_generation() это временная приостановка, из которой можно
-        вернуться resume_generation(), а не полный сброс состояния."""
         if not self.is_running or self.is_paused:
             return
         self.is_paused = True
         self._sync_generation_timer()
-        self.status_label.setText("⏸ Пауза")
-        self.status_label.setStyleSheet("color: #FF9800; font-weight: bold;")
         self._refresh_control_buttons()
+        self._refresh_status_bar()
 
     def resume_generation(self):
         if not self.is_running or not self.is_paused:
             return
         self.is_paused = False
         self._sync_generation_timer()
-        self.status_label.setText("● Работает")
-        self.status_label.setStyleSheet("color: #00CC00; font-weight: bold;")
         self._refresh_control_buttons()
+        self._refresh_status_bar()
 
     def reset_signals(self):
         """Сбросить сигналы и очистить графики."""
@@ -1185,6 +1228,10 @@ class MainWindow(QMainWindow):
             except (RuntimeError, AttributeError):
                 continue
 
+    # ==================================================================
+    # Цикл обновления
+    # ==================================================================
+
     def update_signals(self):
         """Обновить сигналы и UI"""
         scenario_running = (
@@ -1209,31 +1256,18 @@ class MainWindow(QMainWindow):
         for i, widget in enumerate(self.channel_widgets):
             if i >= len(self.generator.channels):
                 break
-
             try:
                 if widget is None:
                     continue
-
                 try:
                     widget.isHidden()
                 except RuntimeError:
                     continue
-
                 widget.update_display()
                 if self.generator.channels[i].enabled:
                     active_count += 1
-
             except (RuntimeError, AttributeError):
                 continue
-
-        # Обновляем статистику
-        try:
-            if self.stats_label:
-                self.stats_label.setText(
-                    f"Каналов: {len(self.generator.channels)} · Активных: {active_count}"
-                )
-        except (RuntimeError, AttributeError):
-            pass
 
         self.frame_count += 1
         if self.frame_count >= 50:
@@ -1243,6 +1277,8 @@ class MainWindow(QMainWindow):
                     self.control_panel.update_fps(fps)
             except (RuntimeError, AttributeError):
                 pass
+            if hasattr(self, "status_bar"):
+                self.status_bar.set_fps(fps)
             self.frame_count = 0
 
     def closeEvent(self, event):  # type: ignore # noqa: N802
@@ -1253,6 +1289,10 @@ class MainWindow(QMainWindow):
             self.plot_window.close()
         if self.plc_view:
             self.plc_view.close()
+        if self.connection_dialog:
+            self.connection_dialog.close()
+        if self.intervals_dialog:
+            self.intervals_dialog.close()
         self.output_interface.disconnect()
         self.plc_interface.disconnect()
         event.accept()

@@ -629,6 +629,12 @@ class ConnectionPanel(CollapsibleGroupBox):
         self._is_connected = connected
         self.update_connection_status()
 
+    def select_device_type(self, device_type: str) -> None:
+        """Программно выбрать тип устройства в выпадающем списке."""
+        index = self.device_combo.findData(device_type)
+        if index >= 0:
+            self.device_combo.setCurrentIndex(index)
+
     def log_connection_event(self, message: str, level: str = "info"):
         """Логировать событие подключения (будет связано с журналом)"""
         # Этот метод будет вызываться из главного окна
