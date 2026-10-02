@@ -1,6 +1,6 @@
 import json
 import os
-from typing import List
+from typing import Dict, List
 
 from PyQt5.QtCore import Qt, QSettings, QThreadPool, QTimer
 from PyQt5.QtWidgets import (
@@ -30,6 +30,7 @@ from modbus.worker import Runnable
 from mu210.interface import MU210Interface
 from plc.plc_interface import PLCInterface
 from plc.plc_register_view import PLCRegisterView
+from plc.moxa_e1242_interface import MoxaE1242Interface
 from scenario.scenario_engine import ScenarioEngine
 from scenario.scenario_model import Scenario
 from scenario.scenario_widget import ScenarioWidget
@@ -98,6 +99,16 @@ class MainWindow(QMainWindow):
             lambda e: self.log(f"МУ210-501: {e}", "error")
         )
         self.output_interface.debug_data.connect(self.on_output_debug_data)
+
+        # Moxa ioLogik E1242 (4 AI + 4 DI + 4 DO)
+        self.moxa_e1242_interface = MoxaE1242Interface(self.generator, self)
+        self.moxa_e1242_interface.connection_status.connect(
+            self.on_output_connection_status
+        )
+        self.moxa_e1242_interface.error_occurred.connect(
+            lambda e: self.log(f"Moxa E1242: {e}", "error")
+        )
+        self.moxa_e1242_interface.debug_data.connect(self.on_output_debug_data)
 
         self.plc_interface.connection_status.connect(self.on_output_connection_status)
         self.plc_interface.error_occurred.connect(
@@ -550,6 +561,9 @@ class MainWindow(QMainWindow):
         mb.device_sim_action.triggered.connect(
             lambda: self._select_device_from_menu("simulator")
         )
+        mb.device_moxa_e1242_action.triggered.connect(
+            lambda: self._select_device_from_menu("moxa_e1242")
+        )
 
         # Настройки
         mb.settings_action.triggered.connect(self.open_settings_dialog)
@@ -687,6 +701,7 @@ class MainWindow(QMainWindow):
             "plc": "PLC Modicon Premium",
             "simulator": "Simulator",
             "owen": "ОВЕН МУ210-501",
+            "moxa_e1242": "Moxa ioLogik E1242",
         }
         self.status_bar.set_device(device_names.get(self.active_device_type, "—"))
 
@@ -846,7 +861,7 @@ class MainWindow(QMainWindow):
             self.active_output_interface.disconnect()
         self._refresh_status_bar()
 
-    def on_connection_changed(self, params: dict) -> None:
+    def on_connection_changed(self, params: Dict) -> None:
         host = params.get("host", "")
         port = params.get("port", 0)
         unit_id = params.get("unit_id", 1)
@@ -855,9 +870,14 @@ class MainWindow(QMainWindow):
         try:
             previous_interface = self.active_output_interface
             previous_device_type = self.active_device_type
-            selected_interface = (
-                self.output_interface if device_type == "owen" else self.plc_interface
-            )
+            
+            if device_type == "owen":
+                selected_interface = self.output_interface
+            elif device_type == "moxa_e1242":
+                selected_interface = self.moxa_e1242_interface
+            else:
+                selected_interface = self.plc_interface
+            
             if previous_device_type != device_type:
                 previous_interface.disconnect()
                 if self.plc_view is not None:
@@ -909,6 +929,7 @@ class MainWindow(QMainWindow):
             "plc": "PLC Modicon Premium",
             "simulator": "Simulator",
             "owen": "ОВЕН МУ210-501",
+            "moxa_e1242": "Moxa ioLogik E1242",
         }[self.active_device_type]
 
     def _submit(self, fn, on_result, *args, **kwargs) -> None:
@@ -1205,8 +1226,8 @@ class MainWindow(QMainWindow):
     def start_generation(self) -> None:
         if self.is_running:
             return
-        if self.active_device_type == "owen" and self.output_interface.is_connected():
-            errors = self.output_interface.validate_manual_output_map()
+        if self.active_output_interface.is_connected():
+            errors = self.active_output_interface.validate_manual_output_map()
             if errors:
                 message = "Нельзя запустить ручной режим:\n• " + "\n• ".join(errors)
                 self.log(message.replace("\n• ", "; "), "error")
@@ -1219,12 +1240,9 @@ class MainWindow(QMainWindow):
         self._refresh_status_bar()
 
     def _validate_scenario_output_map(self, scenario: Scenario) -> List[str]:
-        if (
-            self.active_device_type != "owen"
-            or not self.output_interface.is_connected()
-        ):
+        if not self.active_output_interface.is_connected():
             return []
-        return self.output_interface.validate_scenario_output_map(scenario)
+        return self.active_output_interface.validate_scenario_output_map(scenario)
 
     def _show_output_map_validation_error(self, message: str) -> None:
         QMessageBox.warning(self, "Ошибка карты выходов", message)
@@ -1348,4 +1366,5 @@ class MainWindow(QMainWindow):
 
         self.output_interface.disconnect()
         self.plc_interface.disconnect()
+        self.moxa_e1242_interface.disconnect()
         event.accept()

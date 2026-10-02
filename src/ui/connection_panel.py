@@ -29,6 +29,7 @@ class ConnectionPanel(CollapsibleGroupBox):
         "plc": "PLC Modicon Premium",
         "simulator": "Simulator",
         "owen": "ОВЕН МУ210-501",
+        "moxa_e1242": "Moxa ioLogik E1242",
     }
 
     # Сигналы для внешнего использования
@@ -553,6 +554,7 @@ class ConnectionPanel(CollapsibleGroupBox):
             "plc": "192.168.0.1",
             "simulator": "127.0.0.1",
             "owen": "192.168.1.99",
+            "moxa_e1242": "192.168.127.254",
         }
         if device_type == "owen":
             self.ip_label.setText("IP-адреса:")
@@ -560,6 +562,11 @@ class ConnectionPanel(CollapsibleGroupBox):
         else:
             self.ip_label.setText("IP:")
             self.ip_edit.setPlaceholderText("Введите IP адрес")
+        
+        if device_type == "moxa_e1242":
+            self.ip_label.setText("IP:")
+            self.ip_edit.setPlaceholderText("192.168.127.254")
+
         self.ip_edit.setText(default_hosts[device_type])
         self.on_params_changed()
 
@@ -745,3 +752,4 @@ def test_connection_panel():
 if __name__ == "__main__":
     # Запускаем тест
     test_connection_panel()
+

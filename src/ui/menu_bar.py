@@ -67,6 +67,13 @@ class AppMenuBar(QMenuBar):
         self.device_group.addAction(self.device_plc_action)
         device_menu.addAction(self.device_plc_action)
 
+        self.device_moxa_e1242_action = QAction("Moxa ioLogik E1242", self)
+        self.device_moxa_e1242_action.setCheckable(True)
+        self.device_moxa_e1242_action.setShortcut(QKeySequence("Ctrl+4"))
+        self.device_group.addAction(self.device_moxa_e1242_action)
+        device_menu.addAction(self.device_moxa_e1242_action)
+
+
         self.device_sim_action = QAction("Simulator", self)
         self.device_sim_action.setCheckable(True)
         self.device_sim_action.setShortcut(QKeySequence("Ctrl+3"))
