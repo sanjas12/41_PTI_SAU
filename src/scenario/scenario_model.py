@@ -65,6 +65,14 @@ class ScenarioStep:
         trigger_mode = data.get("trigger_mode", TRIGGER_ALL)
         if trigger_mode not in VALID_TRIGGER_MODES:
             trigger_mode = TRIGGER_ALL
+
+        # Обратная совместимость: старые файлы без output_device/output_address
+        device = data.get("output_device")
+        address = data.get("output_address")
+        if device is None:
+            device = "owen"
+            address = data.get("mu210_register", 3000)
+
         return cls(
             id=str(data.get("id") or uuid4().hex),
             channel_id=int(data["channel_id"]),
@@ -91,17 +99,8 @@ class ScenarioStep:
                 if data.get("mu210_register") is not None
                 else None
             ),
-            device = data.get("output_device")
-            address = data.get("output_address")
-            if device is None:
-                device = "owen"
-                address = data.get("mu210_register", 3000)
-            return cls(
-                # ... существующие поля ...
-                output_device=str(device),
-                output_address=int(address),
-                # ... существующие mu210_* ...
-            )
+            output_device=str(device),
+            output_address=int(address),
         )
 
 
