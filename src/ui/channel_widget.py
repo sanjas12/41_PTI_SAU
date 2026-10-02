@@ -1,3 +1,4 @@
+from typing import Any, Dict
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QCheckBox,
@@ -17,6 +18,11 @@ from PyQt5.QtWidgets import (
 )
 
 from core.channel import AnalogChannel
+from core.output_devices import (
+    ALL_DEVICES,
+    device_label,
+    register_choices,
+)
 from core.signal_types import SignalType
 from ui.styles import COLORS
 
@@ -84,22 +90,28 @@ class ChannelSettingsDialog(QDialog):
         self.type_combo.currentIndexChanged.connect(self._update_parameter_visibility)
         form_layout.addRow("Тип сигнала:", self.type_combo)
 
+        # --- Устройство вывода и адрес в нём ---
+        self.device_combo = QComboBox()
+        for device in ALL_DEVICES:
+            self.device_combo.addItem(device_label(device), device)
+        device_index = self.device_combo.findData(self.channel.output_device)
+        self.device_combo.setCurrentIndex(max(0, device_index))
+        self.device_combo.currentIndexChanged.connect(self._on_device_changed)
+        form_layout.addRow("Устройство вывода:", self.device_combo)
+
+        self.output_address_label = QLabel("Регистр / канал:")
+        self.output_address_combo = QComboBox()
+        form_layout.addRow(self.output_address_label, self.output_address_combo)
+
+        # Заполняем регистры в зависимости от выбранного устройства.
+        self._fill_address_combo(self.channel.output_device, self.channel.output_address)
+
+        # Модуль МУ210 нужен только когда выбрано «ОВЕН».
         self.mu210_module_label = QLabel("Модуль МУ210:")
         self.mu210_module_spin = QSpinBox()
         self.mu210_module_spin.setRange(1, 32)
         self.mu210_module_spin.setValue(self.channel.mu210_module)
         form_layout.addRow(self.mu210_module_label, self.mu210_module_spin)
-
-        self.mu210_register_label = QLabel("Выход МУ210:")
-        self.mu210_register_combo = QComboBox()
-        for output_index in range(8):
-            register = 3000 + output_index
-            self.mu210_register_combo.addItem(
-                f"AO{output_index + 1} — регистр {register}", register
-            )
-        register_index = self.mu210_register_combo.findData(self.channel.mu210_register)
-        self.mu210_register_combo.setCurrentIndex(max(0, register_index))
-        form_layout.addRow(self.mu210_register_label, self.mu210_register_combo)
 
         self.duty_label = QLabel("Скважность (%):")
         self.duty_spin = QDoubleSpinBox()
@@ -160,13 +172,17 @@ class ChannelSettingsDialog(QDialog):
         self.duty_spin.setVisible(is_pwm)
         self.pulse_width_label.setVisible(is_pulse)
         self.pulse_width_spin.setVisible(is_pulse)
-        self.mu210_module_label.setVisible(is_analog)
-        self.mu210_module_spin.setVisible(is_analog)
-        self.mu210_register_label.setVisible(is_analog)
-        self.mu210_register_combo.setVisible(is_analog)
+        
+        is_owen = self.device_combo.currentData() == "owen"
+        # Поля устройства вывода видны только для аналоговых каналов.
+        self.device_combo.setVisible(is_analog)
+        self.output_address_label.setVisible(is_analog)
+        self.output_address_combo.setVisible(is_analog)
+        # Модуль МУ210 — только если аналоговый И устройство ОВЕН.
+        self.mu210_module_label.setVisible(is_analog and is_owen)
+        self.mu210_module_spin.setVisible(is_analog and is_owen)
 
-    def get_settings(self) -> dict:
-        """Получить измененные настройки"""
+    def get_settings(self) -> Dict[str, Any]:
         return {
             "name": self.name_edit.text(),
             "min_value": self.min_spin.value(),
@@ -178,9 +194,30 @@ class ChannelSettingsDialog(QDialog):
             "enabled": self.enabled_check.isChecked(),
             "duty_cycle": self.duty_spin.value(),
             "pulse_width": self.pulse_width_spin.value(),
+            "output_device": self.device_combo.currentData(),
+            "output_address": self.output_address_combo.currentData(),
             "mu210_module": self.mu210_module_spin.value(),
-            "mu210_register": self.mu210_register_combo.currentData(),
         }
+
+    def _fill_address_combo(self, device: str, preferred: int) -> None:
+        """Перезаполнить список регистров под выбранное устройство."""
+        self.output_address_combo.blockSignals(True)
+        self.output_address_combo.clear()
+        for label, value in register_choices(device):
+            self.output_address_combo.addItem(label, value)
+        index = self.output_address_combo.findData(preferred)
+        self.output_address_combo.setCurrentIndex(max(0, index))
+        self.output_address_combo.blockSignals(False)
+
+    def _on_device_changed(self) -> None:
+        """Сменить устройство — перезаполнить список регистров и видимость."""
+        device = self.device_combo.currentData()
+        self._fill_address_combo(device, preferred=0)
+        is_owen = device == "owen"
+        # Модуль МУ210 имеет смысл только для ОВЕН.
+        self.mu210_module_label.setVisible(is_owen)
+        self.mu210_module_spin.setVisible(is_owen)
+        self._update_parameter_visibility()
 
 
 class ChannelWidget(QFrame):
@@ -277,11 +314,20 @@ class ChannelWidget(QFrame):
         kind = "Дискретный" if is_discrete else "Аналоговый"
         self.type_badge.setText(designation)
         self.type_name_label.setText(str(self.channel.signal_type))
+        
         if not is_discrete:
-            self.type_name_label.setText(
-                f"{self.channel.signal_type} · МУ{self.channel.mu210_module}/"
-                f"R{self.channel.mu210_register}"
-            )
+            device = self.channel.output_device
+            addr = self.channel.output_address
+            if device == "owen":
+                tag = f"МУ{self.channel.mu210_module}/R{addr}"
+            elif device == "plc":
+                tag = f"PLC %MW{addr}"
+            elif device == "moxa_e1242":
+                tag = f"E1242 ch{addr}"
+            else:
+                tag = "—"
+            self.type_name_label.setText(f"{self.channel.signal_type} · {tag}")
+        
         self.type_badge.setToolTip(f"{kind} канал")
         self.type_badge.setStyleSheet(
             f"background: {color}; color: white; border-radius: 4px; "
@@ -310,12 +356,18 @@ class ChannelWidget(QFrame):
             self.channel.enabled = settings["enabled"]
             self.channel.duty_cycle = settings["duty_cycle"]
             self.channel.pulse_width = settings["pulse_width"]
+            self.channel.output_device = settings["output_device"]
+            self.channel.output_address = settings["output_address"]
             self.channel.mu210_module = settings["mu210_module"]
-            self.channel.mu210_register = settings["mu210_register"]
+            # mu210_register держим синхронным с output_address,
+            # если выбран ОВЕН.
+            if self.channel.output_device == "owen":
+                self.channel.mu210_register = settings["output_address"]
 
             self.name_label.setText(self.channel.name)
-            self.min_label.setText(f"{self.channel.min_value:.0f}")
-            self.max_label.setText(f"{self.channel.max_value:.0f}")
+            self.enabled_check.setChecked(self.channel.enabled)
+            self.update_type_designation()
+            self.update_display()
 
             self.enabled_check.setChecked(self.channel.enabled)
             self.update_type_designation()

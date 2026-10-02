@@ -184,6 +184,8 @@ class MainWindow(QMainWindow):
                     enabled=cfg.get("enabled", True),
                     duty_cycle=cfg.get("duty_cycle", 50.0),
                     pulse_width=cfg.get("pulse_width", 1.0),
+                    output_device=cfg.get("output_device", "owen"),
+                    output_address=cfg.get("output_address", 3000 + i % 8),
                     mu210_module=cfg.get("mu210_module", i // 8 + 1),
                     mu210_register=cfg.get("mu210_register", 3000 + i % 8),
                 )
@@ -293,6 +295,8 @@ class MainWindow(QMainWindow):
                     "pulse_width": channel.pulse_width,
                     "mu210_module": channel.mu210_module,
                     "mu210_register": channel.mu210_register,
+                    "output_device": channel.output_device,
+                    "output_address": channel.output_address,
                 }
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)

@@ -109,19 +109,28 @@ class MU210Interface(QObject):
         return self._configured and self._connected
 
     def validate_manual_output_map(self) -> List[str]:
-        """Проверить назначения активных аналоговых каналов перед запуском."""
-        targets: Dict[Tuple[int, int], str] = {}
+        """Проверить карту выходов МУ210.
+
+        Учитываются только каналы с output_device == "owen".
+        """
         errors: List[str] = []
+        used: Dict[Tuple[int, int], int] = {}  # (module, register) -> channel.id
+
         for channel in self.generator.channels:
-            if not channel.enabled or not channel.signal_type.is_analog():
+            if not channel.signal_type.is_analog():
                 continue
-            self._validate_output_target(
-                channel.mu210_module,
-                channel.mu210_register,
-                channel.name,
-                targets,
-                errors,
-            )
+            if channel.output_device != "owen":
+                continue
+
+            key = (channel.mu210_module, channel.output_address)
+            if key in used:
+                errors.append(
+                    f"Каналы {used[key] + 1} и {channel.id + 1} пишут в один "
+                    f"регистр МУ210: модуль {key[0]}, R{key[1]}"
+                )
+            else:
+                used[key] = channel.id
+
         return errors
 
     def validate_scenario_output_map(self, scenario: "Scenario") -> List[str]:

@@ -34,6 +34,8 @@ class ScenarioStep:
     pulse_width: float = 1.0  # Для Pulse
     mu210_module: Optional[int] = None
     mu210_register: Optional[int] = None
+    output_device: str = "owen"
+    output_address: int = 3000
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -53,6 +55,8 @@ class ScenarioStep:
             "pulse_width": self.pulse_width,
             "mu210_module": self.mu210_module,
             "mu210_register": self.mu210_register,
+            "output_device": self.output_device,
+            "output_address": self.output_address,
         }
 
     @classmethod
@@ -87,6 +91,17 @@ class ScenarioStep:
                 if data.get("mu210_register") is not None
                 else None
             ),
+            device = data.get("output_device")
+            address = data.get("output_address")
+            if device is None:
+                device = "owen"
+                address = data.get("mu210_register", 3000)
+            return cls(
+                # ... существующие поля ...
+                output_device=str(device),
+                output_address=int(address),
+                # ... существующие mu210_* ...
+            )
         )
 
 

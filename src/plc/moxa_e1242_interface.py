@@ -197,27 +197,30 @@ class MoxaE1242Interface(QObject):
             self.data_updated.emit({"di": list(di_bits)})
 
     def _collect_do_bits(self) -> List[bool]:
-        """4 дискретных канала генератора -> 4 bool для write_multiple_coils."""
-        discrete = [
-            ch for ch in self.generator.channels if ch.signal_type.is_discrete()
-        ]
-        bits: List[bool] = []
-        for i in range(self.DO_COUNT):
-            if i < len(discrete):
-                bits.append(bool(discrete[i].current_value >= 0.5))
-            else:
-                bits.append(False)
-        return bits
+        """Собрать 4 DO-бита из каналов, привязанных к E1242."""
+        # Отбираем дискретные каналы, назначенные на E1242.
+        assigned: List[bool] = [False] * self.DO_COUNT
+        for channel in self.generator.channels:
+            if channel.output_device != "moxa_e1242":
+                continue
+            if not channel.signal_type.is_discrete():
+                continue
+            idx = channel.output_address
+            if 0 <= idx < self.DO_COUNT:
+                assigned[idx] = bool(channel.current_value >= 0.5)
+        return assigned
 
     def _apply_ai_raw(self, index: int, raw_value: int) -> None:
-        """Сырое значение 0..65535 -> 0..100 % и записать в аналоговый канал."""
-        analog = [
-            ch for ch in self.generator.channels if ch.signal_type.is_analog()
-        ]
-        if index >= len(analog):
-            return
-        percent = max(0.0, min(100.0, raw_value / self.AI_RAW_MAX * 100.0))
-        analog[index].current_value = percent
+        for channel in self.generator.channels:
+            if channel.output_device != "moxa_e1242":
+                continue
+            if not channel.signal_type.is_analog():
+                continue
+            if channel.output_address != index:
+                continue
+            percent = max(0.0, min(100.0, raw_value / self.AI_RAW_MAX * 100.0))
+            channel.current_value = percent
+            break
 
     # ==============================================================
     # Валидаторы (нужны MainWindow / ScenarioEngine)

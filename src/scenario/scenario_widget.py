@@ -38,6 +38,12 @@ from .scenario_model import (
     ScenarioStep,
 )
 
+from core.output_devices import (
+    ALL_DEVICES,
+    device_label,
+    register_choices,
+)
+
 SIGNAL_TYPE_NAMES = {
     "Sine": "Синус",
     "Square": "Меандр",
@@ -822,18 +828,22 @@ class StepEditDialog(QDialog):
         self.mu210_module_spin.setValue(self.step.mu210_module or default_module)
         form_layout.addRow(self.mu210_module_label, self.mu210_module_spin)
 
-        self.mu210_register_label = QLabel("Выход МУ210:")
-        self.mu210_register_combo = QComboBox()
-        for output_index in range(8):
-            register = 3000 + output_index
-            self.mu210_register_combo.addItem(
-                f"AO{output_index + 1} — регистр {register}", register
-            )
-        register_index = self.mu210_register_combo.findData(
-            self.step.mu210_register or default_register
+        # --- Устройство вывода и адрес ---
+        self.device_combo = QComboBox()
+        for device in ALL_DEVICES:
+            self.device_combo.addItem(device_label(device), device)
+        device_index = self.device_combo.findData(getattr(self.step, "output_device", "owen"))
+        self.device_combo.setCurrentIndex(max(0, device_index))
+        self.device_combo.currentIndexChanged.connect(self._on_device_changed)
+        form_layout.addRow("Устройство вывода:", self.device_combo)
+
+        self.output_address_label = QLabel("Регистр / канал:")
+        self.output_address_combo = QComboBox()
+        form_layout.addRow(self.output_address_label, self.output_address_combo)
+        self._fill_address_combo(
+            getattr(self.step, "output_device", "owen"),
+            getattr(self.step, "output_address", default_register),
         )
-        self.mu210_register_combo.setCurrentIndex(max(0, register_index))
-        form_layout.addRow(self.mu210_register_label, self.mu210_register_combo)
         self.channel_combo.currentIndexChanged.connect(self._load_channel_mu210_mapping)
 
         # Амплитуда
@@ -938,10 +948,14 @@ class StepEditDialog(QDialog):
             else:
                 self.discrete_group.setVisible(False)
             is_analog = bool(signal_type and signal_type.is_analog())
-            self.mu210_module_label.setVisible(is_analog)
-            self.mu210_module_spin.setVisible(is_analog)
-            self.mu210_register_label.setVisible(is_analog)
-            self.mu210_register_combo.setVisible(is_analog)
+            is_owen = self.device_combo.currentData() == "owen"
+            self.device_combo.setVisible(is_analog)
+            self.output_address_label.setVisible(is_analog)
+            self.output_address_combo.setVisible(is_analog)
+            self.mu210_module_label.setVisible(is_analog and is_owen)
+            self.mu210_module_spin.setVisible(is_analog and is_owen)
+            self.mu210_register_label.setVisible(is_analog and is_owen)
+            self.mu210_register_combo.setVisible(is_analog and is_owen)
 
     def _load_channel_mu210_mapping(self) -> None:
         """Подставить ручную привязку выбранного аналогового канала."""
@@ -976,4 +990,27 @@ class StepEditDialog(QDialog):
             mu210_register=(
                 self.mu210_register_combo.currentData() if is_analog else None
             ),
+            output_device=self.device_combo.currentData() if is_analog else None,
+            output_address=(
+                self.output_address_combo.currentData() if is_analog else None
+            ),
         )
+
+    def _fill_address_combo(self, device: str, preferred: int) -> None:
+        self.output_address_combo.blockSignals(True)
+        self.output_address_combo.clear()
+        for label, value in register_choices(device):
+            self.output_address_combo.addItem(label, value)
+        index = self.output_address_combo.findData(preferred)
+        self.output_address_combo.setCurrentIndex(max(0, index))
+        self.output_address_combo.blockSignals(False)
+
+    def _on_device_changed(self) -> None:
+        device = self.device_combo.currentData()
+        self._fill_address_combo(device, preferred=0)
+        is_owen = device == "owen"
+        self.mu210_module_label.setVisible(is_owen)
+        self.mu210_module_spin.setVisible(is_owen)
+        self.mu210_register_label.setVisible(is_owen)
+        self.mu210_register_combo.setVisible(is_owen)
+        self.update_discrete_visibility()
