@@ -53,13 +53,15 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(__full_version__)
-        self.setGeometry(100, 100, 900, 900)
-
+       
         # Настройки UI (тема + масштаб)
         self.ui_settings = UISettings.instance()
 
         # QSettings для сохранения геометрии разделителя между запусками
         self._settings = QSettings("AnalogSimulator", "MainWindow")
+
+        self.resize(900, 900)
+        self._restore_window_geometry()
 
         # Путь к файлу конфигурации каналов
         self.config_path = self._get_config_path()
@@ -130,6 +132,37 @@ class MainWindow(QMainWindow):
 
         # Пул потоков для асинхронных операций
         self.thread_pool = QThreadPool.globalInstance()
+
+    # ==================================================================
+    # Геометрия окна
+    # ==================================================================
+
+    def _restore_window_geometry(self) -> None:
+        """Восстановить позицию и размер окна из QSettings."""
+        geometry = self._settings.value("window_geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+            return
+
+        if self._settings.value("window_fullscreen", False, type=bool):
+            self.showFullScreen()
+        elif self._settings.value("window_maximized", False, type=bool):
+            self.showMaximized()
+
+        # Первый запуск — центрируем окно на экране
+        screen = QApplication.primaryScreen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            size = self.size()
+            x = available.x() + (available.width() - size.width()) // 2
+            y = available.y() + (available.height() - size.height()) // 2
+            self.move(max(x, available.x()), max(y, available.y()))
+
+    def _save_window_geometry(self) -> None:
+        """Сохранить позицию и размер окна в QSettings."""
+        self._settings.setValue("window_geometry", self.saveGeometry())
+        self._settings.setValue("window_maximized", self.isMaximized())
+        self._settings.setValue("window_fullscreen", self.isFullScreen())
 
     # ==================================================================
     # Конфигурация каналов
@@ -1296,6 +1329,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # type: ignore # noqa: N802
         # Сохраняем позицию разделителя
+        self._save_window_geometry()
         if hasattr(self, "splitter"):
             self._settings.setValue("splitter_sizes", self.splitter.sizes())
 
@@ -1314,4 +1348,3 @@ class MainWindow(QMainWindow):
         self.output_interface.disconnect()
         self.plc_interface.disconnect()
         event.accept()
-        
