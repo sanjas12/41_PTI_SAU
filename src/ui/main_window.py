@@ -53,13 +53,14 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(__full_version__)
-       
+
         # Настройки UI (тема + масштаб)
         self.ui_settings = UISettings.instance()
 
-        # QSettings для сохранения геометрии разделителя между запусками
+        # QSettings для геометрии окна и позиции разделителя
         self._settings = QSettings("AnalogSimulator", "MainWindow")
 
+        # Размер по умолчанию; если есть сохранённая геометрия — применится ниже
         self.resize(900, 900)
         self._restore_window_geometry()
 
@@ -132,37 +133,6 @@ class MainWindow(QMainWindow):
 
         # Пул потоков для асинхронных операций
         self.thread_pool = QThreadPool.globalInstance()
-
-    # ==================================================================
-    # Геометрия окна
-    # ==================================================================
-
-    def _restore_window_geometry(self) -> None:
-        """Восстановить позицию и размер окна из QSettings."""
-        geometry = self._settings.value("window_geometry")
-        if geometry is not None:
-            self.restoreGeometry(geometry)
-            return
-
-        if self._settings.value("window_fullscreen", False, type=bool):
-            self.showFullScreen()
-        elif self._settings.value("window_maximized", False, type=bool):
-            self.showMaximized()
-
-        # Первый запуск — центрируем окно на экране
-        screen = QApplication.primaryScreen()
-        if screen is not None:
-            available = screen.availableGeometry()
-            size = self.size()
-            x = available.x() + (available.width() - size.width()) // 2
-            y = available.y() + (available.height() - size.height()) // 2
-            self.move(max(x, available.x()), max(y, available.y()))
-
-    def _save_window_geometry(self) -> None:
-        """Сохранить позицию и размер окна в QSettings."""
-        self._settings.setValue("window_geometry", self.saveGeometry())
-        self._settings.setValue("window_maximized", self.isMaximized())
-        self._settings.setValue("window_fullscreen", self.isFullScreen())
 
     # ==================================================================
     # Конфигурация каналов
@@ -319,6 +289,36 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.log(f"Ошибка сохранения конфигурации каналов: {e}", "error")
             return False
+
+    # ==================================================================
+    # Геометрия окна
+    # ==================================================================
+
+    def _restore_window_geometry(self) -> None:
+        """Восстановить позицию и размер окна из QSettings."""
+        geometry = self._settings.value("window_geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+
+        if self._settings.value("window_fullscreen", False, type=bool):
+            self.showFullScreen()
+        elif self._settings.value("window_maximized", False, type=bool):
+            self.showMaximized()
+        elif geometry is None:
+            # Первый запуск — центрируем окно на экране
+            screen = QApplication.primaryScreen()
+            if screen is not None:
+                available = screen.availableGeometry()
+                size = self.size()
+                x = available.x() + (available.width() - size.width()) // 2
+                y = available.y() + (available.height() - size.height()) // 2
+                self.move(max(x, available.x()), max(y, available.y()))
+
+    def _save_window_geometry(self) -> None:
+        """Сохранить позицию и размер окна в QSettings."""
+        self._settings.setValue("window_geometry", self.saveGeometry())
+        self._settings.setValue("window_maximized", self.isMaximized())
+        self._settings.setValue("window_fullscreen", self.isFullScreen())
 
     # ==================================================================
     # UI
@@ -1124,9 +1124,9 @@ class MainWindow(QMainWindow):
 
     def on_scenario_stopped(self) -> None:
         self._refresh_control_buttons()
-        if hasattr(self, "control_panel"):
+        if hasattr(self, "control_panel") and self.control_panel:
             self.control_panel.set_progress(0)
-            self._update_scenario_time(0.0)
+        self._update_scenario_time(0.0)
         self._refresh_status_bar()
 
         if self.plot_window and self.plot_window.isVisible():
@@ -1137,7 +1137,8 @@ class MainWindow(QMainWindow):
     def on_scenario_finished(self) -> None:
         scenario = self.scenario_engine.scenario
         if scenario:
-            self.control_panel.set_progress(100)
+            if hasattr(self, "control_panel") and self.control_panel:
+                self.control_panel.set_progress(100)
             self._update_scenario_time(scenario.get_total_duration())
         self._refresh_control_buttons()
         self._refresh_status_bar()
@@ -1147,7 +1148,7 @@ class MainWindow(QMainWindow):
             self.plot_window.set_scenario_progress(100)
 
     def on_scenario_progress_changed(self, progress: float) -> None:
-        if hasattr(self, "control_panel"):
+        if hasattr(self, "control_panel") and self.control_panel:
             self.control_panel.set_progress(int(progress))
         if self.plot_window and self.plot_window.isVisible():
             self.plot_window.set_scenario_progress(int(progress))
@@ -1160,13 +1161,13 @@ class MainWindow(QMainWindow):
     def on_scenario_definition_changed(self, scenario: Scenario) -> None:
         if self.scenario_engine.is_running():
             return
-        if not hasattr(self, "control_panel") or not self.control_panel:
+        if not (hasattr(self, "control_panel") and self.control_panel):
             return
         self.control_panel.set_progress(0)
         self.control_panel.set_scenario_time(0.0, scenario.get_total_duration())
 
     def _update_scenario_time(self, elapsed: float) -> None:
-        if not hasattr(self, "control_panel"):
+        if not (hasattr(self, "control_panel") and self.control_panel):
             return
         scenario = self.scenario_engine.scenario
         total = scenario.get_total_duration() if scenario else 0.0
@@ -1328,7 +1329,7 @@ class MainWindow(QMainWindow):
     # ==================================================================
 
     def closeEvent(self, event) -> None:  # type: ignore # noqa: N802
-        # Сохраняем позицию разделителя
+        # Сохраняем геометрию окна и позицию разделителя
         self._save_window_geometry()
         if hasattr(self, "splitter"):
             self._settings.setValue("splitter_sizes", self.splitter.sizes())
