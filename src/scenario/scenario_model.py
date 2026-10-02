@@ -1,4 +1,7 @@
 import json
+import math
+import os
+import tempfile
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
@@ -306,11 +309,73 @@ class Scenario:
         return max((end for _, end in timings.values()), default=0.0)
 
     def save_to_file(self, filepath: str) -> None:
-        with open(filepath, "w", encoding="utf-8") as file:
-            json.dump(self.to_dict(), file, ensure_ascii=False, indent=2)
+        """Атомарно сохранить сценарий в JSON.
+
+        Сначала данные сериализуются в память, затем пишутся во временный
+        файл рядом с целевым, и только после успешной записи временный файл
+        атомарно подменяет целевой через os.replace. Если что-то падает —
+        старый файл на диске остаётся нетронутым.
+        """
+        data = self.to_dict()
+
+        try:
+            text = json.dumps(
+                data,
+                ensure_ascii=False,
+                indent=2,
+                allow_nan=False,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Сценарий содержит данные, которые нельзя сохранить в JSON: {exc}"
+            ) from exc
+
+        directory = os.path.dirname(os.path.abspath(filepath)) or "."
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=".scenario_", suffix=".json.tmp", dir=directory
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as file:
+                file.write(text)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(tmp_path, filepath)
+        except Exception:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+            raise
 
     @classmethod
     def load_from_file(cls, filepath: str) -> "Scenario":
+        """Загрузить сценарий с понятными сообщениями об ошибках."""
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Файл не найден: {filepath}")
+
         with open(filepath, encoding="utf-8") as file:
-            data = json.load(file)
+            text = file.read()
+
+        if not text.strip():
+            raise ValueError(
+                f"Файл сценария пуст: {filepath}\n\n"
+                f"Скорее всего, предыдущее сохранение завершилось ошибкой. "
+                f"Загрузите более раннюю версию сценария или создайте заново."
+            )
+
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Файл сценария повреждён (не валидный JSON):\n{filepath}\n\n"
+                f"Строка {exc.lineno}, колонка {exc.colno}: {exc.msg}"
+            ) from exc
+
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"Файл сценария имеет неверный формат: ожидался объект, "
+                f"получено {type(data).__name__}.\n{filepath}"
+            )
+
         return cls.from_dict(data)

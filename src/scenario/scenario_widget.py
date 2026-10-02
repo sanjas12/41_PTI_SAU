@@ -716,7 +716,9 @@ class ScenarioWidget(QWidget):
             except (OSError, TypeError, ValueError) as exc:
                 self._log_change(f"Ошибка сохранения сценария: {exc}", "error")
                 QMessageBox.critical(
-                    self, "Ошибка сохранения", f"Не удалось сохранить сценарий:\n{exc}"
+                    self,
+                    "Ошибка сохранения",
+                    f"Не удалось сохранить сценарий:\n{filepath}\n\n{exc}",
                 )
 
     def load_scenario(self):
@@ -744,7 +746,9 @@ class ScenarioWidget(QWidget):
             ) as exc:
                 self._log_change(f"Ошибка загрузки сценария: {exc}", "error")
                 QMessageBox.critical(
-                    self, "Ошибка загрузки", f"Не удалось загрузить сценарий:\n{exc}"
+                    self,
+                    "Ошибка загрузки",
+                    f"Не удалось загрузить сценарий:\n{filepath}\n\n{exc}",
                 )
 
 
