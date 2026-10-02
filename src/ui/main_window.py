@@ -2,7 +2,7 @@ import json
 import os
 from typing import List
 
-from PyQt5.QtCore import Qt, QThreadPool, QTimer
+from PyQt5.QtCore import Qt, QSettings, QThreadPool, QTimer
 from PyQt5.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -53,10 +53,13 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(__full_version__)
-        self.setGeometry(100, 100, 1400, 900)
+        self.setGeometry(100, 100, 900, 900)
 
         # Настройки UI (тема + масштаб)
         self.ui_settings = UISettings.instance()
+
+        # QSettings для сохранения геометрии разделителя между запусками
+        self._settings = QSettings("AnalogSimulator", "MainWindow")
 
         # Путь к файлу конфигурации каналов
         self.config_path = self._get_config_path()
@@ -321,11 +324,16 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(8, 8, 8, 8)
         central_widget.setLayout(main_layout)
 
-        splitter = QSplitter(Qt.Horizontal)
-        main_layout.addWidget(splitter)
+        # QSplitter: левая часть — каналы/сценарий, правая — журнал событий.
+        # Его можно тянуть мышью за ручку между панелями.
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.setChildrenCollapsible(False)  # нельзя схлопнуть в ноль
+        self.splitter.setHandleWidth(6)              # ручку легче поймать мышью
+        main_layout.addWidget(self.splitter)
 
         # Левая панель — управление + рабочая область
         left_container = QWidget()
+        left_container.setMinimumWidth(400)
         left_layout = QVBoxLayout()
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(6)
@@ -459,15 +467,30 @@ class MainWindow(QMainWindow):
         self.mode_stack.addWidget(scenario_group)
 
         left_layout.addWidget(self.mode_stack, 1)
-        splitter.addWidget(left_container)
+        self.splitter.addWidget(left_container)
 
         # Правая панель — журнал событий
         self.event_log_panel = EventLogPanel(self)
-        splitter.addWidget(self.event_log_panel)
+        self.event_log_panel.setMinimumWidth(180)
+        self.splitter.addWidget(self.event_log_panel)
 
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([1050, 350])
+        # Пропорции: левая часть в 3 раза «жаднее» до свободного места
+        self.splitter.setStretchFactor(0, 3)
+        self.splitter.setStretchFactor(1, 1)
+
+        # Восстановить позицию разделителя из QSettings (если есть)
+        saved_sizes = self._settings.value("splitter_sizes")
+        restored = False
+        if saved_sizes:
+            try:
+                sizes = [int(x) for x in saved_sizes]
+                if len(sizes) == 2 and all(s > 0 for s in sizes):
+                    self.splitter.setSizes(sizes)
+                    restored = True
+            except (TypeError, ValueError):
+                pass
+        if not restored:
+            self.splitter.setSizes([700, 200])
 
     # ==================================================================
     # Меню → действия
@@ -1272,6 +1295,10 @@ class MainWindow(QMainWindow):
     # ==================================================================
 
     def closeEvent(self, event) -> None:  # type: ignore # noqa: N802
+        # Сохраняем позицию разделителя
+        if hasattr(self, "splitter"):
+            self._settings.setValue("splitter_sizes", self.splitter.sizes())
+
         self._save_channels_config()
         self.log("Настройки каналов сохранены", "info")
 
@@ -1287,3 +1314,4 @@ class MainWindow(QMainWindow):
         self.output_interface.disconnect()
         self.plc_interface.disconnect()
         event.accept()
+        
