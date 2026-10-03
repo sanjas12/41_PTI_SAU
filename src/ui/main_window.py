@@ -1,7 +1,7 @@
 import logging
-from typing import Dict, List
+from typing import Any, Dict, List
 
-from PyQt5.QtCore import QSettings, Qt, QThreadPool, QTimer
+from PyQt5.QtCore import QSettings, Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -25,10 +25,7 @@ from core.channel import AnalogChannel
 from core.channel_repository import ChannelRepository
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
-from modbus.worker import Runnable
-from mu210.interface import MU210Interface
-from plc.moxa_e1242_interface import MoxaE1242Interface
-from plc.plc_interface import PLCInterface
+from devices.device_manager import DeviceManager
 from plc.plc_register_view import PLCRegisterView
 from scenario.scenario_engine import ScenarioEngine
 from scenario.scenario_model import Scenario
@@ -81,39 +78,16 @@ class MainWindow(QMainWindow):
         self.scenario_engine.progress_changed.connect(self.on_scenario_progress_changed)
         self.scenario_engine.time_updated.connect(self.on_scenario_time_updated)
 
-        # Интерфейс с МУ210-501 (основной) и PLC (резервный)
-        self.output_interface = MU210Interface(self.generator, self)
+        self.device_manager = DeviceManager(self.generator, self)
+        self.device_manager.connection_status.connect(self.on_output_connection_status)
+        self.device_manager.connection_finished.connect(self._on_device_connected)
+        self.device_manager.device_changed.connect(self._on_device_changed)
+        self.device_manager.log_signal.connect(self.log)
+        self.device_manager.debug_data.connect(self.on_output_debug_data)
         self.scenario_engine.start_validator = self._validate_scenario_output_map
         self.scenario_engine.validation_failed.connect(
             self._show_output_map_validation_error
         )
-        self.plc_interface = PLCInterface(self.generator, self)
-        self.active_output_interface = self.output_interface
-        self.active_device_type = "owen"
-
-        self.output_interface.connection_status.connect(
-            self.on_output_connection_status
-        )
-        self.output_interface.error_occurred.connect(
-            lambda e: self.log(f"МУ210-501: {e}", "error")
-        )
-        self.output_interface.debug_data.connect(self.on_output_debug_data)
-
-        # Moxa ioLogik E1242 (4 AI + 4 DI + 4 DO)
-        self.moxa_e1242_interface = MoxaE1242Interface(self.generator, self)
-        self.moxa_e1242_interface.connection_status.connect(
-            self.on_output_connection_status
-        )
-        self.moxa_e1242_interface.error_occurred.connect(
-            lambda e: self.log(f"Moxa E1242: {e}", "error")
-        )
-        self.moxa_e1242_interface.debug_data.connect(self.on_output_debug_data)
-
-        self.plc_interface.connection_status.connect(self.on_output_connection_status)
-        self.plc_interface.error_occurred.connect(
-            lambda e: self.log(f"PLC/Simulator: {e}", "error")
-        )
-        self.plc_interface.debug_data.connect(self.on_output_debug_data)
 
         # Состояние приложения
         self.frame_count = 0
@@ -140,9 +114,6 @@ class MainWindow(QMainWindow):
         # Синхронизация UI с исходным состоянием
         self._refresh_status_bar()
         self._refresh_control_buttons()
-
-        # Пул потоков для асинхронных операций
-        self.thread_pool = QThreadPool.globalInstance()
 
     # ==================================================================
     # Конфигурация каналов
@@ -828,88 +799,47 @@ class MainWindow(QMainWindow):
     # Подключение / устройство
     # ==================================================================
 
+    @property
+    def active_output_interface(self) -> Any:
+        return self.device_manager.active_interface
+
+    @property
+    def active_device_type(self) -> str:
+        return self.device_manager.active_device_type
+
     def disconnect_device(self) -> None:
         """Отключиться от активного устройства."""
-        if self.active_output_interface.is_connected():
-            self.active_output_interface.disconnect()
+        self.device_manager.disconnect_device()
         self._refresh_status_bar()
 
     def on_connection_changed(self, params: Dict) -> None:
-        host = params.get("host", "")
-        port = params.get("port", 0)
-        unit_id = params.get("unit_id", 1)
-        device_type = params.get("device_type", self.active_device_type)
-
         try:
-            previous_interface = self.active_output_interface
-            previous_device_type = self.active_device_type
+            self.device_manager.configure(params)
+        except (OSError, ValueError, RuntimeError) as exc:
+            self.log(f"Ошибка настройки подключения: {exc}", "error")
+        self._refresh_status_bar()
 
-            if device_type == "owen":
-                selected_interface = self.output_interface
-            elif device_type == "moxa_e1242":
-                selected_interface = self.moxa_e1242_interface
-            else:
-                selected_interface = self.plc_interface
-
-            if previous_device_type != device_type:
-                previous_interface.disconnect()
-                if self.plc_view is not None:
-                    self.plc_view.close()
-                    self.plc_view = None
-            self.active_output_interface = selected_interface
-            self.active_device_type = device_type
-            if host and port:
-                selected_interface.configure(host, port, unit_id)
-                self.log(
-                    f"Настроен {self._active_device_name()}: {host}:{port} "
-                    f"(Unit ID: {unit_id})",
-                    "info",
-                )
-            self._refresh_status_bar()
-        except Exception as e:
-            self.log(f"Ошибка настройки подключения: {e}", "error")
+    def _on_device_changed(self, device_type: str) -> None:
+        if self.plc_view is not None:
+            self.plc_view.close()
+            self.plc_view = None
+        self._refresh_status_bar()
 
     def on_connection_status_changed(self, connected: bool) -> None:
         if connected:
-            active_interface = self.active_output_interface
-
-            def after_connect(ok: bool) -> None:
-                if active_interface is not self.active_output_interface:
-                    active_interface.disconnect()
-                    return
-                if ok:
-                    self.log(
-                        f"Подключение к {self._active_device_name()} установлено",
-                        "success",
-                    )
-                    active_interface.start_polling()
-                else:
-                    self.log("Не удалось подключиться", "error")
-                if self.connection_dialog is not None:
-                    self.connection_dialog.set_connection_status(
-                        active_interface.is_connected()
-                    )
-                self._refresh_status_bar()
-
-            self._submit(active_interface.open, after_connect)
+            self.device_manager.connect_device()
         else:
-            self.active_output_interface.disconnect()
+            self.device_manager.disconnect_device()
             self.log("Соединение закрыто", "info")
             self._refresh_status_bar()
 
-    def _active_device_name(self) -> str:
-        return {
-            "plc": "PLC Modicon Premium",
-            "simulator": "Simulator",
-            "owen": "ОВЕН МУ210-501",
-            "moxa_e1242": "Moxa ioLogik E1242",
-        }[self.active_device_type]
+    def _on_device_connected(self, connected: bool) -> None:
+        if self.connection_dialog is not None:
+            self.connection_dialog.set_connection_status(connected)
+        self._refresh_status_bar()
 
-    def _submit(self, fn, on_result, *args, **kwargs) -> None:
-        job = Runnable(fn, *args, **kwargs)
-        job.signals.result.connect(on_result)
-        job.signals.error.connect(lambda e: self.log(f"Ошибка: {e}", "error"))
-        self.thread_pool.start(job)
+    def _active_device_name(self) -> str:
+        return self.device_manager.active_device_name
 
     def log(self, message: str, level: str = "info") -> None:
         if hasattr(self, "event_log_panel"):
@@ -1337,7 +1267,5 @@ class MainWindow(QMainWindow):
         if self.settings_dialog:
             self.settings_dialog.close()
 
-        self.output_interface.disconnect()
-        self.plc_interface.disconnect()
-        self.moxa_e1242_interface.disconnect()
+        self.device_manager.close()
         event.accept()
