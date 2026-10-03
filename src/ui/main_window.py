@@ -1,15 +1,13 @@
-import json
-import os
+import logging
 from typing import Dict, List
 
-from PyQt5.QtCore import Qt, QSettings, QThreadPool, QTimer
+from PyQt5.QtCore import QSettings, Qt, QThreadPool, QTimer
 from PyQt5.QtWidgets import (
     QApplication,
     QButtonGroup,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
-    QLabel,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -24,19 +22,19 @@ from PyQt5.QtWidgets import (
 from _version import __full_version__
 from config.ui_settings import UISettings
 from core.channel import AnalogChannel
+from core.channel_repository import ChannelRepository
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 from modbus.worker import Runnable
 from mu210.interface import MU210Interface
+from plc.moxa_e1242_interface import MoxaE1242Interface
 from plc.plc_interface import PLCInterface
 from plc.plc_register_view import PLCRegisterView
-from plc.moxa_e1242_interface import MoxaE1242Interface
 from scenario.scenario_engine import ScenarioEngine
 from scenario.scenario_model import Scenario
 from scenario.scenario_widget import ScenarioWidget
 from ui.channel_widget import ChannelWidget
 from ui.connection_dialog import ConnectionDialog
-from ui.control_panel import ControlPanel
 from ui.event_log_panel import EventLogPanel
 from ui.menu_bar import AppMenuBar
 from ui.plot_widget import PlotWindow
@@ -67,6 +65,7 @@ class MainWindow(QMainWindow):
 
         # Путь к файлу конфигурации каналов
         self.config_path = self._get_config_path()
+        self.channel_repository = ChannelRepository(self.config_path)
 
         # Каналы
         self.generator = SignalGenerator()
@@ -150,11 +149,7 @@ class MainWindow(QMainWindow):
     # ==================================================================
 
     def _get_config_path(self) -> str:
-        home_dir = os.path.expanduser("~")
-        config_dir = os.path.join(home_dir, ".analog_simulator")
-        if not os.path.exists(config_dir):
-            os.makedirs(config_dir)
-        return os.path.join(config_dir, self.CHANNELS_CONFIG_FILE)
+        return ChannelRepository.default_path(self.CHANNELS_CONFIG_FILE)
 
     def _setup_channels(self) -> None:
         """Создать каналы с загрузкой сохранённых настроек."""
@@ -271,38 +266,19 @@ class MainWindow(QMainWindow):
 
     def _load_channels_config(self) -> dict:
         try:
-            if os.path.exists(self.config_path):
-                with open(self.config_path, encoding="utf-8") as f:
-                    return json.load(f)
-        except Exception as e:
-            print(f"Ошибка загрузки конфигурации каналов: {e}")
-        return {}
+            return self.channel_repository.load()
+        except (OSError, ValueError) as exc:
+            logging.getLogger(__name__).warning(
+                "Ошибка загрузки конфигурации каналов: %s", exc
+            )
+            return {}
 
     def _save_channels_config(self) -> bool:
         try:
-            config = {}
-            for channel in self.generator.channels:
-                config[str(channel.id)] = {
-                    "name": channel.name,
-                    "signal_type": channel.signal_type.name,
-                    "frequency": channel.frequency,
-                    "amplitude": channel.amplitude,
-                    "offset": channel.offset,
-                    "min_value": channel.min_value,
-                    "max_value": channel.max_value,
-                    "enabled": channel.enabled,
-                    "duty_cycle": channel.duty_cycle,
-                    "pulse_width": channel.pulse_width,
-                    "mu210_module": channel.mu210_module,
-                    "mu210_register": channel.mu210_register,
-                    "output_device": channel.output_device,
-                    "output_address": channel.output_address,
-                }
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            self.channel_repository.save(self.generator.channels)
             return True
-        except Exception as e:
-            self.log(f"Ошибка сохранения конфигурации каналов: {e}", "error")
+        except (OSError, TypeError, ValueError) as exc:
+            self.log(f"Ошибка сохранения конфигурации каналов: {exc}", "error")
             return False
 
     # ==================================================================
@@ -376,7 +352,7 @@ class MainWindow(QMainWindow):
         # Его можно тянуть мышью за ручку между панелями.
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setChildrenCollapsible(False)  # нельзя схлопнуть в ноль
-        self.splitter.setHandleWidth(6)              # ручку легче поймать мышью
+        self.splitter.setHandleWidth(6)  # ручку легче поймать мышью
         main_layout.addWidget(self.splitter)
 
         # Левая панель — управление + рабочая область
@@ -573,12 +549,8 @@ class MainWindow(QMainWindow):
         mb.settings_action.triggered.connect(self.open_settings_dialog)
         mb.theme_light_action.triggered.connect(lambda: self._apply_theme("light"))
         mb.theme_dark_action.triggered.connect(lambda: self._apply_theme("dark"))
-        mb.scale_medium_action.triggered.connect(
-            lambda: self._apply_ui_scale("medium")
-        )
-        mb.scale_large_action.triggered.connect(
-            lambda: self._apply_ui_scale("large")
-        )
+        mb.scale_medium_action.triggered.connect(lambda: self._apply_ui_scale("medium"))
+        mb.scale_large_action.triggered.connect(lambda: self._apply_ui_scale("large"))
         mb.plots_action.triggered.connect(self.open_plot_window)
         mb.registers_action.triggered.connect(self.open_plc_view)
 
@@ -642,9 +614,7 @@ class MainWindow(QMainWindow):
         """Открыть модальное окно подключения."""
         if self.connection_dialog is None:
             self.connection_dialog = ConnectionDialog(self)
-            self.connection_dialog.connected.connect(
-                self.on_connection_status_changed
-            )
+            self.connection_dialog.connected.connect(self.on_connection_status_changed)
             self.connection_dialog.connection_changed.connect(
                 self.on_connection_changed
             )
@@ -840,8 +810,7 @@ class MainWindow(QMainWindow):
         self.generator.set_update_interval(interval)
         freq = 1.0 / interval if interval > 0 else 0
         self.log(
-            f"Интервал обновления сигналов изменён: {interval:.3f} с "
-            f"({freq:.1f} Гц)",
+            f"Интервал обновления сигналов изменён: {interval:.3f} с ({freq:.1f} Гц)",
             "info",
         )
 
@@ -874,14 +843,14 @@ class MainWindow(QMainWindow):
         try:
             previous_interface = self.active_output_interface
             previous_device_type = self.active_device_type
-            
+
             if device_type == "owen":
                 selected_interface = self.output_interface
             elif device_type == "moxa_e1242":
                 selected_interface = self.moxa_e1242_interface
             else:
                 selected_interface = self.plc_interface
-            
+
             if previous_device_type != device_type:
                 previous_interface.disconnect()
                 if self.plc_view is not None:
