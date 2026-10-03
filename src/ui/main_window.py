@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
 )
 
 from _version import __full_version__
+from application.controller import ApplicationController
 from config.ui_settings import UISettings
 from core.channel import AnalogChannel
 from core.channel_repository import ChannelRepository
@@ -79,6 +80,11 @@ class MainWindow(QMainWindow):
         self.scenario_engine.time_updated.connect(self.on_scenario_time_updated)
 
         self.device_manager = DeviceManager(self.generator, self)
+        self.controller = ApplicationController(self.device_manager, self)
+        self.controller.validation_failed.connect(
+            self._show_output_map_validation_error
+        )
+        self.controller.log_signal.connect(self.log)
         self.device_manager.connection_status.connect(self.on_output_connection_status)
         self.device_manager.connection_finished.connect(self._on_device_connected)
         self.device_manager.device_changed.connect(self._on_device_changed)
@@ -91,8 +97,6 @@ class MainWindow(QMainWindow):
 
         # Состояние приложения
         self.frame_count = 0
-        self.is_running = False
-        self.is_paused = False
         self._engine_mode = "manual"
 
         # Внешние окна
@@ -108,8 +112,8 @@ class MainWindow(QMainWindow):
         self._apply_theme(self.ui_settings.theme)
 
         # Таймер запускается только по Play
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_signals)
+        self.controller.timer.timeout.connect(self.update_signals)
+        self.controller.state_changed.connect(self._on_generation_state_changed)
 
         # Синхронизация UI с исходным состоянием
         self._refresh_status_bar()
@@ -944,24 +948,17 @@ class MainWindow(QMainWindow):
         self._refresh_status_bar()
 
     def _sync_generation_timer(self) -> None:
-        """Таймер генерации активен в ручном режиме или во время сценария."""
-        engine_mode = getattr(self, "_engine_mode", "manual")
-        scenario_view = self._is_scenario_view_active()
-        manual_running = not scenario_view and self.is_running and not self.is_paused
-        should_run = manual_running or engine_mode == "scenario"
-
-        if should_run and not self.timer.isActive():
-            self.timer.start(10)
-        elif not should_run and self.timer.isActive():
-            self.timer.stop()
-
+        """Согласовать генерацию и состояние сбора графиков."""
+        should_run = self.controller.synchronize(
+            self._is_scenario_view_active(), getattr(self, "_engine_mode", "manual")
+        )
         if self.plot_window is not None:
             self.plot_window.set_acquisition_running(should_run)
 
-        if hasattr(self, "active_output_interface") and hasattr(
-            self.active_output_interface, "set_output_enabled"
-        ):
-            self.active_output_interface.set_output_enabled(should_run)
+    def _on_generation_state_changed(self) -> None:
+        self._sync_generation_timer()
+        self._refresh_control_buttons()
+        self._refresh_status_bar()
 
     def _show_channel_mode_view(self, view: str) -> None:
         """Переключить видимую панель: сетка каналов ⇄ редактор сценария."""
@@ -1126,21 +1123,20 @@ class MainWindow(QMainWindow):
     # Старт / стоп / пауза (ручной режим)
     # ==================================================================
 
+    @property
+    def timer(self) -> QTimer:
+        return self.controller.timer
+
+    @property
+    def is_running(self) -> bool:
+        return self.controller.is_running
+
+    @property
+    def is_paused(self) -> bool:
+        return self.controller.is_paused
+
     def start_generation(self) -> None:
-        if self.is_running:
-            return
-        if self.active_output_interface.is_connected():
-            errors = self.active_output_interface.validate_manual_output_map()
-            if errors:
-                message = "Нельзя запустить ручной режим:\n• " + "\n• ".join(errors)
-                self.log(message.replace("\n• ", "; "), "error")
-                self._show_output_map_validation_error(message)
-                return
-        self.is_running = True
-        self.is_paused = False
-        self._sync_generation_timer()
-        self._refresh_control_buttons()
-        self._refresh_status_bar()
+        self.controller.start_generation()
 
     def _validate_scenario_output_map(self, scenario: Scenario) -> List[str]:
         if not self.active_output_interface.is_connected():
@@ -1151,29 +1147,13 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, "Ошибка карты выходов", message)
 
     def stop_generation(self) -> None:
-        if not self.is_running:
-            return
-        self.is_running = False
-        self.is_paused = False
-        self._sync_generation_timer()
-        self._refresh_control_buttons()
-        self._refresh_status_bar()
+        self.controller.stop_generation()
 
     def pause_generation(self) -> None:
-        if not self.is_running or self.is_paused:
-            return
-        self.is_paused = True
-        self._sync_generation_timer()
-        self._refresh_control_buttons()
-        self._refresh_status_bar()
+        self.controller.pause_generation()
 
     def resume_generation(self) -> None:
-        if not self.is_running or not self.is_paused:
-            return
-        self.is_paused = False
-        self._sync_generation_timer()
-        self._refresh_control_buttons()
-        self._refresh_status_bar()
+        self.controller.resume_generation()
 
     def reset_signals(self) -> None:
         """Сбросить сигналы и очистить графики."""
@@ -1267,5 +1247,6 @@ class MainWindow(QMainWindow):
         if self.settings_dialog:
             self.settings_dialog.close()
 
+        self.controller.close()
         self.device_manager.close()
         event.accept()
