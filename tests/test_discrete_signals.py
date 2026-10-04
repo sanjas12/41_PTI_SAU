@@ -190,7 +190,7 @@ def test_analog_step_dialog_edits_mu210_mapping():
     )
 
     assert dialog.mu210_module_spin.value() == 2
-    assert dialog.mu210_register_combo.currentData() == 3004
+    assert dialog.output_address_combo.currentData() == 3004
     assert dialog.mu210_module_spin.isHidden() is False
     step = dialog.get_step()
     assert step.mu210_module == 2

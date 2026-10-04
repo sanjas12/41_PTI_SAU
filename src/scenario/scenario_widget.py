@@ -25,6 +25,11 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from core.output_devices import (
+    ALL_DEVICES,
+    device_label,
+    register_choices,
+)
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 
@@ -36,12 +41,6 @@ from .scenario_model import (
     TRIGGER_SPECIFIC,
     Scenario,
     ScenarioStep,
-)
-
-from core.output_devices import (
-    ALL_DEVICES,
-    device_label,
-    register_choices,
 )
 
 SIGNAL_TYPE_NAMES = {
@@ -764,20 +763,21 @@ class StepEditDialog(QDialog):
     def __init__(
         self,
         generator: SignalGenerator,
-        parent=None,
+        parent: Optional[QWidget] = None,
         step: Optional[ScenarioStep] = None,
         signal_types: Optional[Sequence[SignalType]] = None,
-    ):
+    ) -> None:
         super().__init__(parent)
         self.generator = generator
         self.step = step or ScenarioStep(channel_id=0, signal_type="Sine")
+        self._editing_existing_step = step is not None
         self.signal_types = list(signal_types) if signal_types else list(SignalType)
         self.setWindowTitle("Редактирование шага" if step else "Добавление шага")
         self.setModal(True)
         self.setup_ui()
         self.update_discrete_visibility()
 
-    def setup_ui(self):
+    def setup_ui(self) -> None:
         layout = QVBoxLayout()
         self.setLayout(layout)
 
@@ -812,7 +812,7 @@ class StepEditDialog(QDialog):
             display_name = SIGNAL_TYPE_NAMES.get(serialized_name, serialized_name)
             self.type_combo.addItem(display_name, serialized_name)
         if self.step:
-            index = self.type_combo.findData(self.step.signal_type)
+            index = self.type_combo.findData(self.step.signal_type.capitalize())
             if index >= 0:
                 self.type_combo.setCurrentIndex(index)
         self.type_combo.currentIndexChanged.connect(self.update_discrete_visibility)
@@ -820,7 +820,22 @@ class StepEditDialog(QDialog):
 
         selected_channel = self.generator.get_channel(self.channel_combo.currentData())
         default_module = selected_channel.mu210_module if selected_channel else 1
-        default_register = selected_channel.mu210_register if selected_channel else 3000
+        default_register = selected_channel.output_address if selected_channel else 3000
+        default_device = selected_channel.output_device if selected_channel else "owen"
+        device = (
+            self.step.output_device if self._editing_existing_step else default_device
+        )
+        address = (
+            self.step.output_address
+            if self._editing_existing_step
+            else default_register
+        )
+        if (
+            self._editing_existing_step
+            and device == "owen"
+            and self.step.mu210_register is not None
+        ):
+            address = self.step.mu210_register
 
         self.mu210_module_label = QLabel("Модуль МУ210:")
         self.mu210_module_spin = QSpinBox()
@@ -830,20 +845,18 @@ class StepEditDialog(QDialog):
 
         # --- Устройство вывода и адрес ---
         self.device_combo = QComboBox()
-        for device in ALL_DEVICES:
-            self.device_combo.addItem(device_label(device), device)
-        device_index = self.device_combo.findData(getattr(self.step, "output_device", "owen"))
+        for device_key in ALL_DEVICES:
+            self.device_combo.addItem(device_label(device_key), device_key)
+        device_index = self.device_combo.findData(device)
         self.device_combo.setCurrentIndex(max(0, device_index))
         self.device_combo.currentIndexChanged.connect(self._on_device_changed)
-        form_layout.addRow("Устройство вывода:", self.device_combo)
+        self.device_label = QLabel("Устройство вывода:")
+        form_layout.addRow(self.device_label, self.device_combo)
 
         self.output_address_label = QLabel("Регистр / канал:")
         self.output_address_combo = QComboBox()
         form_layout.addRow(self.output_address_label, self.output_address_combo)
-        self._fill_address_combo(
-            getattr(self.step, "output_device", "owen"),
-            getattr(self.step, "output_address", default_register),
-        )
+        self._fill_address_combo(device, address)
         self.channel_combo.currentIndexChanged.connect(self._load_channel_mu210_mapping)
 
         # Амплитуда
@@ -927,7 +940,7 @@ class StepEditDialog(QDialog):
 
         self.setMinimumWidth(350)
 
-    def update_discrete_visibility(self):
+    def update_discrete_visibility(self) -> None:
         """Показать/скрыть параметры дискретных сигналов"""
         current_data = self.type_combo.currentData()
         if current_data:
@@ -949,13 +962,12 @@ class StepEditDialog(QDialog):
                 self.discrete_group.setVisible(False)
             is_analog = bool(signal_type and signal_type.is_analog())
             is_owen = self.device_combo.currentData() == "owen"
+            self.device_label.setVisible(is_analog)
             self.device_combo.setVisible(is_analog)
             self.output_address_label.setVisible(is_analog)
             self.output_address_combo.setVisible(is_analog)
             self.mu210_module_label.setVisible(is_analog and is_owen)
             self.mu210_module_spin.setVisible(is_analog and is_owen)
-            self.mu210_register_label.setVisible(is_analog and is_owen)
-            self.mu210_register_combo.setVisible(is_analog and is_owen)
 
     def _load_channel_mu210_mapping(self) -> None:
         """Подставить ручную привязку выбранного аналогового канала."""
@@ -963,13 +975,17 @@ class StepEditDialog(QDialog):
         if channel is None:
             return
         self.mu210_module_spin.setValue(channel.mu210_module)
-        register_index = self.mu210_register_combo.findData(channel.mu210_register)
-        self.mu210_register_combo.setCurrentIndex(max(0, register_index))
+        self.device_combo.setCurrentIndex(
+            self.device_combo.findData(channel.output_device)
+        )
+        self._fill_address_combo(channel.output_device, channel.output_address)
+        self.update_discrete_visibility()
 
     def get_step(self) -> ScenarioStep:
         """Получить настроенный шаг с поддержкой дискретных параметров"""
         signal_type = self.type_combo.currentData()
         is_analog = SignalType[signal_type.upper()].is_analog()
+        is_owen = self.device_combo.currentData() == "owen"
         return ScenarioStep(
             id=self.step.id,
             channel_id=self.channel_combo.currentData(),
@@ -986,14 +1002,16 @@ class StepEditDialog(QDialog):
             trigger_step_id=self.step.trigger_step_id,
             duty_cycle=self.duty_spin.value(),
             pulse_width=self.pulse_width_spin.value(),
-            mu210_module=self.mu210_module_spin.value() if is_analog else None,
+            mu210_module=self.mu210_module_spin.value()
+            if is_analog and is_owen
+            else None,
             mu210_register=(
-                self.mu210_register_combo.currentData() if is_analog else None
+                self.output_address_combo.currentData()
+                if is_analog and is_owen
+                else None
             ),
-            output_device=self.device_combo.currentData() if is_analog else None,
-            output_address=(
-                self.output_address_combo.currentData() if is_analog else None
-            ),
+            output_device=self.device_combo.currentData(),
+            output_address=self.output_address_combo.currentData(),
         )
 
     def _fill_address_combo(self, device: str, preferred: int) -> None:
@@ -1011,6 +1029,4 @@ class StepEditDialog(QDialog):
         is_owen = device == "owen"
         self.mu210_module_label.setVisible(is_owen)
         self.mu210_module_spin.setVisible(is_owen)
-        self.mu210_register_label.setVisible(is_owen)
-        self.mu210_register_combo.setVisible(is_owen)
         self.update_discrete_visibility()
