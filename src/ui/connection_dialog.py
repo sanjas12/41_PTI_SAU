@@ -1,21 +1,9 @@
 """Модальное окно настройки подключения к устройству вывода."""
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import (
-    QComboBox,
-    QDialog,
-    QDialogButtonBox,
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QMessageBox,
-    QPushButton,
-    QSpinBox,
-    QVBoxLayout,
-    QWidget,
-)
+from typing import Optional
+
+from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtWidgets import QDialog, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from ui.connection_panel import ConnectionPanel
 
@@ -31,24 +19,24 @@ class ConnectionDialog(QDialog):
     connected = pyqtSignal(bool)
     connection_changed = pyqtSignal(dict)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Подключение")
         self.setModal(True)
         self.setMinimumWidth(560)
+        self.resize(640, 480)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
         # Панель подключения — та же, что была на главном окне.
-        self.connection_panel = ConnectionPanel()
+        self.connection_panel = ConnectionPanel(self)
         # В диалоге сворачивание не нужно — держим панель развёрнутой.
         self.connection_panel.set_collapsed(False)
+        self.connection_panel.setCheckable(False)
         self.connection_panel.connected.connect(self.connected.emit)
-        self.connection_panel.connection_changed.connect(
-            self.connection_changed.emit
-        )
+        self.connection_panel.connection_changed.connect(self.connection_changed.emit)
         layout.addWidget(self.connection_panel)
 
         # Кнопка закрытия

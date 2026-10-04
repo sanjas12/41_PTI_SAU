@@ -19,6 +19,9 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from config.ui_settings import UISettings
+from ui.themes import get_theme
+
 from .collapsible_groupbox import CollapsibleGroupBox
 
 
@@ -158,253 +161,89 @@ class ConnectionPanel(CollapsibleGroupBox):
             self.port_spin.setValue(self._last_connection.get("port", 502))
             self.unit_spin.setValue(self._last_connection.get("unit_id", 1))
 
-    def setup_ui(self):
-        """Настройка интерфейса"""
-        # Основной контейнер для содержимого
-        content_widget = QWidget()
-        layout = QVBoxLayout()
-        content_widget.setLayout(layout)
-
-        # Основная сетка параметров
+    def setup_ui(self) -> None:
+        """Параметры, профили и действия в отдельных строках общей темы."""
+        self.setStyleSheet("")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 18, 12, 12)
+        layout.setSpacing(12)
         grid = QGridLayout()
-
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(8)
+        grid.setColumnStretch(1, 1)
         self.device_combo = QComboBox()
         for device_type, label in self.DEVICE_LABELS.items():
             self.device_combo.addItem(label, device_type)
         self.device_combo.setCurrentIndex(self.device_combo.findData("owen"))
         grid.addWidget(QLabel("Устройство:"), 0, 0)
-        grid.addWidget(self.device_combo, 0, 1, 1, 2)
-
-        # Быстрый выбор сохраненных подключений
+        grid.addWidget(self.device_combo, 0, 1)
         self.preset_combo = QComboBox()
         self.preset_combo.addItem("-- Выберите сохраненное --")
         for conn in self.saved_connections:
             self.preset_combo.addItem(f"{conn['name']} ({conn['host']}:{conn['port']})")
-        grid.addWidget(QLabel("Быстрый выбор:"), 1, 0)
-        grid.addWidget(self.preset_combo, 1, 1, 1, 2)
-
-        # IP Address
+        grid.addWidget(QLabel("Сохранённое подключение:"), 1, 0)
+        grid.addWidget(self.preset_combo, 1, 1)
         self.ip_label = QLabel("IP-адреса:")
-        grid.addWidget(self.ip_label, 2, 0)
         self.ip_edit = QLineEdit("192.168.1.99")
         self.ip_edit.setPlaceholderText("192.168.1.99, 192.168.1.100")
-        self.ip_edit.setMaximumWidth(320)
+        grid.addWidget(self.ip_label, 2, 0)
         grid.addWidget(self.ip_edit, 2, 1)
-
-        # Порт
-        grid.addWidget(QLabel("Порт:"), 2, 2)
+        options = QHBoxLayout()
         self.port_spin = QSpinBox()
         self.port_spin.setRange(1, 65535)
         self.port_spin.setValue(502)
-        self.port_spin.setMaximumWidth(80)
-        grid.addWidget(self.port_spin, 2, 3)
-
-        # Unit ID
-        grid.addWidget(QLabel("Unit ID:"), 3, 0)
         self.unit_spin = QSpinBox()
         self.unit_spin.setRange(0, 255)
         self.unit_spin.setValue(1)
-        self.unit_spin.setMaximumWidth(80)
-        grid.addWidget(self.unit_spin, 3, 1)
-
-        # Кнопки управления
-        button_layout = QHBoxLayout()
-
-        self.connect_btn = QPushButton("Подключиться")
-        self.connect_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-                min-width: 120px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-            }
-        """)
-        button_layout.addWidget(self.connect_btn)
-
-        self.disconnect_btn = QPushButton("Отключиться")
-        self.disconnect_btn.setEnabled(False)
-        self.disconnect_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f44336;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-                min-width: 120px;
-            }
-            QPushButton:hover {
-                background-color: #da190b;
-            }
-            QPushButton:pressed {
-                background-color: #c62828;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-            }
-        """)
-        button_layout.addWidget(self.disconnect_btn)
-
-        # Кнопка сохранить настройки
-        self.save_btn = QPushButton("Сохранить")
-        self.save_btn.setMaximumWidth(100)
-        self.save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-        """)
-        button_layout.addWidget(self.save_btn)
-
-        # Кнопка удалить настройки
-        self.delete_btn = QPushButton("Удалить")
-        self.delete_btn.setMaximumWidth(100)
-        self.delete_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ff5722;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #e64a19;
-            }
-        """)
-        button_layout.addWidget(self.delete_btn)
-
-        # Добавляем кнопки в сетку
-        grid.addLayout(button_layout, 4, 0, 1, 4)
-
-        # Статус подключения
-        status_layout = QHBoxLayout()
-
-        self.status_indicator = QFrame()
-        self.status_indicator.setFixedSize(16, 16)
-        self.status_indicator.setStyleSheet("""
-            QFrame {
-                background-color: #f44336;
-                border-radius: 8px;
-            }
-        """)
-        status_layout.addWidget(self.status_indicator)
-
-        self.status_label = QLabel("Отключено")
-        self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
-        status_layout.addWidget(self.status_label)
-
-        status_layout.addStretch()
-
-        # Время соединения
-        self.connection_time_label = QLabel("Время соединения: --")
-        self.connection_time_label.setStyleSheet("color: #666666;")
-        status_layout.addWidget(self.connection_time_label)
-
-        grid.addLayout(status_layout, 5, 0, 1, 4)
-
+        options.addWidget(QLabel("Порт:"))
+        options.addWidget(self.port_spin)
+        options.addSpacing(16)
+        options.addWidget(QLabel("Unit ID:"))
+        options.addWidget(self.unit_spin)
+        options.addStretch()
+        grid.addLayout(options, 3, 1)
         layout.addLayout(grid)
 
-        # Разделитель
+        profiles = QHBoxLayout()
+        profiles.addStretch()
+        self.save_btn = QPushButton("Сохранить")
+        self.delete_btn = QPushButton("Удалить")
+        profiles.addWidget(self.save_btn)
+        profiles.addWidget(self.delete_btn)
+        layout.addLayout(profiles)
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
         layout.addWidget(separator)
 
-        # Дополнительная информация
-        info_layout = QHBoxLayout()
-
+        status = QHBoxLayout()
+        self.status_indicator = QFrame()
+        self.status_indicator.setFixedSize(12, 12)
+        self.status_label = QLabel("Отключено")
+        self.connection_time_label = QLabel("Время соединения: --")
+        status.addWidget(self.status_indicator)
+        status.addWidget(self.status_label)
+        status.addStretch()
+        status.addWidget(self.connection_time_label)
+        layout.addLayout(status)
         self.connection_info = QLabel("Не подключено")
-        self.connection_info.setStyleSheet("color: #999999;")
-        info_layout.addWidget(self.connection_info)
-
-        info_layout.addStretch()
-
+        self.connection_info.setWordWrap(True)
+        layout.addWidget(self.connection_info)
+        details = QHBoxLayout()
         self.retry_count_label = QLabel("Попыток: 0")
-        self.retry_count_label.setStyleSheet("color: #999999;")
-        info_layout.addWidget(self.retry_count_label)
+        details.addWidget(self.retry_count_label)
+        details.addStretch()
+        details.addWidget(QLabel(os.path.basename(self.config_path)))
+        layout.addLayout(details)
 
-        # Информация о файле настроек
-        config_info = QLabel(f"📁 {os.path.basename(self.config_path)}")
-        config_info.setStyleSheet("color: #999999;")
-        info_layout.addWidget(config_info)
-
-        layout.addLayout(info_layout)
-
-        # Добавляем контент в GroupBox
-        self.setLayout(layout)
-
-        self._content_widgets = []
-        for child in self.findChildren(QWidget):
-            if child != self:  # Не добавляем сам GroupBox
-                self._content_widgets.append(child)
-
-        # Стили группы
-        self.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 2px solid #d0d0d0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-                background-color: #fafafa;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-                background-color: #fafafa;
-            }
-            QGroupBox::indicator {
-                width: 18px;
-                height: 18px;
-            }
-            QGroupBox::indicator:checked {
-                image: none;
-            }
-            QGroupBox::indicator:unchecked {
-                image: none;
-            }
-            QLabel {
-                color: #333333;
-            }
-            QLineEdit, QSpinBox, QComboBox {
-                padding: 5px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                background-color: white;
-            }
-            QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
-                border: 2px solid #4CAF50;
-            }
-            QSpinBox::up-button, QSpinBox::down-button {
-                width: 16px;
-            }
-        """)
-
-        # Размеры
-        self.setMaximumWidth(500)
+        actions = QHBoxLayout()
+        self.connect_btn = QPushButton("Подключиться")
+        self.disconnect_btn = QPushButton("Отключиться")
+        self.disconnect_btn.setEnabled(False)
+        actions.addWidget(self.connect_btn)
+        actions.addWidget(self.disconnect_btn)
+        actions.addStretch()
+        layout.addLayout(actions)
+        self._content_widgets = list(self.findChildren(QWidget))
 
     def setup_connections(self):
         """Настройка сигналов"""
@@ -428,7 +267,7 @@ class ConnectionPanel(CollapsibleGroupBox):
 
         if not host:
             self.status_label.setText("Введите IP адрес")
-            self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+            self.status_label.setStyleSheet("")
             return
 
         # Сохраняем параметры
@@ -562,7 +401,7 @@ class ConnectionPanel(CollapsibleGroupBox):
         else:
             self.ip_label.setText("IP:")
             self.ip_edit.setPlaceholderText("Введите IP адрес")
-        
+
         if device_type == "moxa_e1242":
             self.ip_label.setText("IP:")
             self.ip_edit.setPlaceholderText("192.168.127.254")
@@ -570,17 +409,19 @@ class ConnectionPanel(CollapsibleGroupBox):
         self.ip_edit.setText(default_hosts[device_type])
         self.on_params_changed()
 
+    def _update_status_indicator(self) -> None:
+        colors = get_theme(UISettings.instance().theme)
+        color = colors.success if self._is_connected else colors.danger
+        self.status_indicator.setStyleSheet(
+            f"background-color: {color}; border-radius: 6px;"
+        )
+
     def update_connection_status(self):
         """Обновить статус подключения"""
         if self._is_connected:
-            self.status_indicator.setStyleSheet("""
-                QFrame {
-                    background-color: #4CAF50;
-                    border-radius: 8px;
-                }
-            """)
+            self._update_status_indicator()
             self.status_label.setText("Подключено")
-            self.status_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+            self.status_label.setStyleSheet("")
 
             self.connect_btn.setEnabled(False)
             self.disconnect_btn.setEnabled(True)
@@ -590,7 +431,7 @@ class ConnectionPanel(CollapsibleGroupBox):
                 f"{self._connection_params['host']}:{self._connection_params['port']} "
                 f"(Unit ID: {self._connection_params['unit_id']})"
             )
-            self.connection_info.setStyleSheet("color: #4CAF50;")
+            self.connection_info.setStyleSheet("")
 
             import datetime
 
@@ -598,20 +439,15 @@ class ConnectionPanel(CollapsibleGroupBox):
             self.connection_time_label.setText(f"Подключено в: {now}")
 
         else:
-            self.status_indicator.setStyleSheet("""
-                QFrame {
-                    background-color: #f44336;
-                    border-radius: 8px;
-                }
-            """)
+            self._update_status_indicator()
             self.status_label.setText("❌ Отключено")
-            self.status_label.setStyleSheet("color: #f44336; font-weight: bold;")
+            self.status_label.setStyleSheet("")
 
             self.connect_btn.setEnabled(True)
             self.disconnect_btn.setEnabled(False)
 
             self.connection_info.setText("Не подключено")
-            self.connection_info.setStyleSheet("color: #999999;")
+            self.connection_info.setStyleSheet("")
 
             self.connection_time_label.setText("Время соединения: --")
 
@@ -752,4 +588,3 @@ def test_connection_panel():
 if __name__ == "__main__":
     # Запускаем тест
     test_connection_panel()
-
