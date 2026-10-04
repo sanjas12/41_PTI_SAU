@@ -151,6 +151,24 @@ class ScenarioEngine(QObject):
             self.scenario_stopped.emit()
             self.log_signal.emit("Сценарий остановлен, каналы восстановлены", "info")
 
+    def reset_scenario(self) -> None:
+        """Остановить сценарий и вернуть его выполнение к началу."""
+        if self._is_running or self.mode != ScenarioMode.MANUAL:
+            self.stop_scenario()
+        self.timer.stop()
+        self._current_step = 0
+        self._step_time = 0.0
+        self._scenario_time = 0.0
+        self._scenario_active = False
+        self._active_steps.clear()
+        self._started_steps.clear()
+        self._completed_steps.clear()
+        self._ramp_data.clear()
+        self.step_changed.emit(0, len(self.scenario.steps) if self.scenario else 0)
+        self.time_updated.emit(0.0)
+        self.progress_changed.emit(0.0)
+        self._emit_active_steps()
+
     def pause_scenario(self):
         """Приостановить сценарий"""
         if self._is_running and self.mode == ScenarioMode.SCENARIO:

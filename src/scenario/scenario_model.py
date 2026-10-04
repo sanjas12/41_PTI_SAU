@@ -1,10 +1,12 @@
+import contextlib
 import json
-import math
 import os
 import tempfile
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
+
+from core.output_devices import default_address
 
 TRIGGER_ANY = "any"
 TRIGGER_ALL = "all"
@@ -72,6 +74,9 @@ class ScenarioStep:
         if device is None:
             device = "owen"
             address = data.get("mu210_register", 3000)
+
+        if address is None:
+            address = default_address(str(device))
 
         return cls(
             id=str(data.get("id") or uuid4().hex),
@@ -356,10 +361,8 @@ class Scenario:
             os.replace(tmp_path, filepath)
         except Exception:
             if os.path.exists(tmp_path):
-                try:
+                with contextlib.suppress(OSError):
                     os.remove(tmp_path)
-                except OSError:
-                    pass
             raise
 
     @classmethod

@@ -61,6 +61,19 @@ class SignalGenerator:
         """Получить текущий интервал обновления в секундах"""
         return self._update_interval
 
+    def reset(self) -> None:
+        """Обнулить значения и внутреннее состояние без пересчёта сигналов."""
+        self._time_accumulator = 0.0
+        self._last_update_time = 0.0
+        self._random_values.clear()
+        self._random_buckets.clear()
+        self._discrete_state.clear()
+        self._last_toggle_time.clear()
+        for channel in self.channels:
+            channel.time = 0.0
+            channel.current_value = 0.0
+            channel.discrete_value = False
+
     def update(self, dt: Optional[float] = None) -> List[float]:
         """
         Обновить значения всех каналов

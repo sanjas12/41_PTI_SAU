@@ -89,6 +89,9 @@ class AnalogChannel:
             if address <= 0:
                 address = default_address(DEVICE_OWEN)
 
+        if address is None:
+            address = default_address(str(device))
+
         return cls(
             id=int(data["id"]),
             name=str(data["name"]),
@@ -103,10 +106,6 @@ class AnalogChannel:
             pulse_width=float(data.get("pulse_width", 1.0)),
             output_device=str(device),
             output_address=int(address),
-            mu210_module=int(
-                data.get("mu210_module", data["id"] // 8 + 1)
-            ),
-            mu210_register=int(
-                data.get("mu210_register", 3000 + data["id"] % 8)
-            ),
+            mu210_module=int(data.get("mu210_module", data["id"] // 8 + 1)),
+            mu210_register=int(data.get("mu210_register", 3000 + data["id"] % 8)),
         )

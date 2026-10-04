@@ -980,30 +980,22 @@ class MainWindow(QMainWindow):
         self._refresh_status_bar()
 
     def _refresh_control_buttons(self) -> None:
-        """Состояние Play/Stop/Пауза/прогресса в ControlPanel и ToolBar."""
-        if not (hasattr(self, "control_panel") and self.control_panel):
-            return
-
-        if self._is_scenario_view_active():
-            engine_mode = getattr(self, "_engine_mode", "manual")
-            scenario_running = engine_mode in ("scenario", "paused")
-            self.control_panel.set_running_state(scenario_running)
-            self.control_panel.set_pause_enabled(scenario_running)
-            self.control_panel.set_pause_icon(paused=(engine_mode == "paused"))
-            self.control_panel.set_progress_visible(True)
-            self.control_panel.set_toggle_all_enabled(False)
-            if hasattr(self, "toolbar"):
-                self.toolbar.set_running_state(
-                    scenario_running, paused=(engine_mode == "paused")
-                )
-        else:
-            self.control_panel.set_running_state(self.is_running)
-            self.control_panel.set_pause_enabled(self.is_running)
-            self.control_panel.set_pause_icon(paused=self.is_paused)
-            self.control_panel.set_progress_visible(False)
-            self.control_panel.set_toggle_all_enabled(True)
-            if hasattr(self, "toolbar"):
-                self.toolbar.set_running_state(self.is_running, paused=self.is_paused)
+        """Обновить toolbar независимо от наличия старой ControlPanel."""
+        scenario_view = self._is_scenario_view_active()
+        engine_mode = getattr(self, "_engine_mode", "manual")
+        running = (
+            engine_mode in ("scenario", "paused") if scenario_view else self.is_running
+        )
+        paused = engine_mode == "paused" if scenario_view else self.is_paused
+        if hasattr(self, "toolbar"):
+            self.toolbar.set_running_state(running, paused=paused)
+        panel = getattr(self, "control_panel", None)
+        if panel is not None:
+            panel.set_running_state(running)
+            panel.set_pause_enabled(running)
+            panel.set_pause_icon(paused=paused)
+            panel.set_progress_visible(scenario_view)
+            panel.set_toggle_all_enabled(not scenario_view)
 
     def _is_scenario_view_active(self) -> bool:
         return hasattr(self, "mode_stack") and self.mode_stack.currentIndex() == 1
@@ -1156,18 +1148,20 @@ class MainWindow(QMainWindow):
         self.controller.resume_generation()
 
     def reset_signals(self) -> None:
-        """Сбросить сигналы и очистить графики."""
-        for channel in self.generator.channels:
-            channel.time = 0
-            channel.current_value = 0
-
-        if self.plot_window and self.plot_window.isVisible():
+        """Остановить выполнение, обнулить сигналы и очистить графики."""
+        self.controller.stop_generation()
+        self.scenario_engine.reset_scenario()
+        self.generator.reset()
+        self._sync_generation_timer()
+        for widget in self.channel_widgets:
+            widget.update_display()
+        if self.plot_window is not None:
             for plot in self.plot_window.plot_widgets:
                 plot.clear_plot()
             self.plot_window._update_channels_list()
             self.log("Графики очищены", "info")
-
-        self.update_signals()
+        self._refresh_control_buttons()
+        self._refresh_status_bar()
         self.log("Сигналы сброшены", "info")
 
     def on_toggle_all_channels_clicked(self) -> None:

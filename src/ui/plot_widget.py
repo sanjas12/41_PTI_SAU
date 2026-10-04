@@ -1,3 +1,4 @@
+import contextlib
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -1630,6 +1631,7 @@ class PlotWindow(QMainWindow):
     def apply_theme(self, theme_name: str) -> None:
         """Применить тему к окну графиков."""
         from ui.themes import get_theme
+
         c = get_theme(theme_name)
         for plot in self.plot_widgets:
             plot.setBackground(c.plot_bg)
@@ -1639,13 +1641,13 @@ class PlotWindow(QMainWindow):
                 axis.setTextPen(pg.mkPen(c.plot_text))
             # Пересоздать легенду с новыми цветами
             if plot._legend is not None:
-                try:
+                with contextlib.suppress(Exception):
                     plot._legend.scene().removeItem(plot._legend)
-                except Exception:
-                    pass
             plot._legend = plot.addLegend(
                 brush=pg.mkBrush(c.plot_legend_bg),
                 pen=pg.mkPen(c.plot_legend_border),
             )
-            for channel_id, curve in plot.curves.items():
-                plot._legend.addItem(curve, plot.get_channel_name(channel_id))
+            legend = plot._legend
+            if legend is not None:
+                for channel_id, curve in plot.curves.items():
+                    legend.addItem(curve, plot.get_channel_name(channel_id))
