@@ -308,6 +308,7 @@ class MainWindow(QMainWindow):
         self.toolbar.stop_clicked.connect(self.on_stop_clicked)
         self.toolbar.pause_clicked.connect(self.on_pause_clicked)
         self.toolbar.reset_clicked.connect(self.reset_signals)
+        self.toolbar.disable_all_clicked.connect(self.disable_all_channels)
         self.toolbar.plots_clicked.connect(self.open_plot_window)
         self.toolbar.registers_clicked.connect(self.open_plc_view)
         self.toolbar.save_clicked.connect(self.save_channels)
@@ -990,6 +991,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "toolbar"):
             self.toolbar.set_running_state(running, paused=paused)
             self.toolbar.scenario_progress_action.setVisible(scenario_view)
+            self.toolbar.disable_all_action.setVisible(not scenario_view)
         panel = getattr(self, "control_panel", None)
         if panel is not None:
             panel.set_running_state(running)
@@ -1169,6 +1171,17 @@ class MainWindow(QMainWindow):
         self._refresh_control_buttons()
         self._refresh_status_bar()
         self.log("Сигналы сброшены", "info")
+
+    def disable_all_channels(self) -> None:
+        """Снять флаг включения всех каналов в ручном режиме."""
+        if self._is_scenario_view_active():
+            return
+        for channel in self.generator.channels:
+            channel.enabled = False
+        for widget in self.channel_widgets:
+            widget.enabled_check.setChecked(False)
+        self._save_channels_config()
+        self.log("Все каналы выключены", "info")
 
     def on_toggle_all_channels_clicked(self) -> None:
         """Включить/выключить разом все каналы (только ручной режим)."""

@@ -13,6 +13,7 @@ class AppToolBar(QToolBar):
     stop_clicked = pyqtSignal()
     pause_clicked = pyqtSignal()
     reset_clicked = pyqtSignal()
+    disable_all_clicked = pyqtSignal()
     plots_clicked = pyqtSignal()
     registers_clicked = pyqtSignal()
     save_clicked = pyqtSignal()
@@ -55,6 +56,11 @@ class AppToolBar(QToolBar):
         self.scenario_progress.setToolTip("Прогресс выполнения сценария")
         self.scenario_progress_action = self.addWidget(self.scenario_progress)
         self.scenario_progress_action.setVisible(False)
+
+        self.disable_all_action = QAction("Выключить все", self)
+        self.disable_all_action.setToolTip("Снять галку «Вкл.» у всех каналов")
+        self.disable_all_action.triggered.connect(self.disable_all_clicked.emit)
+        self.addAction(self.disable_all_action)
 
         self.addSeparator()
 
