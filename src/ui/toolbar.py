@@ -1,7 +1,7 @@
 """Верхняя панель инструментов главного окна."""
 
 from PyQt5.QtCore import QSize, Qt, pyqtSignal
-from PyQt5.QtWidgets import QAction, QToolBar
+from PyQt5.QtWidgets import QAction, QProgressBar, QToolBar
 
 from ui.themes import get_theme
 
@@ -47,6 +47,15 @@ class AppToolBar(QToolBar):
         self.reset_action.triggered.connect(self.reset_clicked.emit)
         self.addAction(self.reset_action)
 
+        self.scenario_progress = QProgressBar(self)
+        self.scenario_progress.setRange(0, 100)
+        self.scenario_progress.setValue(0)
+        self.scenario_progress.setFormat("Сценарий: %p%")
+        self.scenario_progress.setFixedWidth(160)
+        self.scenario_progress.setToolTip("Прогресс выполнения сценария")
+        self.scenario_progress_action = self.addWidget(self.scenario_progress)
+        self.scenario_progress_action.setVisible(False)
+
         self.addSeparator()
 
         # --- Окна ---
@@ -89,6 +98,13 @@ class AppToolBar(QToolBar):
             self.pause_action.setText("▶ Возобновить")
         else:
             self.pause_action.setText("⏸ Пауза")
+
+    def set_scenario_progress(self, progress: int) -> None:
+        progress = max(0, min(100, progress))
+        self.scenario_progress.setValue(progress)
+        self.scenario_progress.setFormat(
+            "Сценарий завершён" if progress == 100 else "Сценарий: %p%"
+        )
 
     def apply_theme(self, theme_name: str) -> None:
         """Применить стили к toolbar под выбранную тему."""

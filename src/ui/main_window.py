@@ -989,6 +989,7 @@ class MainWindow(QMainWindow):
         paused = engine_mode == "paused" if scenario_view else self.is_paused
         if hasattr(self, "toolbar"):
             self.toolbar.set_running_state(running, paused=paused)
+            self.toolbar.scenario_progress_action.setVisible(scenario_view)
         panel = getattr(self, "control_panel", None)
         if panel is not None:
             panel.set_running_state(running)
@@ -1026,6 +1027,7 @@ class MainWindow(QMainWindow):
     # ==================================================================
 
     def on_scenario_started(self, name: str) -> None:
+        self.toolbar.set_scenario_progress(0)
         self._update_scenario_time(0.0)
         self._refresh_control_buttons()
         self._refresh_status_bar()
@@ -1036,6 +1038,7 @@ class MainWindow(QMainWindow):
             self.plot_window.progress_bar.setVisible(True)
 
     def on_scenario_stopped(self) -> None:
+        self.toolbar.set_scenario_progress(0)
         self._refresh_control_buttons()
         if hasattr(self, "control_panel") and self.control_panel:
             self.control_panel.set_progress(0)
@@ -1048,6 +1051,7 @@ class MainWindow(QMainWindow):
             self.plot_window.progress_bar.setVisible(False)
 
     def on_scenario_finished(self) -> None:
+        self.toolbar.set_scenario_progress(100)
         scenario = self.scenario_engine.scenario
         if scenario:
             if hasattr(self, "control_panel") and self.control_panel:
@@ -1061,6 +1065,7 @@ class MainWindow(QMainWindow):
             self.plot_window.set_scenario_progress(100)
 
     def on_scenario_progress_changed(self, progress: float) -> None:
+        self.toolbar.set_scenario_progress(int(progress))
         if hasattr(self, "control_panel") and self.control_panel:
             self.control_panel.set_progress(int(progress))
         if self.plot_window and self.plot_window.isVisible():
@@ -1074,6 +1079,7 @@ class MainWindow(QMainWindow):
     def on_scenario_definition_changed(self, scenario: Scenario) -> None:
         if self.scenario_engine.is_running():
             return
+        self.toolbar.set_scenario_progress(0)
         if not (hasattr(self, "control_panel") and self.control_panel):
             return
         self.control_panel.set_progress(0)
