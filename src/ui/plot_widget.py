@@ -1,4 +1,3 @@
-import contextlib
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -420,20 +419,22 @@ class PlotWidget(pg.PlotWidget):
     # ------------------------------------------------------------------
 
     def update_legend(self) -> None:
-        """Пересоздать легенду."""
+        """Обновить содержимое легенды, сохраняя её привязку к графику."""
 
-        if self._legend is not None:
-            self._legend.scene().removeItem(self._legend)
-
-        self._legend = self.addLegend(
-            brush=pg.mkBrush(24, 27, 30, 220),
-            pen=pg.mkPen("#525a63"),
-        )
+        if self._legend is None:
+            self._legend = self.addLegend(
+                brush=pg.mkBrush(24, 27, 30, 220),
+                pen=pg.mkPen("#525a63"),
+            )
+        legend = self._legend
+        if legend is None:
+            return
+        legend.clear()
 
         for channel_id, curve in self.curves.items():
             name = self.get_channel_name(channel_id)
 
-            self._legend.addItem(  # type: ignore
+            legend.addItem(
                 curve,
                 name,
             )
@@ -1639,15 +1640,8 @@ class PlotWindow(QMainWindow):
                 axis = plot.getAxis(axis_name)
                 axis.setPen(pg.mkPen(c.plot_axis))
                 axis.setTextPen(pg.mkPen(c.plot_text))
-            # Пересоздать легенду с новыми цветами
-            if plot._legend is not None:
-                with contextlib.suppress(Exception):
-                    plot._legend.scene().removeItem(plot._legend)
-            plot._legend = plot.addLegend(
-                brush=pg.mkBrush(c.plot_legend_bg),
-                pen=pg.mkPen(c.plot_legend_border),
-            )
+            plot.update_legend()
             legend = plot._legend
             if legend is not None:
-                for channel_id, curve in plot.curves.items():
-                    legend.addItem(curve, plot.get_channel_name(channel_id))
+                legend.setBrush(pg.mkBrush(c.plot_legend_bg))
+                legend.setPen(pg.mkPen(c.plot_legend_border))

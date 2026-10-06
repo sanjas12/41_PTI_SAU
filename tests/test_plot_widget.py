@@ -12,6 +12,28 @@ from ui.plot_widget import PlotWindow
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
+def test_repeated_clear_keeps_legend_attached() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = PlotWindow(SignalGenerator([AnalogChannel(id=0, name="channel")]))
+    try:
+        window.add_channel_to_plot(0)
+        plot = window.plot_widgets[0]
+        for _ in range(3):
+            plot.clear_plot()
+            assert plot._legend is not None
+            assert plot._legend.scene() is not None
+            assert not plot._legend.items
+            window.add_channel_to_plot(0)
+            assert len(plot._legend.items) == 1
+        window.apply_theme("light")
+        window.apply_theme("dark")
+        plot.clear_plot()
+        assert plot._legend.scene() is not None
+    finally:
+        window.close()
+        app.processEvents()
+
+
 def test_plot_acquisition_follows_running_state():
     app = QApplication.instance() or QApplication([])
     generator = SignalGenerator([AnalogChannel(id=0, name="channel")])
