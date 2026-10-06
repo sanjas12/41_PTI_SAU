@@ -27,7 +27,6 @@ from core.channel_repository import ChannelRepository
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 from devices.device_manager import DeviceManager
-from plc.plc_register_view import PLCRegisterView
 from scenario.scenario_engine import ScenarioEngine
 from scenario.scenario_model import Scenario
 from scenario.scenario_widget import ScenarioWidget
@@ -35,6 +34,7 @@ from ui.channel_widget import ChannelWidget
 from ui.connection_dialog import ConnectionDialog
 from ui.event_log_panel import EventLogPanel
 from ui.menu_bar import AppMenuBar
+from ui.plc_register_view import PLCRegisterView
 from ui.plot_widget import PlotWindow
 from ui.settings_dialog import SettingsDialog
 from ui.status_bar import AppStatusBar

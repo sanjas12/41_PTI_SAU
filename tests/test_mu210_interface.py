@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QApplication
 from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
-from mu210.interface import MU210Interface
+from devices.mu210_interface import MU210Interface
 from scenario.scenario_model import Scenario, ScenarioStep
 
 

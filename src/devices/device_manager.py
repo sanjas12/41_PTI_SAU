@@ -6,10 +6,10 @@ from PyQt5.QtCore import QObject, QThreadPool, pyqtSignal, pyqtSlot
 
 from core.output_devices import device_label
 from core.signal_generator import SignalGenerator
+from devices.moxa_e1242_interface import MoxaE1242Interface
+from devices.mu210_interface import MU210Interface
+from devices.plc_interface import PLCInterface
 from modbus.worker import Runnable
-from mu210.interface import MU210Interface
-from plc.moxa_e1242_interface import MoxaE1242Interface
-from plc.plc_interface import PLCInterface
 
 
 class DeviceManager(QObject):

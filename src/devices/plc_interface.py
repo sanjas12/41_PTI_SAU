@@ -210,7 +210,6 @@ class PLCInterface(QObject):
                 for i, channel in enumerate(self.generator.channels):
                     if channel.output_device != "plc":
                         continue
-                    address = channel.output_address  # %MWxx
                     if channel.enabled:
                         status_word |= 1 << i
 

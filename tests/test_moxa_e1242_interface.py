@@ -8,8 +8,8 @@ from PyQt5.QtWidgets import QApplication
 from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
+from devices.moxa_e1242_interface import MoxaE1242Interface
 from modbus.worker import Runnable
-from plc.moxa_e1242_interface import MoxaE1242Interface
 
 
 class DeferredPool:
