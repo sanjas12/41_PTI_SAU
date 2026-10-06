@@ -4,6 +4,7 @@ import os
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QDoubleSpinBox,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -27,7 +28,8 @@ class IntervalControl(CollapsibleGroupBox):
     CONFIG_FILE = "intervals_config.json"
 
     def __init__(self, parent=None):
-        super().__init__("⏱ Интервалы обновления", parent, collapsed=False)
+        super().__init__("Интервалы обновления", parent, collapsed=False)
+        self.setStyleSheet("")
         self._current_interval = 0.01  # 10ms по умолчанию
         self._current_plc_interval = 0.2  # 200ms по умолчанию
 
@@ -43,6 +45,8 @@ class IntervalControl(CollapsibleGroupBox):
 
         # Устанавливаем layout для GroupBox
         layout = QVBoxLayout()
+        layout.setContentsMargins(12, 18, 12, 12)
+        layout.setSpacing(12)
         layout.addWidget(content_widget)
         self.setLayout(layout)
 
@@ -120,36 +124,13 @@ class IntervalControl(CollapsibleGroupBox):
         self.update_signal_info(self._current_interval)
         self.update_plc_info(self._current_plc_interval)
 
-    def setup_ui(self, container):
+    def setup_ui(self, container: QWidget) -> None:
         """Настройка интерфейса"""
         layout = QVBoxLayout()
         container.setLayout(layout)
 
         # Создаем вкладки для разных интервалов
         tabs = QTabWidget()
-        tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
-                background-color: white;
-            }
-            QTabBar::tab {
-                background-color: #e8e8e8;
-                border: 1px solid #d0d0d0;
-                border-bottom: none;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-                padding: 6px 12px;
-                margin-right: 2px;
-            }
-            QTabBar::tab:selected {
-                background-color: white;
-                border-bottom: 2px solid #4CAF50;
-            }
-            QTabBar::tab:hover {
-                background-color: #d0d0d0;
-            }
-        """)
 
         # Вкладка 1: Интервал обновления сигналов
         signal_tab = QWidget()
@@ -173,49 +154,37 @@ class IntervalControl(CollapsibleGroupBox):
         self.status_label = QLabel(
             "✅ Сигналы: 0.010 с (100 Гц) | Устройство: 0.200 с (5 Гц)"
         )
-        self.status_label.setStyleSheet("color: #666666;")
         info_layout.addWidget(self.status_label)
 
         info_layout.addStretch()
 
         self.update_count_label = QLabel("Обновлений/сек: 100")
-        self.update_count_label.setStyleSheet("color: #666666;")
         info_layout.addWidget(self.update_count_label)
 
         # Кнопка сохранения
-        self.save_btn = QPushButton("💾 Сохранить настройки")
+        self.save_btn = QPushButton("Сохранить интервалы")
         self.save_btn.clicked.connect(self.save_settings)
-        self.save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 4px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
-        info_layout.addWidget(self.save_btn)
-
         layout.addLayout(info_layout)
+        actions = QHBoxLayout()
+        actions.addStretch()
+        actions.addWidget(self.save_btn)
+        layout.addLayout(actions)
 
     def save_settings(self):
         """Сохранить текущие настройки"""
         if self._save_config():
             self.status_label.setText("✅ Настройки сохранены!")
-            self.status_label.setStyleSheet("color: #4CAF50;")
 
             from PyQt5.QtCore import QTimer
 
             QTimer.singleShot(2000, lambda: self._update_status())
 
-    def _setup_signal_interval_ui(self, layout):
+    def _setup_signal_interval_ui(self, layout: QVBoxLayout) -> None:
         """Настройка интерфейса для интервала сигналов"""
         # Основная панель
-        main_layout = QHBoxLayout()
+        main_layout = QGridLayout()
+        main_layout.setHorizontalSpacing(12)
+        main_layout.setVerticalSpacing(8)
 
         # Значение в секундах
         value_layout = QVBoxLayout()
@@ -231,7 +200,7 @@ class IntervalControl(CollapsibleGroupBox):
         self.interval_spin.setMaximumWidth(120)
         value_layout.addWidget(self.interval_spin)
 
-        main_layout.addLayout(value_layout)
+        main_layout.addLayout(value_layout, 0, 0)
 
         # Слайдер для быстрой настройки
         slider_layout = QVBoxLayout()
@@ -245,7 +214,7 @@ class IntervalControl(CollapsibleGroupBox):
         self.interval_slider.setMinimumWidth(200)
         slider_layout.addWidget(self.interval_slider)
 
-        main_layout.addLayout(slider_layout)
+        main_layout.addLayout(slider_layout, 1, 0, 1, 2)
 
         # Информация о частоте
         freq_layout = QVBoxLayout()
@@ -253,10 +222,9 @@ class IntervalControl(CollapsibleGroupBox):
 
         self.freq_label = QLabel("100.0 Гц")
         self.freq_label.setObjectName("channelValue")
-        self.freq_label.setStyleSheet("color: #0066CC;")
         freq_layout.addWidget(self.freq_label)
 
-        main_layout.addLayout(freq_layout)
+        main_layout.addLayout(freq_layout, 0, 1)
 
         # Кнопки быстрых установок
         quick_layout = QVBoxLayout()
@@ -276,36 +244,20 @@ class IntervalControl(CollapsibleGroupBox):
         self.preset_buttons = []
         for label, value in presets:
             btn = QPushButton(label)
-            btn.setMaximumWidth(50)
-            btn.setMaximumHeight(25)
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #e0e0e0;
-                    border: 1px solid #b0b0b0;
-                    border-radius: 3px;
-                    padding: 2px;
-                }
-                QPushButton:hover {
-                    background-color: #d0d0d0;
-                }
-                QPushButton:pressed {
-                    background-color: #4CAF50;
-                    color: white;
-                }
-            """)
             btn.clicked.connect(lambda checked, v=value: self.set_signal_interval(v))
             quick_buttons_layout.addWidget(btn)
             self.preset_buttons.append(btn)
 
         quick_layout.addLayout(quick_buttons_layout)
-        main_layout.addLayout(quick_layout)
-
         layout.addLayout(main_layout)
+        layout.addLayout(quick_layout)
 
-    def _setup_plc_interval_ui(self, layout):
+    def _setup_plc_interval_ui(self, layout: QVBoxLayout) -> None:
         """Настройка интерфейса для интервала записи в PLC"""
         # Основная панель
-        main_layout = QHBoxLayout()
+        main_layout = QGridLayout()
+        main_layout.setHorizontalSpacing(12)
+        main_layout.setVerticalSpacing(8)
 
         # Значение в секундах
         value_layout = QVBoxLayout()
@@ -321,7 +273,7 @@ class IntervalControl(CollapsibleGroupBox):
         self.plc_interval_spin.setMaximumWidth(120)
         value_layout.addWidget(self.plc_interval_spin)
 
-        main_layout.addLayout(value_layout)
+        main_layout.addLayout(value_layout, 0, 0)
 
         # Слайдер для быстрой настройки
         slider_layout = QVBoxLayout()
@@ -335,7 +287,7 @@ class IntervalControl(CollapsibleGroupBox):
         self.plc_interval_slider.setMinimumWidth(200)
         slider_layout.addWidget(self.plc_interval_slider)
 
-        main_layout.addLayout(slider_layout)
+        main_layout.addLayout(slider_layout, 1, 0, 1, 2)
 
         # Информация о частоте записи
         freq_layout = QVBoxLayout()
@@ -343,10 +295,9 @@ class IntervalControl(CollapsibleGroupBox):
 
         self.plc_freq_label = QLabel("5.0 Гц")
         self.plc_freq_label.setObjectName("channelValue")
-        self.plc_freq_label.setStyleSheet("color: #FF6F00;")
         freq_layout.addWidget(self.plc_freq_label)
 
-        main_layout.addLayout(freq_layout)
+        main_layout.addLayout(freq_layout, 0, 1)
 
         # Кнопки быстрых установок для PLC
         quick_layout = QVBoxLayout()
@@ -366,43 +317,23 @@ class IntervalControl(CollapsibleGroupBox):
         self.plc_preset_buttons = []
         for label, value in plc_presets:
             btn = QPushButton(label)
-            btn.setMaximumWidth(50)
-            btn.setMaximumHeight(25)
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #e0e0e0;
-                    border: 1px solid #b0b0b0;
-                    border-radius: 3px;
-                    padding: 2px;
-                }
-                QPushButton:hover {
-                    background-color: #d0d0d0;
-                }
-                QPushButton:pressed {
-                    background-color: #FF6F00;
-                    color: white;
-                }
-            """)
             btn.clicked.connect(lambda checked, v=value: self.set_plc_interval(v))
             quick_buttons_layout.addWidget(btn)
             self.plc_preset_buttons.append(btn)
 
         quick_layout.addLayout(quick_buttons_layout)
-        main_layout.addLayout(quick_layout)
-
         layout.addLayout(main_layout)
+        layout.addLayout(quick_layout)
 
         # Информационная строка для PLC
         info_layout = QHBoxLayout()
 
         self.plc_status_label = QLabel("💡 Рекомендуемый интервал: 100-500 мс")
-        self.plc_status_label.setStyleSheet("color: #666666;")
         info_layout.addWidget(self.plc_status_label)
 
         info_layout.addStretch()
 
         self.plc_write_count_label = QLabel("Записей: 0")
-        self.plc_write_count_label.setStyleSheet("color: #666666;")
         info_layout.addWidget(self.plc_write_count_label)
 
         layout.addLayout(info_layout)

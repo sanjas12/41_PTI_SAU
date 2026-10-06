@@ -1,16 +1,18 @@
 """Диалог общих настроек: тема, масштаб UI, интервалы."""
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from typing import Optional
+
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import (
     QComboBox,
     QDialog,
-    QDialogButtonBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from config.ui_settings import UISettings
@@ -20,27 +22,30 @@ from ui.interval_control import IntervalControl
 class SettingsDialog(QDialog):
     """Единый диалог настроек: тема, масштаб, интервалы."""
 
-    theme_changed = pyqtSignal(str)      # "light" / "dark"
-    ui_scale_changed = pyqtSignal(str)   # "medium" / "large"
+    theme_changed = pyqtSignal(str)  # "light" / "dark"
+    ui_scale_changed = pyqtSignal(str)  # "medium" / "large"
     signal_interval_changed = pyqtSignal(float)
     plc_interval_changed = pyqtSignal(float)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Настройки")
         self.setModal(True)
-        self.setMinimumWidth(640)
+        self.setMinimumWidth(560)
+        self.resize(640, 520)
 
         self._ui_settings = UISettings.instance()
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         # --- Внешний вид ---
         appearance_group = QGroupBox("Внешний вид")
         appearance_form = QFormLayout(appearance_group)
-        appearance_form.setSpacing(6)
+        appearance_form.setContentsMargins(12, 18, 12, 12)
+        appearance_form.setHorizontalSpacing(12)
+        appearance_form.setVerticalSpacing(8)
 
         self.theme_combo = QComboBox()
         self.theme_combo.addItem("Светлая", "light")
@@ -69,11 +74,8 @@ class SettingsDialog(QDialog):
         layout.addWidget(appearance_group)
 
         # --- Интервалы ---
-        intervals_group = QGroupBox("Интервалы обновления")
-        intervals_layout = QVBoxLayout(intervals_group)
-        intervals_layout.setContentsMargins(6, 10, 6, 6)
-
-        self.interval_control = IntervalControl()
+        self.interval_control = IntervalControl(self)
+        self.interval_control.setCheckable(False)
         self.interval_control.set_collapsed(False)
         self.interval_control.signal_interval_changed.connect(
             self.signal_interval_changed.emit
@@ -81,18 +83,15 @@ class SettingsDialog(QDialog):
         self.interval_control.plc_interval_changed.connect(
             self.plc_interval_changed.emit
         )
-        intervals_layout.addWidget(self.interval_control)
-
-        layout.addWidget(intervals_group)
+        layout.addWidget(self.interval_control)
 
         # --- Кнопки ---
         buttons_row = QHBoxLayout()
         buttons_row.addStretch()
 
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
-        button_box.button(QDialogButtonBox.Ok).setText("Закрыть")
-        button_box.accepted.connect(self.accept)
-        buttons_row.addWidget(button_box)
+        self.close_btn = QPushButton("Закрыть")
+        self.close_btn.clicked.connect(self.accept)
+        buttons_row.addWidget(self.close_btn)
 
         layout.addLayout(buttons_row)
 
