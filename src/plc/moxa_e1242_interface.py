@@ -10,11 +10,11 @@
 Протокол: Modbus/TCP, порт по умолчанию 502, Unit ID = 1.
 """
 
-import struct
 import time
+from threading import Event
 from typing import Any, Dict, List, Optional
 
-from PyQt5.QtCore import QObject, QThreadPool, QTimer, pyqtSignal
+from PyQt5.QtCore import QObject, QThreadPool, QTimer, pyqtSignal, pyqtSlot
 
 from core.signal_generator import SignalGenerator
 from modbus.modbus_client import ModbusClientWrapper
@@ -41,13 +41,18 @@ class MoxaE1242Interface(QObject):
     DO_COUNT = 4
     AI_RAW_START = 0
     AI_RAW_COUNT = 4
-    AI_SCALED_START = 8       # 4 канала x 2 слова, начиная с 30009
+    AI_SCALED_START = 8  # 4 канала x 2 слова, начиная с 30009
     AI_SCALED_COUNT = 8
 
     # Масштаб сырых AI: 0..65535 -> 0..100 %
     AI_RAW_MAX = 65535.0
 
-    def __init__(self, generator: SignalGenerator, parent=None, debug: bool = False):
+    def __init__(
+        self,
+        generator: SignalGenerator,
+        parent: Optional[QObject] = None,
+        debug: bool = False,
+    ) -> None:
         super().__init__(parent)
         self.generator = generator
         self.debug = debug
@@ -63,10 +68,15 @@ class MoxaE1242Interface(QObject):
 
         # Если генерация выключена — DO не пишем, но AI читать продолжаем.
         self._output_enabled = False
+        self._exchange_pending = False
+        self._exchange_revision = 0
+        self._pending_revision = 0
+        self._pending_ai_targets: Dict[int, int] = {}
+        self._cancel_write = Event()
 
         self.thread_pool = QThreadPool.globalInstance()
 
-        self.update_timer = QTimer()
+        self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.update_device_data)
 
         if self.debug:
@@ -77,6 +87,13 @@ class MoxaE1242Interface(QObject):
     # ==============================================================
 
     def configure(self, host: str, port: int = 502, unit_id: int = 1) -> bool:
+        if self._exchange_pending:
+            self.error_occurred.emit(
+                "Дождитесь завершения обмена E1242 перед настройкой"
+            )
+            return False
+        self._exchange_revision += 1
+        self.update_timer.stop()
         try:
             self.modbus.configure(host, port, unit_id)
             self._is_configured = True
@@ -103,6 +120,7 @@ class MoxaE1242Interface(QObject):
 
     def start_polling(self) -> None:
         """Соединение уже открыто — запустить периодический обмен."""
+        self._exchange_revision += 1
         self._connected = self.modbus.is_connected()
         if not self._connected:
             return
@@ -111,6 +129,8 @@ class MoxaE1242Interface(QObject):
         self.connection_status.emit(True)
 
     def disconnect(self) -> None:
+        self._exchange_revision += 1
+        self._cancel_write.set()
         self._connected = False
         self.update_timer.stop()
         try:
@@ -138,63 +158,129 @@ class MoxaE1242Interface(QObject):
 
     def set_output_enabled(self, enabled: bool) -> None:
         self._output_enabled = enabled
+        if not enabled:
+            self._cancel_write.set()
 
     # ==============================================================
     # Цикл обмена
     # ==============================================================
 
     def update_device_data(self) -> None:
-        """Один цикл: пишем DO, читаем AI и DI (в отдельном потоке)."""
-        if not self._connected or not self._is_configured:
+        """Передать снимок в один фоновый цикл без накопления очереди."""
+        if not self.is_connected() or self._exchange_pending:
             return
-        task = Runnable(self._exchange)
-        task.signals.error.connect(
-            lambda e: self.error_occurred.emit(f"Ошибка обмена E1242: {e}")
+        do_bits = self._collect_do_bits() if self._output_enabled else None
+        self._pending_ai_targets = {}
+        for channel in self.generator.channels:
+            if (
+                channel.output_device == "moxa_e1242"
+                and channel.signal_type.is_analog()
+            ):
+                self._pending_ai_targets.setdefault(channel.output_address, channel.id)
+        self._exchange_pending = True
+        self._pending_revision = self._exchange_revision
+        self._cancel_write = Event()
+        task = Runnable(
+            self._exchange,
+            self.modbus,
+            do_bits,
+            self._cancel_write,
+            self._pending_revision,
         )
-        self.thread_pool.start(task)
+        task.signals.result.connect(self._on_exchange_finished)
+        task.signals.error.connect(self._on_exchange_error)
+        try:
+            self.thread_pool.start(task)
+        except RuntimeError as exc:
+            self._on_exchange_error(str(exc))
 
-    def _exchange(self) -> None:
-        """Выполняется в рабочем потоке."""
-        # --- 1. Запись DO (только если генерация активна) ---
-        if self._output_enabled:
-            do_bits = self._collect_do_bits()
+    def _exchange(
+        self,
+        client: ModbusClientWrapper,
+        do_bits: Optional[List[bool]],
+        cancel_write: Event,
+        revision: int,
+    ) -> Dict[str, Any]:
+        """Рабочий поток: только Modbus и локальные данные, без изменения каналов."""
+        errors: List[str] = []
+        written: Optional[bool] = None
+        if do_bits is not None and not cancel_write.is_set():
             try:
-                ok = self.modbus.write_multiple_coils(self.DO_START, do_bits)
-            except Exception as e:
-                self.error_occurred.emit(f"Ошибка записи DO E1242: {e}")
-                ok = False
-            if ok:
+                written = bool(client.write_multiple_coils(self.DO_START, do_bits))
+                if not written:
+                    errors.append("Запись DO E1242 отклонена")
+            except (OSError, RuntimeError, ValueError) as exc:
+                errors.append(f"Ошибка записи DO E1242: {exc}")
+                written = False
+        raw = None
+        try:
+            raw = client.read_input(self.AI_RAW_START, self.AI_RAW_COUNT)
+            if raw is None or len(raw) != self.AI_RAW_COUNT:
+                errors.append("Не получены все значения AI E1242")
+                raw = None
+        except (OSError, RuntimeError, ValueError) as exc:
+            errors.append(f"Ошибка чтения AI E1242: {exc}")
+        di_bits = None
+        try:
+            di_bits = client.read_discrete_inputs(self.DI_START, self.DI_COUNT)
+            if di_bits is None or len(di_bits) != self.DI_COUNT:
+                errors.append("Не получены все значения DI E1242")
+                di_bits = None
+        except (OSError, RuntimeError, ValueError) as exc:
+            errors.append(f"Ошибка чтения DI E1242: {exc}")
+        return {
+            "revision": revision,
+            "written": written,
+            "do_bits": do_bits,
+            "raw": raw,
+            "di": di_bits,
+            "errors": errors,
+            "timestamp": time.time(),
+        }
+
+    @pyqtSlot(object)
+    def _on_exchange_finished(self, result: Dict[str, Any]) -> None:
+        """Применить результаты и выдать сигналы в потоке владельца QObject."""
+        targets = self._pending_ai_targets
+        self._exchange_pending = False
+        self._pending_ai_targets = {}
+        if result["revision"] != self._exchange_revision or not self.is_connected():
+            return
+        for message in result["errors"]:
+            self.error_occurred.emit(message)
+        raw = result["raw"]
+        if raw is not None:
+            for index, value in enumerate(raw):
+                channel = self.generator.get_channel(targets.get(index, -1))
+                if (
+                    channel is not None
+                    and channel.output_device == "moxa_e1242"
+                    and channel.signal_type.is_analog()
+                    and channel.output_address == index
+                ):
+                    self._apply_ai_raw(index, value, channel.id)
+        if result["di"] is not None:
+            self.data_updated.emit({"di": list(result["di"])})
+        written = result["written"]
+        if written is not None:
+            if written:
                 self.write_count += 1
                 if self.debug and self.write_count % 10 == 0:
                     self.debug_data.emit(
                         {
                             "write_count": self.write_count,
-                            "registers": do_bits,
-                            "timestamp": time.time(),
+                            "registers": result["do_bits"],
+                            "timestamp": result["timestamp"],
                         }
                     )
-                self.write_completed.emit(True)
-            else:
-                self.write_completed.emit(False)
+            self.write_completed.emit(written)
 
-        # --- 2. Чтение AI raw ---
-        try:
-            raw = self.modbus.read_input(self.AI_RAW_START, self.AI_RAW_COUNT)
-        except Exception as e:
-            self.error_occurred.emit(f"Ошибка чтения AI E1242: {e}")
-            raw = None
-        if raw:
-            for i, value in enumerate(raw):
-                self._apply_ai_raw(i, value)
-
-        # --- 3. Чтение DI ---
-        try:
-            di_bits = self.modbus.read_discrete_inputs(self.DI_START, self.DI_COUNT)
-        except Exception as e:
-            self.error_occurred.emit(f"Ошибка чтения DI E1242: {e}")
-            di_bits = None
-        if di_bits:
-            self.data_updated.emit({"di": list(di_bits)})
+    @pyqtSlot(str)
+    def _on_exchange_error(self, message: str) -> None:
+        self._exchange_pending = False
+        self._pending_ai_targets = {}
+        if self._pending_revision == self._exchange_revision and self.is_connected():
+            self.error_occurred.emit(f"Ошибка обмена E1242: {message}")
 
     def _collect_do_bits(self) -> List[bool]:
         """Собрать 4 DO-бита из каналов, привязанных к E1242."""
@@ -210,8 +296,12 @@ class MoxaE1242Interface(QObject):
                 assigned[idx] = bool(channel.current_value >= 0.5)
         return assigned
 
-    def _apply_ai_raw(self, index: int, raw_value: int) -> None:
+    def _apply_ai_raw(
+        self, index: int, raw_value: int, channel_id: Optional[int] = None
+    ) -> None:
         for channel in self.generator.channels:
+            if channel_id is not None and channel.id != channel_id:
+                continue
             if channel.output_device != "moxa_e1242":
                 continue
             if not channel.signal_type.is_analog():
