@@ -10,12 +10,14 @@ from typing import List, Tuple
 DEVICE_OWEN = "owen"
 DEVICE_PLC = "plc"
 DEVICE_MOXA_E1242 = "moxa_e1242"
+DEVICE_MOXA_SIMULATOR = "moxa_e1242_simulator"
 DEVICE_SIMULATOR = "simulator"
 
 ALL_DEVICES = (
     DEVICE_OWEN,
     DEVICE_PLC,
     DEVICE_MOXA_E1242,
+    DEVICE_MOXA_SIMULATOR,
     DEVICE_SIMULATOR,
 )
 
@@ -26,6 +28,7 @@ def device_label(device: str) -> str:
         DEVICE_OWEN: "ОВЕН МУ210-501",
         DEVICE_PLC: "PLC Modicon Premium",
         DEVICE_MOXA_E1242: "Moxa ioLogik E1242",
+        DEVICE_MOXA_SIMULATOR: "Moxa E1242 — симулятор",
         DEVICE_SIMULATOR: "Simulator",
     }.get(device, device)
 
@@ -40,7 +43,7 @@ def register_choices(device: str) -> List[Tuple[str, int]]:
         # Шаг 2, 20 каналов -> %MW0, %MW2, ..., %MW38.
         return [(f"%MW{i} (float)", i) for i in range(0, 40, 2)]
 
-    if device == DEVICE_MOXA_E1242:
+    if device in (DEVICE_MOXA_E1242, DEVICE_MOXA_SIMULATOR):
         # 4 канала E1242: AI-00..AI-03 (чтение) / DO-00..DO-03 (запись).
         return [(f"Канал {i:02d} (AI/DO-{i:02d})", i) for i in range(4)]
 

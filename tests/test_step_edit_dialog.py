@@ -93,8 +93,8 @@ def test_device_switch_and_discrete_visibility(app: QApplication) -> None:
         assert dialog.output_address_combo.count() == 20
         assert dialog.mu210_module_spin.isHidden()
         dialog.type_combo.setCurrentIndex(dialog.type_combo.findData("Pwm"))
-        assert dialog.device_combo.isHidden()
-        assert dialog.device_label.isHidden()
+        assert not dialog.device_combo.isHidden()
+        assert not dialog.device_label.isHidden()
         assert not dialog.discrete_group.isHidden()
         dialog.type_combo.setCurrentIndex(dialog.type_combo.findData("Sine"))
         assert not dialog.device_combo.isHidden()

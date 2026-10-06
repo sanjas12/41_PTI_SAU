@@ -201,6 +201,8 @@ class ScenarioEngine(QObject):
                 "max_value": channel.max_value,
                 "mu210_module": channel.mu210_module,
                 "mu210_register": channel.mu210_register,
+                "output_device": channel.output_device,
+                "output_address": channel.output_address,
             }
 
     def _restore_channel_configs(self):
@@ -219,6 +221,8 @@ class ScenarioEngine(QObject):
                 channel.max_value = config["max_value"]
                 channel.mu210_module = config["mu210_module"]
                 channel.mu210_register = config["mu210_register"]
+                channel.output_device = config["output_device"]
+                channel.output_address = config["output_address"]
                 # Сбрасываем время для корректной генерации
                 channel.time = 0
         self._original_channel_configs.clear()
@@ -242,6 +246,14 @@ class ScenarioEngine(QObject):
         channel.pulse_width = step.pulse_width
         if step.mu210_module is not None:
             channel.mu210_module = step.mu210_module
+        if step.output_device != "owen" or step.mu210_register is not None:
+            channel.output_device = step.output_device
+            channel.output_address = step.output_address
+        else:
+            original = self._original_channel_configs.get(channel.id)
+            if original is not None:
+                channel.output_device = original["output_device"]
+                channel.output_address = original["output_address"]
         if step.mu210_register is not None:
             channel.mu210_register = step.mu210_register
         channel.enabled = True
@@ -284,6 +296,14 @@ class ScenarioEngine(QObject):
         channel.pulse_width = step.pulse_width
         if step.mu210_module is not None:
             channel.mu210_module = step.mu210_module
+        if step.output_device != "owen" or step.mu210_register is not None:
+            channel.output_device = step.output_device
+            channel.output_address = step.output_address
+        else:
+            original = self._original_channel_configs.get(channel.id)
+            if original is not None:
+                channel.output_device = original["output_device"]
+                channel.output_address = original["output_address"]
         if step.mu210_register is not None:
             channel.mu210_register = step.mu210_register
         channel.enabled = True  # ← ВКЛЮЧАЕМ КАНАЛ

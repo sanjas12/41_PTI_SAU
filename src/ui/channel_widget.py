@@ -1,4 +1,5 @@
 from typing import Any, Dict
+
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QCheckBox,
@@ -104,7 +105,9 @@ class ChannelSettingsDialog(QDialog):
         form_layout.addRow(self.output_address_label, self.output_address_combo)
 
         # Заполняем регистры в зависимости от выбранного устройства.
-        self._fill_address_combo(self.channel.output_device, self.channel.output_address)
+        self._fill_address_combo(
+            self.channel.output_device, self.channel.output_address
+        )
 
         # Модуль МУ210 нужен только когда выбрано «ОВЕН».
         self.mu210_module_label = QLabel("Модуль МУ210:")
@@ -172,7 +175,7 @@ class ChannelSettingsDialog(QDialog):
         self.duty_spin.setVisible(is_pwm)
         self.pulse_width_label.setVisible(is_pulse)
         self.pulse_width_spin.setVisible(is_pulse)
-        
+
         is_owen = self.device_combo.currentData() == "owen"
         # Поля устройства вывода видны только для аналоговых каналов.
         self.device_combo.setVisible(is_analog)
@@ -314,7 +317,7 @@ class ChannelWidget(QFrame):
         kind = "Дискретный" if is_discrete else "Аналоговый"
         self.type_badge.setText(designation)
         self.type_name_label.setText(str(self.channel.signal_type))
-        
+
         if not is_discrete:
             device = self.channel.output_device
             addr = self.channel.output_address
@@ -322,12 +325,16 @@ class ChannelWidget(QFrame):
                 tag = f"МУ{self.channel.mu210_module}/R{addr}"
             elif device == "plc":
                 tag = f"PLC %MW{addr}"
-            elif device == "moxa_e1242":
-                tag = f"E1242 ch{addr}"
+            elif device in ("moxa_e1242", "moxa_e1242_simulator"):
+                tag = (
+                    f"E1242 ch{addr}"
+                    if device == "moxa_e1242"
+                    else f"E1242 sim ch{addr}"
+                )
             else:
                 tag = "—"
             self.type_name_label.setText(f"{self.channel.signal_type} · {tag}")
-        
+
         self.type_badge.setToolTip(f"{kind} канал")
         self.type_badge.setStyleSheet(
             f"background: {color}; color: white; border-radius: 4px; "

@@ -962,10 +962,10 @@ class StepEditDialog(QDialog):
                 self.discrete_group.setVisible(False)
             is_analog = bool(signal_type and signal_type.is_analog())
             is_owen = self.device_combo.currentData() == "owen"
-            self.device_label.setVisible(is_analog)
-            self.device_combo.setVisible(is_analog)
-            self.output_address_label.setVisible(is_analog)
-            self.output_address_combo.setVisible(is_analog)
+            self.device_label.setVisible(True)
+            self.device_combo.setVisible(True)
+            self.output_address_label.setVisible(True)
+            self.output_address_combo.setVisible(True)
             self.mu210_module_label.setVisible(is_analog and is_owen)
             self.mu210_module_spin.setVisible(is_analog and is_owen)
 

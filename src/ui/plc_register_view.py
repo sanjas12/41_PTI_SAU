@@ -180,7 +180,11 @@ class PLCRegisterView(QMainWindow):
                 for group_name, group in register_map.items():
                     start_addr = group["start"]
                     count = group["end"] - start_addr + 1
-                    if hasattr(self.plc, "get_device_labels"):
+                    if hasattr(self.plc, "read_register_group"):
+                        data = self.plc.read_register_group(
+                            group_name, start_addr, count
+                        )
+                    elif hasattr(self.plc, "get_device_labels"):
                         data = self.plc.read_plc_data(
                             start_addr, count, module_index=module_index
                         )
@@ -191,6 +195,8 @@ class PLCRegisterView(QMainWindow):
                             f"не удалось прочитать {device_label}, группа {group_name}"
                         )
                     value_type = "REAL" if "REAL" in group["description"] else "UINT16"
+                    if group_name in ("di", "do"):
+                        value_type = "BOOL"
                     rows.extend(
                         (
                             f"{device_label} / {group_name}",

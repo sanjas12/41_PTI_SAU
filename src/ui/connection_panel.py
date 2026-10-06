@@ -33,6 +33,7 @@ class ConnectionPanel(CollapsibleGroupBox):
         "simulator": "Simulator",
         "owen": "ОВЕН МУ210-501",
         "moxa_e1242": "Moxa ioLogik E1242",
+        "moxa_e1242_simulator": "Moxa E1242 — симулятор",
     }
 
     # Сигналы для внешнего использования
@@ -394,6 +395,7 @@ class ConnectionPanel(CollapsibleGroupBox):
             "simulator": "127.0.0.1",
             "owen": "192.168.1.99",
             "moxa_e1242": "192.168.127.254",
+            "moxa_e1242_simulator": "127.0.0.1",
         }
         if device_type == "owen":
             self.ip_label.setText("IP-адреса:")
@@ -407,6 +409,7 @@ class ConnectionPanel(CollapsibleGroupBox):
             self.ip_edit.setPlaceholderText("192.168.127.254")
 
         self.ip_edit.setText(default_hosts[device_type])
+        self.port_spin.setValue(1502 if device_type == "moxa_e1242_simulator" else 502)
         self.on_params_changed()
 
     def _update_status_indicator(self) -> None:

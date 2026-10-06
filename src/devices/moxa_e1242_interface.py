@@ -24,6 +24,8 @@ from modbus.worker import Runnable
 class MoxaE1242Interface(QObject):
     """Modbus/TCP-интерфейс к Moxa ioLogik E1242."""
 
+    DEVICE_TYPE = "moxa_e1242"
+
     # Сигналы — те же, что у PLCInterface, чтобы MainWindow не пришлось
     # ничего переписывать.
     data_updated = pyqtSignal(dict)
@@ -173,7 +175,7 @@ class MoxaE1242Interface(QObject):
         self._pending_ai_targets = {}
         for channel in self.generator.channels:
             if (
-                channel.output_device == "moxa_e1242"
+                channel.output_device == self.DEVICE_TYPE
                 and channel.signal_type.is_analog()
             ):
                 self._pending_ai_targets.setdefault(channel.output_address, channel.id)
@@ -254,7 +256,7 @@ class MoxaE1242Interface(QObject):
                 channel = self.generator.get_channel(targets.get(index, -1))
                 if (
                     channel is not None
-                    and channel.output_device == "moxa_e1242"
+                    and channel.output_device == self.DEVICE_TYPE
                     and channel.signal_type.is_analog()
                     and channel.output_address == index
                 ):
@@ -287,7 +289,7 @@ class MoxaE1242Interface(QObject):
         # Отбираем дискретные каналы, назначенные на E1242.
         assigned: List[bool] = [False] * self.DO_COUNT
         for channel in self.generator.channels:
-            if channel.output_device != "moxa_e1242":
+            if channel.output_device != self.DEVICE_TYPE:
                 continue
             if not channel.signal_type.is_discrete():
                 continue
@@ -302,7 +304,7 @@ class MoxaE1242Interface(QObject):
         for channel in self.generator.channels:
             if channel_id is not None and channel.id != channel_id:
                 continue
-            if channel.output_device != "moxa_e1242":
+            if channel.output_device != self.DEVICE_TYPE:
                 continue
             if not channel.signal_type.is_analog():
                 continue
@@ -351,6 +353,22 @@ class MoxaE1242Interface(QObject):
     # ==============================================================
     # Чтение регистров (используется PLCRegisterView)
     # ==============================================================
+
+    def read_register_group(
+        self, group: str, address: int, count: int
+    ) -> Optional[List[int]]:
+        """Читать AI, DI и DO в соответствующем адресном пространстве Modbus."""
+        if not self.is_connected():
+            return None
+        if group == "ai_raw":
+            return self.modbus.read_input(address, count)
+        if group == "di":
+            values = self.modbus.read_discrete_inputs(address, count)
+        elif group == "do":
+            values = self.modbus.read_coils(address, count)
+        else:
+            raise ValueError("Неизвестная группа регистров Moxa")
+        return [int(value) for value in values] if values is not None else None
 
     def read_plc_data(self, address: int, count: int) -> Optional[List[int]]:
         """Прочитать регистры по адресу — совместимость с PLCRegisterView.

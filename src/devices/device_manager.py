@@ -7,6 +7,7 @@ from PyQt5.QtCore import QObject, QThreadPool, pyqtSignal, pyqtSlot
 from core.output_devices import device_label
 from core.signal_generator import SignalGenerator
 from devices.moxa_e1242_interface import MoxaE1242Interface
+from devices.moxa_simulator_interface import MoxaSimulatorInterface
 from devices.mu210_interface import MU210Interface
 from devices.plc_interface import PLCInterface
 from modbus.worker import Runnable
@@ -40,6 +41,7 @@ class DeviceManager(QObject):
                 "plc": plc,
                 "simulator": plc,
                 "moxa_e1242": MoxaE1242Interface(generator, self),
+                "moxa_e1242_simulator": MoxaSimulatorInterface(generator, self),
             }
         self.interfaces = interfaces
         self.active_device_type = "owen"
