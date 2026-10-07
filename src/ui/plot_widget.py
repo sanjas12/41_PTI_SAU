@@ -648,23 +648,34 @@ class PlotWindow(QMainWindow):
     # ==================================================================
 
     def _setup_window_geometry(self) -> None:
-        """Установить размер окна."""
+        """Установить размер и центрировать в доступной области экрана."""
 
-        screen = QApplication.primaryScreen()
+        parent = self.parentWidget()
+        screen = (
+            QApplication.screenAt(parent.frameGeometry().center())
+            if parent is not None
+            else QApplication.primaryScreen()
+        )
+        if screen is None:
+            screen = QApplication.primaryScreen()
 
         if screen is not None:
             geometry = screen.availableGeometry()
 
             width = min(1100, geometry.width() - 40)
             height = min(720, geometry.height() - 60)
+            x = geometry.x() + (geometry.width() - width) // 2
+            y = geometry.y() + (geometry.height() - height) // 2
 
         else:
             width = 1100
             height = 720
+            x = 20
+            y = 30
 
         self.setGeometry(
-            20,
-            30,
+            x,
+            y,
             width,
             height,
         )

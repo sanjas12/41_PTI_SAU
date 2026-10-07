@@ -1,7 +1,9 @@
 import os
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from PyQt5.QtCore import QRect
 from PyQt5.QtWidgets import QApplication, QFrame, QSizePolicy
 
 from core.channel import AnalogChannel
@@ -10,6 +12,21 @@ from core.signal_types import SignalType
 from ui.plot_widget import PlotWindow
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+
+def test_plot_window_centers_on_screen_available_area(monkeypatch) -> None:
+    app = QApplication.instance() or QApplication([])
+    available = QRect(1920, 40, 1600, 900)
+
+    screen = SimpleNamespace(availableGeometry=lambda: available)
+    monkeypatch.setattr(QApplication, "primaryScreen", lambda: screen)
+    window = PlotWindow(SignalGenerator([]))
+    try:
+        assert window.geometry().center() == available.center()
+        assert available.contains(window.geometry())
+    finally:
+        window.close()
+        app.processEvents()
 
 
 def test_constant_plot_shows_value_instead_of_frequency() -> None:
