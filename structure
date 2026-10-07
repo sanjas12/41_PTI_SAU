@@ -1,169 +1,162 @@
-41_PTI_SAU
+PTI_SAU — структура проекта
+==========================
+
+Python 3.8, PyQt5, pyqtgraph, pyModbusTCP; сборка — cx_Freeze.
+Дерево исходников и служебных файлов. Кэши, окружение, журналы,
+результаты сборки и пользовательские сценарии не перечислены.
+41_PTI_SAU/
+├── bugs/
+│   └── bug-001.md
+├── docs/
+│   ├── РЭ_МУ210-501_1-RU-34940-2.6_А4.pdf
+│   ├── Help.md
+│   ├── moxa-iologik-e1200-series-manual-v15.2.pdf
+│   ├── Readme.md
+│   ├── RelNote.txt
+│   └── TODO.md
+├── plc/
+│   └── plc.stu
+├── scripts/
+│   ├── build_all.sh
+│   ├── build.sh
+│   ├── recreate_env.sh
+│   └── release.sh
 ├── src/
-│   ├── __init__.py
-│   ├── main.py                 # Точка входа
-│   │
-│   ├── ui/                     # UI слой
+│   ├── application/
 │   │   ├── __init__.py
-│   │   ├── main_window.py      # Главное окно
-│   │   ├── channel_widget.py   # Виджет одного канала
-│   │   ├── channels_grid.py    # Сетка каналов
-│   │   ├── plot_widget.py      # График (matplotlib/pyqtgraph)
-│   │   ├── settings_dialog.py  # Настройки
-│   │   ├── resources/          # .qrc, иконки, стили
-│   │   ├── logger_window.py    # ← НОВЫЙ ФАЙЛ (окно журнала)    
-│       └── connection_panel.py     # ← НОВЫЙ ФАЙЛ
+│   │   └── controller.py
+│   ├── config/
+│   │   ├── config.py
+│   │   └── ui_settings.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── channel_repository.py
+│   │   ├── channel.py
+│   │   ├── output_devices.py
+│   │   ├── signal_generator.py
+│   │   ├── signal_history.py
+│   │   └── signal_types.py
+│   ├── devices/
+│   │   ├── __init__.py
+│   │   ├── device_manager.py
+│   │   ├── moxa_e1242_interface.py
+│   │   ├── moxa_e1242_simulator.py
+│   │   ├── moxa_simulator_interface.py
+│   │   ├── mu210_interface.py
+│   │   └── plc_interface.py
+│   ├── modbus/
+│   │   ├── modbus_client.py
+│   │   └── worker.py
 │   ├── scenario/
+│   │   ├── __init__.py
+│   │   ├── scenario_engine.py
+│   │   ├── scenario_graph.py
+│   │   ├── scenario_model.py
+│   │   └── scenario_widget.py
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   ├── channel_widget.py
+│   │   ├── collapsible_groupbox.py
+│   │   ├── connection_dialog.py
+│   │   ├── connection_panel.py
+│   │   ├── control_panel.py
+│   │   ├── event_log_panel.py
+│   │   ├── interval_control.py
+│   │   ├── intervals_dialog.py
+│   │   ├── logger_window.py
+│   │   ├── main_window.py
+│   │   ├── menu_bar.py
+│   │   ├── moxa_simulator_dialog.py
+│   │   ├── plc_register_view.py
+│   │   ├── plot_widget.py
+│   │   ├── settings_dialog.py
+│   │   ├── status_bar.py
+│   │   ├── styles.py
+│   │   ├── themes.py
+│   │   └── toolbar.py
 │   ├── __init__.py
-│   ├── scenario_model.py      # Модели данных
-│   ├── scenario_engine.py     # Движок воспроизведения
-│   └── scenario_widget.py     # Виджет конструктора
-
-│   ├── core/                   # Бизнес-логика
-│   │   ├── __init__.py
-│   │   ├── signal_generator.py # Генерация сигналов
-│   │   ├── channel.py          # Модель канала
-│   │   ├── signal_types.py     # Типы сигналов (enum)
-│   │   └── engine.py           # Оркестрация (QThread)
-│   │
-│   ├── modbus/                 # Modbus слой
-│   │   ├── __init__.py
-│   │   ├── modbus_client.py    # Modbus TCP сервер
-│   │   ├── modbus_mapping.py   # Отображение регистров
-│   │   └── worker.py           # Асинхронный воркер
-│   │
-│   ├── config/                 # Конфигурация
-│   │   ├── __init__.py
-│   │   ├── config_manager.py   # Загрузка/сохранение
-│   │   └── default_config.json # Дефолтные настройки
-│   │
-│   └── utils/                  # Утилиты
-│       ├── __init__.py
-│       ├── logger.py           # Настройка логирования
-│       └── exceptions.py       # Кастомные исключения
-│
-├── tests/                      # Тесты
+│   ├── _version.py
+│   └── main.py
+├── tests/
+│   ├── test_application_controller.py
+│   ├── test_channel_repository.py
+│   ├── test_connection_dialog.py
+│   ├── test_connection_panel.py
+│   ├── test_control_panel.py
+│   ├── test_device_manager.py
+│   ├── test_disable_all_channels.py
+│   ├── test_discrete_signals.py
+│   ├── test_moxa_e1242_interface.py
+│   ├── test_moxa_simulator.py
+│   ├── test_mu210_interface.py
+│   ├── test_output_address_loading.py
+│   ├── test_plot_widget.py
+│   ├── test_scenario_model.py
+│   ├── test_settings_dialog.py
 │   ├── test_signal_generator.py
-│   ├── test_modbus.py
-│   └── ...
-│
-├── requirements.txt            # Зависимости
-├── setup.py                    # Установка
-├── run.py                      # Запуск
-└── README.md
+│   ├── test_step_edit_dialog.py
+│   ├── test_toolbar_controls.py
+│   └── test_toolbar_progress.py
+├── .gitignore
+├── .pre-commit-config.yaml
+├── .python-version
+├── AGENTS.md
+├── build.py
+├── pyproject.toml
+├── Readme.md
+├── requirements.txt
+├── settings.json
+├── structure
+└── uv.lock
 
+Связи компонентов
+=================
 
-┌─────────────────────────────────────────────────────────────────┐
-│                      Desktop App (Win7)                       │
-│                      Python 3.8.10 + PyQt5                   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
-│  │   UI Layer   │  │  Signal      │  │  Modbus TCP Server   │ │
-│  │   (PyQt5)    │◄─┤  Generator   │──┤  (pymodbus)          │ │
-│  │              │  │  (Core)      │  │                      │ │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘ │
-│         │                  │                      │             │
-│         ▼                  ▼                      ▼             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
-│  │  Widgets:    │  │  Analog      │  │  Holding Registers   │ │
-│  │  - MainWin   │  │  Channels    │  │  (20+ channels)      │ │
-│  │  - Controls  │  │  (20 шт)     │  │  Float32 / INT16     │ │
-│  │  - Plots     │  │  Types:      │  │                      │ │
-│  │  - Settings  │  │  - Sine      │  │  Modbus Mapping:     │ │
-│  │              │  │  - Square    │  │  Ch1: 40001-40002    │ │
-│  │              │  │  - Sawtooth  │  │  Ch2: 40003-40004    │ │
-│  │              │  │  - Random    │  │  ...                 │ │
-│  │              │  │  - Custom    │  │                      │ │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘ │
-│                                                                 │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │              Configuration Manager (JSON/YAML)            │ │
-│  │  - Channel settings (name, type, min/max, freq)          │ │
-│  │  - Modbus settings (port, IP, mapping)                   │ │
-│  │  - UI preferences                                        │ │
-│  └────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-                               │
-                               │ Ethernet (Modbus TCP)
-                               ▼
-                    ┌─────────────────────┐
-                    │  Schneider PLC      │
-                    │  (M340/M580/...)    │
-                    │  Modbus TCP Slave   │
-                    └─────────────────────┘
+main.py → MainWindow (ui): координация интерфейса, каналов и устройств.
+  ├─ ApplicationController: состояние ручного режима и таймер генерации.
+  ├─ ChannelRepository: чтение и сохранение настроек каналов в JSON.
+  ├─ ScenarioEngine: изменение параметров каналов по шагам сценария.
+  ├─ SignalGenerator: расчёт фактических значений сигналов.
+  ├─ PlotWidget: графики pyqtgraph, история значений и легенды.
+  └─ DeviceManager: выбор адаптера, фоновые подключения и сигналы устройств.
+       ├─ PLCInterface → Modbus TCP → PLC Modicon Premium / Simulator.
+       ├─ MU210Interface → Modbus TCP → модули ОВЕН МУ210-501.
+       ├─ MoxaE1242Interface → Modbus TCP → Moxa ioLogik E1242.
+       └─ MoxaSimulatorInterface → Modbus TCP → локальный сервер Moxa.
 
+Назначение каталогов
+====================
 
-┌─ 📡 Управление каналами ──────────────────┐
-│ ControlPanel (Стоп/Сброс/Графики/...)      │  ← общая, не переключается
-│ [🖐 Ручной][🎬 Сценарий]                   │  ← тумблер
-│ ┌─ QStackedWidget ───────────────────────┐│
-│ │ index 0: сетка каналов                 ││  ← видна в "Ручной"
-│ │ index 1: конструктор сценария          ││  ← видна в "Сценарий"
-│ └──────────────────────────────────────────┘│
-└────────────────────────────────────────────┘
+src/application — управление выполнением и согласование режимов.
+src/core — модели каналов, генерация сигналов, история и файловый repository.
+src/config — конфигурация приложения и настройки интерфейса.
+src/devices — адаптеры оборудования, менеджер подключений и симулятор Moxa.
+src/modbus — потокобезопасная обёртка Modbus TCP клиента и фоновые задачи.
+src/scenario — модель, движок, графическое представление и редактор сценариев.
+src/ui — окна, виджеты, меню, toolbar, темы и диагностика регистров устройств.
+tests — unit-тесты и проверки Qt-виджетов, fake/mock-клиенты и локальный сервер.
+scripts — подготовка окружения, сборка и выпуск приложения.
+docs — документация проекта и руководства устройств.
+plc — проект PLC; bugs — описания ошибок.
 
+Границы ответственности
+=======================
 
+ScenarioEngine меняет параметры каналов, а значения рассчитывает общий
+SignalGenerator. Преобразование значений в регистры и особенности оборудования
+находятся внутри адаптеров devices. Диагностика регистров находится в
+src/ui/plc_register_view.py и использует интерфейсы устройств.
 
+ApplicationController управляет ручным режимом и согласует таймер с режимом
+сценария. Состояние сценария принадлежит ScenarioEngine. MainWindow пока
+остаётся главным координатором приложения; разделение выполняется поэтапно.
 
-41_PTI_SAU
- ┣ docs
- ┃ ┣ Help.md
- ┃ ┣ Readme.md
- ┃ ┣ RelNote.txt
- ┃ ┗ TODO.md
- ┣ logs
- ┃ ┣ app.log
- ┃ ┣ init_env_20260818_151817.log
- ┣ plc
- ┃ ┗ plc.stu
- ┣ reports
- ┣ scripts
- ┃ ┣ build.sh
- ┃ ┣ build_all.sh
- ┃ ┗ recreate_env.sh
- ┣ src
- ┃ ┣ config
- ┃ ┃ ┗ config.py
- ┃ ┣ core
- ┃ ┃ ┣ channel.py
- ┃ ┃ ┣ signal_generator.py
- ┃ ┃ ┣ signal_history.py
- ┃ ┃ ┣ signal_types.py
- ┃ ┃ ┗ __init__.py
- ┃ ┣ modbus
- ┃ ┃ ┣ modbus_client.py
- ┃ ┃ ┗ worker.py
- ┃ ┣ plc
- ┃ ┃ ┣ plc_interface.py
- ┃ ┃ ┗ plc_register_view.py
- ┃ ┣ scenario
- ┃ ┃ ┣ scenario_engine.py
- ┃ ┃ ┣ scenario_model.py
- ┃ ┃ ┣ scenario_widget.py
- ┃ ┃ ┗ __init__.py
- ┃ ┣ ui
- ┃ ┃ ┣ collapsible_groupbox.py
- ┃ ┃ ┣ connection_panel.py
- ┃ ┃ ┣ control_panel.py
- ┃ ┃ ┣ interval_control.py
- ┃ ┃ ┣ logger_window.py
- ┃ ┃ ┣ main_window.py
- ┃ ┃ ┣ plot_widget.py
- ┃ ┃ ┣ styles.py
- ┃ ┃ ┗ __init__.py
- ┃ ┣ main.py
- ┃ ┣ _version.py
- ┃ ┗ __init__.py
- ┣ .gitignore
- ┣ .pre-commit-config.yaml
- ┣ .python-version
- ┣ build.py
- ┣ pyproject.toml
- ┣ README copy 2.md
- ┣ README copy.md
- ┣ Readme.md
- ┣ requirements.txt
- ┣ settings.json
- ┣ structure
- ┗ uv.lock
+Симулятор Moxa доступен отдельным типом в окне подключения. После подключения
+его можно выбрать для вывода каналов и просматривать его регистры. Сервер
+работает на 127.0.0.1:1502 по умолчанию; moxa_simulator_dialog.py позволяет
+менять AI/DI и наблюдать DO. Этот симулятор отличается от Simulator с картой PLC.
+
+Импорты рассчитаны на запуск src/main.py: from core..., from devices...,
+from ui... . Запуск: uv run python src/main.py.
+Зависимости и настройки инструментов описаны в pyproject.toml;
+uv.lock фиксирует версии, requirements.txt содержит экспорт зависимостей.
