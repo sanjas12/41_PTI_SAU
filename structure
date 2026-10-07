@@ -10,7 +10,6 @@ Python 3.8, PyQt5, pyqtgraph, pyModbusTCP; сборка — cx_Freeze.
 ├── docs/
 │   ├── РЭ_МУ210-501_1-RU-34940-2.6_А4.pdf
 │   ├── Help.md
-│   ├── moxa-iologik-e1200-series-manual-v15.2.pdf
 │   ├── Readme.md
 │   ├── RelNote.txt
 │   └── TODO.md
@@ -39,9 +38,6 @@ Python 3.8, PyQt5, pyqtgraph, pyModbusTCP; сборка — cx_Freeze.
 │   ├── devices/
 │   │   ├── __init__.py
 │   │   ├── device_manager.py
-│   │   ├── moxa_e1242_interface.py
-│   │   ├── moxa_e1242_simulator.py
-│   │   ├── moxa_simulator_interface.py
 │   │   ├── mu210_interface.py
 │   │   └── plc_interface.py
 │   ├── modbus/
@@ -66,7 +62,6 @@ Python 3.8, PyQt5, pyqtgraph, pyModbusTCP; сборка — cx_Freeze.
 │   │   ├── logger_window.py
 │   │   ├── main_window.py
 │   │   ├── menu_bar.py
-│   │   ├── moxa_simulator_dialog.py
 │   │   ├── plc_register_view.py
 │   │   ├── plot_widget.py
 │   │   ├── settings_dialog.py
@@ -86,8 +81,6 @@ Python 3.8, PyQt5, pyqtgraph, pyModbusTCP; сборка — cx_Freeze.
 │   ├── test_device_manager.py
 │   ├── test_disable_all_channels.py
 │   ├── test_discrete_signals.py
-│   ├── test_moxa_e1242_interface.py
-│   ├── test_moxa_simulator.py
 │   ├── test_mu210_interface.py
 │   ├── test_output_address_loading.py
 │   ├── test_plot_widget.py
@@ -120,9 +113,7 @@ main.py → MainWindow (ui): координация интерфейса, кан
   ├─ PlotWidget: графики pyqtgraph, история значений и легенды.
   └─ DeviceManager: выбор адаптера, фоновые подключения и сигналы устройств.
        ├─ PLCInterface → Modbus TCP → PLC Modicon Premium / Simulator.
-       ├─ MU210Interface → Modbus TCP → модули ОВЕН МУ210-501.
-       ├─ MoxaE1242Interface → Modbus TCP → Moxa ioLogik E1242.
-       └─ MoxaSimulatorInterface → Modbus TCP → локальный сервер Moxa.
+       └─ MU210Interface → Modbus TCP → модули ОВЕН МУ210-501.
 
 Назначение каталогов
 ====================
@@ -130,7 +121,7 @@ main.py → MainWindow (ui): координация интерфейса, кан
 src/application — управление выполнением и согласование режимов.
 src/core — модели каналов, генерация сигналов, история и файловый repository.
 src/config — конфигурация приложения и настройки интерфейса.
-src/devices — адаптеры оборудования, менеджер подключений и симулятор Moxa.
+src/devices — адаптеры PLC и МУ210 и менеджер подключений.
 src/modbus — потокобезопасная обёртка Modbus TCP клиента и фоновые задачи.
 src/scenario — модель, движок, графическое представление и редактор сценариев.
 src/ui — окна, виджеты, меню, toolbar, темы и диагностика регистров устройств.
@@ -150,12 +141,6 @@ src/ui/plc_register_view.py и использует интерфейсы уст�
 ApplicationController управляет ручным режимом и согласует таймер с режимом
 сценария. Состояние сценария принадлежит ScenarioEngine. MainWindow пока
 остаётся главным координатором приложения; разделение выполняется поэтапно.
-
-Симулятор Moxa доступен отдельным типом в окне подключения. После подключения
-его можно выбрать для вывода каналов и просматривать его регистры. Сервер
-работает на 127.0.0.1:1502 по умолчанию; moxa_simulator_dialog.py позволяет
-менять AI/DI и наблюдать DO. Этот симулятор отличается от Simulator с картой PLC.
-
 Импорты рассчитаны на запуск src/main.py: from core..., from devices...,
 from ui... . Запуск: uv run python src/main.py.
 Зависимости и настройки инструментов описаны в pyproject.toml;

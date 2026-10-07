@@ -71,7 +71,6 @@ def setup_manager(
         "owen": FakeInterface(),
         "plc": plc,
         "simulator": plc,
-        "moxa_e1242": FakeInterface(),
     }
     pool = DeferredPool()
     return (
@@ -81,7 +80,7 @@ def setup_manager(
     )
 
 
-@pytest.mark.parametrize("device_type", ["owen", "plc", "simulator", "moxa_e1242"])
+@pytest.mark.parametrize("device_type", ["owen", "plc", "simulator"])
 def test_configures_selected_adapter(setup_manager: tuple, device_type: str) -> None:
     manager, interfaces, pool = setup_manager
     manager.configure(

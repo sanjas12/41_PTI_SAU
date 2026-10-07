@@ -325,12 +325,6 @@ class ChannelWidget(QFrame):
                 tag = f"МУ{self.channel.mu210_module}/R{addr}"
             elif device == "plc":
                 tag = f"PLC %MW{addr}"
-            elif device in ("moxa_e1242", "moxa_e1242_simulator"):
-                tag = (
-                    f"E1242 ch{addr}"
-                    if device == "moxa_e1242"
-                    else f"E1242 sim ch{addr}"
-                )
             else:
                 tag = "—"
             self.type_name_label.setText(f"{self.channel.signal_type} · {tag}")

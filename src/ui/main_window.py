@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from PyQt5.QtCore import QSettings, Qt, QTimer
 from PyQt5.QtWidgets import (
@@ -34,7 +34,6 @@ from ui.channel_widget import ChannelWidget
 from ui.connection_dialog import ConnectionDialog
 from ui.event_log_panel import EventLogPanel
 from ui.menu_bar import AppMenuBar
-from ui.moxa_simulator_dialog import MoxaSimulatorDialog
 from ui.plc_register_view import PLCRegisterView
 from ui.plot_widget import PlotWindow
 from ui.settings_dialog import SettingsDialog
@@ -105,7 +104,6 @@ class MainWindow(QMainWindow):
         self.plc_view: PLCRegisterView | None = None
         self.connection_dialog: ConnectionDialog | None = None
         self.settings_dialog: SettingsDialog | None = None
-        self.moxa_simulator_dialog: Optional[MoxaSimulatorDialog] = None
 
         # Собираем UI
         self.setup_ui()
@@ -510,7 +508,6 @@ class MainWindow(QMainWindow):
         # Подключение
         mb.connect_action.triggered.connect(self.open_connection_dialog)
         mb.disconnect_action.triggered.connect(self.disconnect_device)
-        mb.moxa_simulator_action.triggered.connect(self.open_moxa_simulator)
         mb.device_owen_action.triggered.connect(
             lambda: self._select_device_from_menu("owen")
         )
@@ -519,12 +516,6 @@ class MainWindow(QMainWindow):
         )
         mb.device_sim_action.triggered.connect(
             lambda: self._select_device_from_menu("simulator")
-        )
-        mb.device_moxa_simulator_action.triggered.connect(
-            lambda: self._select_device_from_menu("moxa_e1242_simulator")
-        )
-        mb.device_moxa_e1242_action.triggered.connect(
-            lambda: self._select_device_from_menu("moxa_e1242")
         )
 
         # Настройки
@@ -605,43 +596,6 @@ class MainWindow(QMainWindow):
             )
         self.connection_dialog.exec_()
 
-    def open_moxa_simulator(self) -> None:
-        if self.moxa_simulator_dialog is None:
-            self.moxa_simulator_dialog = MoxaSimulatorDialog(self)
-            self.moxa_simulator_dialog.connect_requested.connect(
-                self._connect_moxa_simulator
-            )
-        self.moxa_simulator_dialog.show()
-        self._attach_connected_simulator()
-        self.moxa_simulator_dialog.raise_()
-        self.moxa_simulator_dialog.activateWindow()
-
-    def _connect_moxa_simulator(self, params: Dict) -> None:
-        try:
-            self.device_manager.configure(params)
-        except (OSError, ValueError, RuntimeError) as exc:
-            self.log(f"Ошибка настройки симулятора: {exc}", "error")
-            return
-        adapter = self.device_manager.active_interface
-        if (
-            self.moxa_simulator_dialog is not None
-            and self.moxa_simulator_dialog.simulator is not None
-        ):
-            adapter.local_server = self.moxa_simulator_dialog.simulator
-            adapter.owns_server = False
-        self._refresh_status_bar()
-        self.on_connection_status_changed(True)
-
-    def _attach_connected_simulator(self) -> None:
-        if self.active_device_type == "moxa_e1242_simulator":
-            server = self.device_manager.active_interface.local_server
-            if (
-                server is not None
-                and server.is_running
-                and self.moxa_simulator_dialog is not None
-            ):
-                self.moxa_simulator_dialog.attach_simulator(server)
-
     def open_settings_dialog(self) -> None:
         """Открыть единый диалог настроек."""
         if self.settings_dialog is None:
@@ -694,8 +648,6 @@ class MainWindow(QMainWindow):
             "plc": "PLC Modicon Premium",
             "simulator": "Simulator",
             "owen": "ОВЕН МУ210-501",
-            "moxa_e1242": "Moxa ioLogik E1242",
-            "moxa_e1242_simulator": "Moxa E1242 (simulator)",
         }
         self.status_bar.set_device(device_names.get(self.active_device_type, "—"))
 
@@ -884,7 +836,6 @@ class MainWindow(QMainWindow):
 
     def _on_device_connected(self, connected: bool) -> None:
         if connected:
-            self._attach_connected_simulator()
             self._sync_generation_timer()
         if self.connection_dialog is not None:
             self.connection_dialog.set_connection_status(connected)
@@ -1309,6 +1260,4 @@ class MainWindow(QMainWindow):
 
         self.controller.close()
         self.device_manager.close()
-        if self.moxa_simulator_dialog is not None:
-            self.moxa_simulator_dialog.close()
         event.accept()

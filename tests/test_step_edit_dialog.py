@@ -18,7 +18,7 @@ def app() -> Iterator[QApplication]:
 
 
 @pytest.mark.parametrize(
-    "device,address", [("owen", 3004), ("plc", 6), ("moxa_e1242", 2), ("simulator", 0)]
+    "device,address", [("owen", 3004), ("plc", 6), ("simulator", 0)]
 )
 def test_new_step_inherits_channel_assignment(
     app: QApplication, device: str, address: int
@@ -68,8 +68,8 @@ def test_existing_step_preserves_assignment_and_metadata(
     original = ScenarioStep(
         channel_id=0,
         signal_type=signal_type,
-        output_device="moxa_e1242",
-        output_address=3,
+        output_device="plc",
+        output_address=6,
         position_x=123.0,
     )
     dialog = StepEditDialog(
@@ -81,7 +81,7 @@ def test_existing_step_preserves_assignment_and_metadata(
         assert edited.output_address == original.output_address
         assert edited.id == original.id
         assert edited.position_x == original.position_x
-        assert ScenarioStep.from_dict(edited.to_dict()).output_address == 3
+        assert ScenarioStep.from_dict(edited.to_dict()).output_address == 6
     finally:
         dialog.close()
 

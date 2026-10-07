@@ -48,9 +48,6 @@ class AppMenuBar(QMenuBar):
         self.disconnect_action.setShortcut(QKeySequence("Ctrl+D"))
         connection_menu.addAction(self.disconnect_action)
 
-        self.moxa_simulator_action = QAction("Симулятор Moxa E1242…", self)
-        connection_menu.addAction(self.moxa_simulator_action)
-
         connection_menu.addSeparator()
 
         device_menu = connection_menu.addMenu("Тип устройства")
@@ -69,17 +66,6 @@ class AppMenuBar(QMenuBar):
         self.device_plc_action.setShortcut(QKeySequence("Ctrl+2"))
         self.device_group.addAction(self.device_plc_action)
         device_menu.addAction(self.device_plc_action)
-
-        self.device_moxa_e1242_action = QAction("Moxa ioLogik E1242", self)
-        self.device_moxa_e1242_action.setCheckable(True)
-        self.device_moxa_e1242_action.setShortcut(QKeySequence("Ctrl+4"))
-        self.device_group.addAction(self.device_moxa_e1242_action)
-        device_menu.addAction(self.device_moxa_e1242_action)
-
-        self.device_moxa_simulator_action = QAction("Moxa E1242 — симулятор", self)
-        self.device_moxa_simulator_action.setCheckable(True)
-        self.device_group.addAction(self.device_moxa_simulator_action)
-        device_menu.addAction(self.device_moxa_simulator_action)
 
         self.device_sim_action = QAction("Simulator", self)
         self.device_sim_action.setCheckable(True)

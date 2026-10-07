@@ -20,13 +20,7 @@ def test_connection_panel_offers_all_supported_device_types(tmp_path, monkeypatc
         "plc",
         "simulator",
         "owen",
-        "moxa_e1242",
-        "moxa_e1242_simulator",
     ]
-    panel.select_device_type("moxa_e1242_simulator")
-    assert panel.ip_edit.text() == "127.0.0.1"
-    assert panel.port_spin.value() == 1502
-
     panel.device_combo.setCurrentIndex(panel.device_combo.findData("simulator"))
     params = panel.get_connection_params()
     assert params["device_type"] == "simulator"

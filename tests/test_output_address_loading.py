@@ -7,7 +7,7 @@ from scenario.scenario_model import ScenarioStep
 
 
 @pytest.mark.parametrize(
-    "device,expected", [("owen", 3000), ("plc", 0), ("moxa_e1242", 0)]
+    "device,expected", [("owen", 3000), ("plc", 0), ("simulator", 0)]
 )
 @pytest.mark.parametrize("include_address", [False, True])
 def test_missing_or_null_address_uses_device_default(
