@@ -7,6 +7,35 @@ from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 
 
+@pytest.mark.parametrize("time", [0.0, 0.125, 12.0])
+@pytest.mark.parametrize("value,expected", [(-30.0, -10.0), (27.5, 27.5), (90.0, 80.0)])
+def test_constant_signal_holds_value_and_respects_range(
+    time: float, value: float, expected: float
+) -> None:
+    channel = AnalogChannel(
+        id=0,
+        name="constant",
+        signal_type=SignalType.CUSTOM,
+        constant_value=value,
+        min_value=-10.0,
+        max_value=80.0,
+        frequency=17.0,
+        amplitude=90.0,
+        offset=40.0,
+        time=time,
+    )
+    assert SignalGenerator([channel])._generate_signal(channel) == expected
+
+
+def test_constant_value_survives_channel_serialization() -> None:
+    channel = AnalogChannel(
+        id=0, name="constant", signal_type=SignalType.CUSTOM, constant_value=27.5
+    )
+    loaded = AnalogChannel.from_dict(channel.to_dict())
+    assert loaded.signal_type == SignalType.CUSTOM
+    assert loaded.constant_value == 27.5
+
+
 def test_offset_shifts_signal_center_by_percent_of_half_range():
     channel = AnalogChannel(
         id=0,

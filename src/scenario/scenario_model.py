@@ -22,6 +22,7 @@ class ScenarioStep:
     signal_type: str
     amplitude: float = 50.0
     frequency: float = 1.0
+    constant_value: float = 0.0
     offset: float = 0.0
     duration: float = 5.0
     ramp_up: float = 0.0
@@ -46,6 +47,7 @@ class ScenarioStep:
             "signal_type": self.signal_type,
             "amplitude": self.amplitude,
             "frequency": self.frequency,
+            "constant_value": self.constant_value,
             "offset": self.offset,
             "duration": self.duration,
             "ramp_up": self.ramp_up,
@@ -84,6 +86,7 @@ class ScenarioStep:
             signal_type=str(data["signal_type"]),
             amplitude=float(data.get("amplitude", 50.0)),
             frequency=float(data.get("frequency", 1.0)),
+            constant_value=float(data.get("constant_value", 0.0)),
             offset=float(data.get("offset", 0.0)),
             duration=float(data.get("duration", 5.0)),
             ramp_up=float(data.get("ramp_up", 0.0)),

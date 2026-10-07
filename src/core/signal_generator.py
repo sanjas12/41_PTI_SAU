@@ -113,6 +113,10 @@ class SignalGenerator:
 
     def _generate_analog_signal(self, channel: AnalogChannel) -> float:
         """Генерирует аналоговый сигнал"""
+        if channel.signal_type == SignalType.CUSTOM:
+            return max(
+                channel.min_value, min(channel.max_value, channel.constant_value)
+            )
         t = channel.time
         freq = channel.frequency
         amp = channel.amplitude / 100.0

@@ -49,7 +49,7 @@ SIGNAL_TYPE_NAMES = {
     "Sawtooth": "Пилообразный",
     "Triangle": "Треугольный",
     "Random": "Случайный",
-    "Custom": "Пользовательский",
+    "Custom": "Постоянный",
     # Дискретные
     "Discrete": "Дискретный (0/1)",
     "Pulse": "Импульсный",
@@ -69,8 +69,11 @@ def describe_step(step: ScenarioStep) -> str:
         else f"Канал {step.channel_id + 1}"
     )
     desc = f"{designation}, {signal_name}, "
-    desc += f"A={step.amplitude:g} %, f={step.frequency:g} Гц, "
-    desc += f"смещение={step.offset:g} %, {step.duration:g} с"
+    if signal_type == SignalType.CUSTOM:
+        desc += f"значение={step.constant_value:g}, {step.duration:g} с"
+    else:
+        desc += f"A={step.amplitude:g} %, f={step.frequency:g} Гц, "
+        desc += f"смещение={step.offset:g} %, {step.duration:g} с"
 
     # Добавляем информацию о дискретных параметрах
     if signal_type == SignalType.PWM:
@@ -782,6 +785,7 @@ class StepEditDialog(QDialog):
         self.setLayout(layout)
 
         form_layout = QFormLayout()
+        self.parameter_form = form_layout
         form_layout.setSpacing(5)
 
         # Канал
@@ -875,6 +879,12 @@ class StepEditDialog(QDialog):
         form_layout.addRow("Частота:", self.freq_spin)
 
         # Смещение
+        self.constant_spin = QDoubleSpinBox()
+        self.constant_spin.setRange(-10000.0, 10000.0)
+        self.constant_spin.setDecimals(3)
+        self.constant_spin.setValue(self.step.constant_value)
+        form_layout.addRow("Значение:", self.constant_spin)
+
         self.offset_spin = QDoubleSpinBox()
         self.offset_spin.setRange(-100, 100)
         self.offset_spin.setValue(self.step.offset)
@@ -960,6 +970,14 @@ class StepEditDialog(QDialog):
                 self.pulse_width_spin.setVisible(signal_type == SignalType.PULSE)
             else:
                 self.discrete_group.setVisible(False)
+            is_constant = signal_type == SignalType.CUSTOM
+            self.constant_spin.setVisible(is_constant)
+            self.parameter_form.labelForField(self.constant_spin).setVisible(
+                is_constant
+            )
+            for widget in (self.freq_spin, self.amp_spin, self.offset_spin):
+                widget.setVisible(not is_constant)
+                self.parameter_form.labelForField(widget).setVisible(not is_constant)
             is_analog = bool(signal_type and signal_type.is_analog())
             is_owen = self.device_combo.currentData() == "owen"
             self.device_label.setVisible(True)
@@ -992,6 +1010,7 @@ class StepEditDialog(QDialog):
             signal_type=signal_type,
             amplitude=self.amp_spin.value(),
             frequency=self.freq_spin.value(),
+            constant_value=self.constant_spin.value(),
             offset=self.offset_spin.value(),
             duration=self.duration_spin.value(),
             ramp_up=self.ramp_up_spin.value(),

@@ -58,6 +58,8 @@ def test_main_window_restores_saved_channels(
     try:
         channel = window.generator.channels[0]
         channel.name = "Сохранённый канал"
+        channel.signal_type = SignalType.CUSTOM
+        channel.constant_value = 27.5
         channel.output_device = "plc"
         channel.output_address = 6
         assert window._save_channels_config()
@@ -67,6 +69,8 @@ def test_main_window_restores_saved_channels(
     try:
         channel = restored.generator.channels[0]
         assert channel.name == "Сохранённый канал"
+        assert channel.signal_type == SignalType.CUSTOM
+        assert channel.constant_value == 27.5
         assert (channel.output_device, channel.output_address) == ("plc", 6)
         assert not restored.active_output_interface.is_connected()
     finally:

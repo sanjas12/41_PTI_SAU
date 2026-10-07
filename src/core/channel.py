@@ -18,6 +18,7 @@ class AnalogChannel:
     signal_type: SignalType = SignalType.SINE
     frequency: float = 1.0  # Гц
     amplitude: float = 50.0  # 0-100%
+    constant_value: float = 0.0
     offset: float = 0.0
     min_value: float = 0.0
     max_value: float = 100.0
@@ -64,6 +65,7 @@ class AnalogChannel:
             "signal_type": self.signal_type.name,
             "frequency": self.frequency,
             "amplitude": self.amplitude,
+            "constant_value": self.constant_value,
             "offset": self.offset,
             "min_value": self.min_value,
             "max_value": self.max_value,
@@ -98,6 +100,7 @@ class AnalogChannel:
             signal_type=SignalType[data["signal_type"]],
             frequency=float(data.get("frequency", 1.0)),
             amplitude=float(data.get("amplitude", 50.0)),
+            constant_value=float(data.get("constant_value", 0.0)),
             offset=float(data.get("offset", 0.0)),
             min_value=float(data.get("min_value", 0.0)),
             max_value=float(data.get("max_value", 100.0)),

@@ -194,6 +194,7 @@ class ScenarioEngine(QObject):
                 "signal_type": channel.signal_type,
                 "frequency": channel.frequency,
                 "amplitude": channel.amplitude,
+                "constant_value": channel.constant_value,
                 "offset": channel.offset,
                 "duty_cycle": channel.duty_cycle,
                 "pulse_width": channel.pulse_width,
@@ -214,6 +215,7 @@ class ScenarioEngine(QObject):
                 channel.signal_type = config["signal_type"]
                 channel.frequency = config["frequency"]
                 channel.amplitude = config["amplitude"]
+                channel.constant_value = config["constant_value"]
                 channel.offset = config["offset"]
                 channel.duty_cycle = config["duty_cycle"]
                 channel.pulse_width = config["pulse_width"]
@@ -241,6 +243,7 @@ class ScenarioEngine(QObject):
         channel.signal_type = SignalType[step.signal_type.upper()]
         channel.frequency = step.frequency
         channel.amplitude = step.amplitude
+        channel.constant_value = step.constant_value
         channel.offset = step.offset
         channel.duty_cycle = step.duty_cycle
         channel.pulse_width = step.pulse_width
@@ -291,6 +294,7 @@ class ScenarioEngine(QObject):
         channel.signal_type = SignalType[step.signal_type.upper()]
         channel.frequency = step.frequency
         channel.amplitude = step.amplitude
+        channel.constant_value = step.constant_value
         channel.offset = step.offset
         channel.duty_cycle = step.duty_cycle
         channel.pulse_width = step.pulse_width

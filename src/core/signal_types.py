@@ -26,7 +26,7 @@ class SignalType(Enum):
             "SAWTOOTH": "Пилообразный",
             "TRIANGLE": "Треугольный",
             "RANDOM": "Случайный",
-            "CUSTOM": "Пользовательский",
+            "CUSTOM": "Постоянный",
             "DISCRETE": "Дискретный (0/1)",
             "PULSE": "Импульсный",
             "PWM": "ШИМ",

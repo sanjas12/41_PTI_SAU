@@ -44,6 +44,7 @@ class ChannelSettingsDialog(QDialog):
         self.setLayout(layout)
 
         form_layout = QFormLayout()
+        self.parameter_form = form_layout
 
         self.name_edit = QLineEdit(self.channel.name)
         form_layout.addRow("Имя канала:", self.name_edit)
@@ -77,6 +78,12 @@ class ChannelSettingsDialog(QDialog):
         self.offset_spin.setValue(self.channel.offset)
         self.offset_spin.setSingleStep(1)
         form_layout.addRow("Смещение (%):", self.offset_spin)
+
+        self.constant_spin = QDoubleSpinBox()
+        self.constant_spin.setRange(-10000.0, 10000.0)
+        self.constant_spin.setDecimals(3)
+        self.constant_spin.setValue(self.channel.constant_value)
+        form_layout.addRow("Значение:", self.constant_spin)
 
         self.kind_combo = QComboBox()
         self.kind_combo.addItem("Аналоговый", "analog")
@@ -166,6 +173,12 @@ class ChannelSettingsDialog(QDialog):
     def _update_parameter_visibility(self) -> None:
         """Показывать только параметры выбранного типа сигнала."""
         signal_name = self.type_combo.currentData()
+        is_constant = signal_name == SignalType.CUSTOM.name
+        self.constant_spin.setVisible(is_constant)
+        self.parameter_form.labelForField(self.constant_spin).setVisible(is_constant)
+        for widget in (self.freq_spin, self.amp_spin, self.offset_spin):
+            widget.setVisible(not is_constant)
+            self.parameter_form.labelForField(widget).setVisible(not is_constant)
         is_pwm = signal_name == SignalType.PWM.name
         is_pulse = signal_name == SignalType.PULSE.name
         is_analog = signal_name in {
@@ -192,6 +205,7 @@ class ChannelSettingsDialog(QDialog):
             "max_value": self.max_spin.value(),
             "frequency": self.freq_spin.value(),
             "amplitude": self.amp_spin.value(),
+            "constant_value": self.constant_spin.value(),
             "offset": self.offset_spin.value(),
             "signal_type": self.type_combo.currentData(),
             "enabled": self.enabled_check.isChecked(),
@@ -352,6 +366,7 @@ class ChannelWidget(QFrame):
             self.channel.max_value = settings["max_value"]
             self.channel.frequency = settings["frequency"]
             self.channel.amplitude = settings["amplitude"]
+            self.channel.constant_value = settings["constant_value"]
             self.channel.offset = settings["offset"]
             self.channel.signal_type = SignalType[settings["signal_type"]]
             self.channel.enabled = settings["enabled"]

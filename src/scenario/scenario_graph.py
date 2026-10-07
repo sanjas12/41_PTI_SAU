@@ -193,12 +193,19 @@ class StepNodeItem(QGraphicsItem):
                 routing_text = (
                     f"\nМУ210 №{self.step.mu210_module} · R{self.step.mu210_register}"
                 )
+            parameter_text = (
+                f"Значение: {self.step.constant_value:g}"
+                if signal_type == SignalType.CUSTOM
+                else (
+                    f"A: {self.step.amplitude:g} %   f: {self.step.frequency:g} Гц\n"
+                    f"Смещение: {self.step.offset:g} %"
+                )
+            )
             details = (
                 f"{signal_type.channel_designation(self.step.channel_id)}  ·  "
                 f"{signal_type}\n"
                 f"Длительность: {self.step.duration:g} с\n"
-                f"A: {self.step.amplitude:g} %   f: {self.step.frequency:g} Гц\n"
-                f"Смещение: {self.step.offset:g} %{routing_text}{trigger_text}"
+                f"{parameter_text}{routing_text}{trigger_text}"
             )
         painter.drawText(
             QRectF(13.0, 39.0, self.node_width - 26.0, self.node_height - 48.0),

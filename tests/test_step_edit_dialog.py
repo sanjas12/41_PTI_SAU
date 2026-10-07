@@ -6,8 +6,10 @@ from PyQt5.QtWidgets import QApplication
 from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
-from scenario.scenario_model import ScenarioStep
+from scenario.scenario_engine import ScenarioEngine
+from scenario.scenario_model import Scenario, ScenarioStep
 from scenario.scenario_widget import StepEditDialog
+from ui.channel_widget import ChannelSettingsDialog
 
 
 @pytest.fixture
@@ -15,6 +17,52 @@ def app() -> Iterator[QApplication]:
     application = QApplication.instance() or QApplication([])
     yield application
     application.processEvents()
+
+
+def test_constant_channel_settings_offer_fixed_value(app: QApplication) -> None:
+    channel = AnalogChannel(
+        id=0, name="constant", signal_type=SignalType.CUSTOM, constant_value=27.5
+    )
+    dialog = ChannelSettingsDialog(channel)
+    try:
+        assert dialog.type_combo.currentText() == "Постоянный"
+        assert not dialog.constant_spin.isHidden()
+        assert dialog.freq_spin.isHidden()
+        assert dialog.amp_spin.isHidden()
+        assert dialog.offset_spin.isHidden()
+        dialog.constant_spin.setValue(42.0)
+        assert dialog.get_settings()["constant_value"] == 42.0
+        dialog.type_combo.setCurrentIndex(dialog.type_combo.findData("SINE"))
+        assert dialog.constant_spin.isHidden()
+        assert not dialog.freq_spin.isHidden()
+    finally:
+        dialog.close()
+
+
+@pytest.mark.parametrize("graph", [False, True])
+def test_constant_step_roundtrip_and_restore(app: QApplication, graph: bool) -> None:
+    channel = AnalogChannel(id=0, name="channel", constant_value=12.0)
+    generator = SignalGenerator([channel])
+    step = ScenarioStep(channel_id=0, signal_type="Custom", constant_value=42.0)
+    dialog = StepEditDialog(generator, step=step)
+    try:
+        assert dialog.type_combo.currentText() == "Постоянный"
+        assert not dialog.constant_spin.isHidden()
+        assert dialog.freq_spin.isHidden()
+        edited = ScenarioStep.from_dict(dialog.get_step().to_dict())
+        assert edited.constant_value == 42.0
+        engine = ScenarioEngine(generator)
+        engine.scenario = Scenario(name="constant", steps=[edited])
+        engine._save_channel_configs()
+        if graph:
+            engine._apply_graph_step(edited)
+        else:
+            engine._apply_step(0)
+        assert channel.constant_value == 42.0
+        engine._restore_channel_configs()
+        assert channel.constant_value == 12.0
+    finally:
+        dialog.close()
 
 
 @pytest.mark.parametrize(
