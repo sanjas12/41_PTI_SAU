@@ -41,9 +41,9 @@ class MoxaE1242Interface(QObject):
     DI_COUNT = 4
     DO_START = 0
     DO_COUNT = 4
-    AI_RAW_START = 0
+    AI_RAW_START = 1298
     AI_RAW_COUNT = 4
-    AI_SCALED_START = 8  # 4 канала x 2 слова, начиная с 30009
+    AI_SCALED_START = 1312
     AI_SCALED_COUNT = 8
 
     # Масштаб сырых AI: 0..65535 -> 0..100 %
@@ -333,20 +333,23 @@ class MoxaE1242Interface(QObject):
     def get_register_map(self) -> Dict[str, Any]:
         return {
             "ai_raw": {
-                "start": self.AI_RAW_START,
+                "start": self.AI_RAW_START,        # 1298
                 "end": self.AI_RAW_START + self.AI_RAW_COUNT - 1,
                 "description": "AI, сырые значения (UINT16, 0..65535)",
+                "function": "input",               # 0x04
                 "channels": [f"AI-{i:02d}" for i in range(self.AI_RAW_COUNT)],
             },
             "di": {
-                "start": self.DI_START,
+                "start": self.DI_START,            # 0
                 "end": self.DI_START + self.DI_COUNT - 1,
                 "description": "DI, дискретные входы (биты)",
+                "function": "discrete",            # 0x02
             },
             "do": {
-                "start": self.DO_START,
+                "start": self.DO_START,            # 0
                 "end": self.DO_START + self.DO_COUNT - 1,
                 "description": "DO, дискретные выходы (биты)",
+                "function": "coil",                # 0x01
             },
         }
 
