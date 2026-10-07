@@ -41,9 +41,9 @@ class MoxaE1242Interface(QObject):
     DI_COUNT = 4
     DO_START = 0
     DO_COUNT = 4
-    AI_RAW_START = 1298
+    AI_RAW_START = 512   # dec
     AI_RAW_COUNT = 4
-    AI_SCALED_START = 1312
+    AI_SCALED_START = 1312  # dec
     AI_SCALED_COUNT = 8
 
     # Масштаб сырых AI: 0..65535 -> 0..100 %
