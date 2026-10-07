@@ -28,7 +28,9 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from core.channel import AnalogChannel
 from core.signal_generator import SignalGenerator
+from core.signal_types import SignalType
 from ui.styles import COLORS as UI_COLORS
 from ui.styles import app_stylesheet
 
@@ -583,7 +585,7 @@ class PlotWindow(QMainWindow):
 
         self.time_window = 10.0
         self.max_points = 2000
-        self.plot_height = 400
+        self.plot_height = 260
 
         # --------------------------------------------------------------
         # Графики
@@ -653,12 +655,12 @@ class PlotWindow(QMainWindow):
         if screen is not None:
             geometry = screen.availableGeometry()
 
-            width = geometry.width() - 40
-            height = geometry.height() - 60
+            width = min(1100, geometry.width() - 40)
+            height = min(720, geometry.height() - 60)
 
         else:
-            width = 1800
-            height = 1000
+            width = 1100
+            height = 720
 
         self.setGeometry(
             20,
@@ -683,12 +685,12 @@ class PlotWindow(QMainWindow):
 
         main_layout = QVBoxLayout(central_widget)
 
-        main_layout.setContentsMargins(6, 6, 6, 5)
-        main_layout.setSpacing(5)
+        main_layout.setContentsMargins(4, 4, 4, 4)
+        main_layout.setSpacing(3)
 
         header = QWidget()
         header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        header.setFixedHeight(36)
+        header.setFixedHeight(28)
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(0, 0, 0, 0)
         title = QLabel("Графики сигналов")
@@ -700,8 +702,8 @@ class PlotWindow(QMainWindow):
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setFixedWidth(200)
-        self.progress_bar.setFixedHeight(22)
+        self.progress_bar.setFixedWidth(160)
+        self.progress_bar.setFixedHeight(18)
         self.progress_bar.setVisible(False)
         self.progress_bar.setFormat("Сценарий: %p%")
         self.progress_bar.setStyleSheet("""
@@ -740,7 +742,7 @@ class PlotWindow(QMainWindow):
 
         splitter.addWidget(right_panel)
 
-        left_width = 250
+        left_width = 220
         right_width = self._window_width - left_width - 50
 
         splitter.setSizes(
@@ -765,7 +767,7 @@ class PlotWindow(QMainWindow):
             + f"""
             QLabel#pageTitle {{
                 color: {UI_COLORS["text"]};
-                font-size: 15pt;
+                font-size: 12pt;
                 font-weight: 600;
             }}
             QFrame#toolbar, QFrame#statusBar, QFrame#panelCard {{
@@ -800,7 +802,8 @@ class PlotWindow(QMainWindow):
                 border-radius: 2px;
                 outline: none;
             }}
-            QListWidget::item {{ padding: 6px 5px; }}
+            QListWidget::item {{ padding: 3px 4px; }}
+            QPushButton {{ padding: 3px 7px; }}
             QListWidget::item:selected {{
                 color: white;
                 background-color: {UI_COLORS["primary"]};
@@ -821,13 +824,14 @@ class PlotWindow(QMainWindow):
         toolbar = QFrame()
         toolbar.setObjectName("toolbar")
         toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        toolbar.setMaximumHeight(46)
+        toolbar.setMaximumHeight(38)
         layout = QHBoxLayout(toolbar)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(6)
+        layout.setContentsMargins(5, 3, 5, 3)
+        layout.setSpacing(4)
 
         # Добавить график
-        self.add_plot_btn = QPushButton("＋ Добавить график")
+        self.add_plot_btn = QPushButton("＋ График")
+        self.add_plot_btn.setToolTip("Добавить график")
         self.add_plot_btn.setObjectName("primaryButton")
 
         self.add_plot_btn.clicked.connect(self.add_plot)
@@ -835,7 +839,8 @@ class PlotWindow(QMainWindow):
         layout.addWidget(self.add_plot_btn)
 
         # Удалить последний
-        self.remove_last_btn = QPushButton("− Удалить последний")
+        self.remove_last_btn = QPushButton("− График")
+        self.remove_last_btn.setToolTip("Удалить последний график")
         self.remove_last_btn.setObjectName("dangerButton")
 
         self.remove_last_btn.clicked.connect(self.remove_last_plot)
@@ -843,7 +848,8 @@ class PlotWindow(QMainWindow):
         layout.addWidget(self.remove_last_btn)
 
         # Очистить всё
-        self.clear_all_btn = QPushButton("Очистить данные")
+        self.clear_all_btn = QPushButton("Очистить")
+        self.clear_all_btn.setToolTip("Очистить данные всех графиков")
 
         self.clear_all_btn.clicked.connect(self.clear_all_plots)
 
@@ -935,12 +941,11 @@ class PlotWindow(QMainWindow):
 
         self.channels_list.customContextMenuRequested.connect(self.show_channel_menu)
 
-        self.channels_list.setMinimumWidth(220)
-        self.channels_list.setMaximumWidth(280)
+        self.channels_list.setMinimumWidth(180)
 
         layout.addWidget(self.channels_list)
 
-        info_layout = QHBoxLayout()
+        info_layout = QVBoxLayout()
 
         info_layout.setSpacing(2)
 
@@ -985,7 +990,7 @@ class PlotWindow(QMainWindow):
         title.setObjectName("sectionTitle")
         title_layout.addWidget(title)
         title_layout.addStretch()
-        hint = QLabel("Правый щелчок по графику открывает действия")
+        hint = QLabel("Действия: правый щелчок")
         hint.setObjectName("secondaryText")
         title_layout.addWidget(hint)
 
@@ -1024,15 +1029,12 @@ class PlotWindow(QMainWindow):
         panel = QFrame()
         panel.setObjectName("statusBar")
         panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        panel.setMaximumHeight(34)
+        panel.setMaximumHeight(28)
         layout = QHBoxLayout(panel)
-        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setContentsMargins(5, 2, 5, 2)
         layout.setSpacing(5)
 
-        info_label = QLabel(
-            "Ctrl + щелчок — выбор нескольких каналов · "
-            "правый щелчок — дополнительные действия"
-        )
+        info_label = QLabel("Ctrl + щелчок — выбор каналов · правый щелчок — действия")
         info_label.setObjectName("secondaryText")
 
         layout.addWidget(info_label)
@@ -1050,6 +1052,16 @@ class PlotWindow(QMainWindow):
     # ==================================================================
     # Каналы
     # ==================================================================
+
+    @staticmethod
+    def _channel_parameters(channel: AnalogChannel) -> str:
+        """Показать параметры, соответствующие выбранному типу сигнала."""
+        if channel.signal_type == SignalType.CUSTOM:
+            value = max(
+                channel.min_value, min(channel.max_value, channel.constant_value)
+            )
+            return f"Значение: {value:g}"
+        return f"Частота: {channel.frequency:g} Гц"
 
     def _update_channels_list(self) -> None:
         """Обновить список каналов."""
@@ -1078,8 +1090,16 @@ class PlotWindow(QMainWindow):
                 f"({str(channel.signal_type)})"
                 f"{status}"
             )
+            if channel.signal_type == SignalType.CUSTOM:
+                text += f" · {self._channel_parameters(channel)}"
 
             item = QListWidgetItem(text)
+            item.setToolTip(
+                f"{designation}: {channel.name}\n"
+                f"{channel.signal_type}\n"
+                f"Диапазон: {channel.min_value:g}–{channel.max_value:g}\n"
+                f"{self._channel_parameters(channel)}"
+            )
 
             item.setData(
                 Qt.UserRole,
@@ -1158,9 +1178,9 @@ class PlotWindow(QMainWindow):
         info_action = QAction(
             (
                 f"{channel.name[:15]} | "
-                f"{channel.min_value:.0f}-"
-                f"{channel.max_value:.0f} | "
-                f"{channel.frequency:.1f} Гц"
+                f"{channel.min_value:g}–"
+                f"{channel.max_value:g} | "
+                f"{self._channel_parameters(channel)}"
             ),
             self,
         )
@@ -1447,6 +1467,7 @@ class PlotWindow(QMainWindow):
             (
                 f"{channel.signal_type.channel_designation(channel.id)}: "
                 f"{channel.name} ({str(channel.signal_type)})"
+                f" · {self._channel_parameters(channel)}"
             )
             for channel in self.generator.channels
         ]

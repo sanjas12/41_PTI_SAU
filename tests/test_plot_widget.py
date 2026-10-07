@@ -12,6 +12,31 @@ from ui.plot_widget import PlotWindow
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
+def test_constant_plot_shows_value_instead_of_frequency() -> None:
+    app = QApplication.instance() or QApplication([])
+    channel = AnalogChannel(
+        id=0, name="constant", signal_type=SignalType.CUSTOM, constant_value=27.5
+    )
+    window = PlotWindow(SignalGenerator([channel]))
+    try:
+        item = window.channels_list.item(0)
+        assert "Постоянный" in item.text()
+        assert "27.5" in item.text()
+        assert "Гц" not in item.toolTip()
+        window.add_channel_to_plot(0)
+        for _ in range(3):
+            channel.current_value = window.generator._generate_signal(channel)
+            window.update_plots()
+        _times, values = window.plot_widgets[0].channel_data[0].get_data()
+        assert np.array_equal(values, np.array([27.5, 27.5, 27.5]))
+        channel.constant_value = 150.0
+        window._update_channels_list()
+        assert "Значение: 100" in window.channels_list.item(0).text()
+    finally:
+        window.close()
+        app.processEvents()
+
+
 def test_repeated_clear_keeps_legend_attached() -> None:
     app = QApplication.instance() or QApplication([])
     window = PlotWindow(SignalGenerator([AnalogChannel(id=0, name="channel")]))
@@ -70,8 +95,12 @@ def test_plot_window_keeps_service_panels_compact():
     assert status_bar is not None
     assert toolbar.sizePolicy().verticalPolicy() == QSizePolicy.Fixed
     assert status_bar.sizePolicy().verticalPolicy() == QSizePolicy.Fixed
-    assert toolbar.maximumHeight() == 46
-    assert status_bar.maximumHeight() == 34
+    assert toolbar.maximumHeight() == 38
+    assert status_bar.maximumHeight() == 28
+    assert window.plot_height == 260
+    assert window.width() <= 1100
+    assert window.height() <= 720
+    assert window.minimumSizeHint().width() <= 1100
 
     window.close()
     app.processEvents()
