@@ -27,6 +27,7 @@ cd "$(dirname "$0")/.."
 # ─── Логирование ──────────────────────────────────────────────
 LOG_DIR="logs"
 LOG_FILE="$LOG_DIR/release_$(date '+%Y%m%d_%H%M%S').log"
+LOG_PYTEST="$LOG_DIR/pytest_${TIMESTAMP}.log"
 mkdir -p "$LOG_DIR"
 
 # Всё что идёт в терминал — дублируется в файл
@@ -126,7 +127,9 @@ fi
 log_ok "Синтаксис Python проверен"
 
 log_info "Запускаем все тесты из каталога tests"
-if ! uv run --frozen pytest tests; then
+# LOG_PYTEST="$LOG_DIR/pytest_${TIMESTAMP}.log"
+# pytest tests -v > pytest.log
+if ! uv run --frozen pytest tests -v > "$LOG_PYTEST" 2>&1; then
     log_error "Тесты не прошли! Релиз отменён."
     exit 1
 fi

@@ -91,7 +91,7 @@ setup(
         Executable(
             os.path.join(src_root, "main.py"),
             target_name=exe_name,
-            # base="Win32GUI",  # раскомментировать чтобы скрыть консоль на Windows
+            base="Win32GUI",  # раскомментировать чтобы скрыть консоль на Windows
         )
     ],
 )
