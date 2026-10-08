@@ -1,17 +1,16 @@
-from typing import Callable, Optional
-
 from PyQt5 import QtCore
 
 
 class WorkerSignals(QtCore.QObject):
     """Сигналы для асинхронных операций"""
+
     result = QtCore.pyqtSignal(object)
     error = QtCore.pyqtSignal(str)
 
 
 class Runnable(QtCore.QRunnable):
     """Задача для выполнения в отдельном потоке"""
-    
+
     def __init__(self, fn, *args, **kwargs):
         super().__init__()
         self.fn = fn

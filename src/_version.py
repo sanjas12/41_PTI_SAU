@@ -20,6 +20,7 @@ def _revision_from_baked() -> str | None:
     # Вариант 1: exe-окружение — doc/_revision.py
     try:
         from doc._revision import __revision__  # type: ignore[import]
+
         return __revision__
     except ImportError:
         pass
@@ -27,6 +28,7 @@ def _revision_from_baked() -> str | None:
     # Вариант 2: сборка — src/_revision.py рядом с модулями
     try:
         from _revision import __revision__  # type: ignore[import]
+
         return __revision__
     except ImportError:
         pass

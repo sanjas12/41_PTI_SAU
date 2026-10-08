@@ -7,7 +7,7 @@ from pyModbusTCP.client import ModbusClient
 
 class ModbusClientWrapper:
     """Thread-safe обертка для Modbus TCP клиента"""
-    
+
     NOT_CONNECT = "Нет соединения с устройством"
 
     def __init__(self) -> None:
@@ -19,7 +19,7 @@ class ModbusClientWrapper:
         """Настройка параметров подключения"""
         if not host or not isinstance(port, int) or port <= 0 or port > 65535:
             raise ValueError("Неверные параметры подключения")
-            
+
         with self._lock:
             if self._client is not None:
                 with contextlib.suppress(Exception):

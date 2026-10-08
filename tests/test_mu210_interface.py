@@ -1,3 +1,4 @@
+import pytest
 from PyQt5.QtWidgets import QApplication
 
 from core.channel import AnalogChannel
@@ -185,13 +186,15 @@ def test_channel_serialization_preserves_mu210_mapping():
     assert restored.mu210_register == 3006
 
 
-def test_mu210_manual_validation_reports_missing_module_and_invalid_register():
+def test_mu210_manual_validation_reports_missing_module_and_invalid_register() -> None:
     channels = [
         AnalogChannel(id=0, name="missing", mu210_module=2, mu210_register=3000),
         AnalogChannel(id=1, name="invalid", mu210_module=1, mu210_register=3010),
     ]
     interface = make_interface(channels)
     interface.configure("192.168.1.99", 502, 1)
+    # Модель нормализует адрес при создании; проверяем повреждённое runtime-состояние.
+    channels[1].output_address = 3010
 
     errors = interface.validate_manual_output_map()
 
@@ -199,7 +202,7 @@ def test_mu210_manual_validation_reports_missing_module_and_invalid_register():
     assert any("регистр 3010 вне диапазона" in error for error in errors)
 
 
-def test_mu210_manual_validation_ignores_disabled_duplicate():
+def test_mu210_manual_validation_ignores_disabled_duplicate() -> None:
     channels = [
         AnalogChannel(id=0, name="active", mu210_module=1, mu210_register=3000),
         AnalogChannel(
@@ -215,7 +218,7 @@ def test_mu210_manual_validation_ignores_disabled_duplicate():
     assert interface.validate_manual_output_map() == []
 
 
-def test_mu210_manual_validation_rejects_active_duplicate():
+def test_mu210_manual_validation_rejects_active_duplicate() -> None:
     channels = [
         AnalogChannel(id=0, name="first", mu210_module=1, mu210_register=3000),
         AnalogChannel(id=1, name="second", mu210_module=1, mu210_register=3000),
@@ -226,6 +229,30 @@ def test_mu210_manual_validation_rejects_active_duplicate():
 
     assert len(errors) == 1
     assert "назначены на МУ210 №1, регистр 3000" in errors[0]
+
+
+@pytest.mark.parametrize(
+    "enabled,device,signal_type",
+    [
+        (False, "owen", SignalType.SINE),
+        (True, "plc", SignalType.SINE),
+        (True, "owen", SignalType.DISCRETE),
+    ],
+)
+def test_mu210_validation_ignores_channels_without_active_analog_output(
+    enabled: bool, device: str, signal_type: SignalType
+) -> None:
+    channel = AnalogChannel(
+        id=0,
+        name="ignored",
+        enabled=enabled,
+        output_device=device,
+        signal_type=signal_type,
+        mu210_module=99,
+    )
+    channel.output_address = 3010
+    interface = make_interface([channel])
+    assert interface.validate_manual_output_map() == []
 
 
 def test_mu210_scenario_allows_sequential_steps_on_same_output():

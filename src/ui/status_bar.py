@@ -2,8 +2,6 @@
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
     QLabel,
     QStatusBar,
     QWidget,
@@ -89,7 +87,9 @@ class AppStatusBar(QStatusBar):
 
         # Распорка, прижимающая индикаторы вправо
         spacer = QWidget()
-        spacer.setSizePolicy(spacer.sizePolicy().Expanding, spacer.sizePolicy().Preferred)
+        spacer.setSizePolicy(
+            spacer.sizePolicy().Expanding, spacer.sizePolicy().Preferred
+        )
         self.addWidget(spacer, 1)
 
         # --- Правая часть — индикаторы состояния ---
@@ -161,9 +161,7 @@ class AppStatusBar(QStatusBar):
         if connected and host:
             self.connection_indicator.setText(f"TCPIP:{host}")
             self.connection_indicator.set_state(IndicatorLabel.STATE_ACTIVE)
-            self.connection_indicator.setToolTip(
-                f"Подключено к {host}:{port}"
-            )
+            self.connection_indicator.setToolTip(f"Подключено к {host}:{port}")
         else:
             self.connection_indicator.setText("OFFLINE")
             self.connection_indicator.set_state(IndicatorLabel.STATE_OFFLINE)

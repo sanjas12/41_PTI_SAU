@@ -11,9 +11,9 @@ class ThemeColors:
     """Набор цветов для одной темы."""
 
     # Фоны
-    canvas: str          # фон окна/рабочей области
-    surface: str         # фон панелей и GroupBox
-    surface_alt: str     # фон карточек и вложенных блоков
+    canvas: str  # фон окна/рабочей области
+    surface: str  # фон панелей и GroupBox
+    surface_alt: str  # фон карточек и вложенных блоков
     surface_raised: str  # фон приподнятых элементов (toolbar, statusbar)
 
     # Границы
@@ -23,12 +23,12 @@ class ThemeColors:
     # Текст
     text: str
     text_muted: str
-    text_inverse: str    # текст на цветном фоне (кнопки)
+    text_inverse: str  # текст на цветном фоне (кнопки)
 
     # Акценты
-    primary: str         # основной акцент (синий)
+    primary: str  # основной акцент (синий)
     primary_hover: str
-    primary_soft: str    # мягкий фон для hover
+    primary_soft: str  # мягкий фон для hover
 
     # Статусы
     success: str
@@ -60,28 +60,22 @@ LIGHT_THEME: Final[ThemeColors] = ThemeColors(
     surface="#ffffff",
     surface_alt="#f7f8fa",
     surface_raised="#e6e8eb",
-
     border="#c7ced6",
     border_strong="#9da8b3",
-
     text="#1f2933",
     text_muted="#66727d",
     text_inverse="#ffffff",
-
     primary="#246b8f",
     primary_hover="#1d5a78",
     primary_soft="#e5f1f7",
-
     success="#2f7d4a",
     warning="#a56616",
     danger="#b23a3a",
     disabled="#aab2ba",
-
     toolbar_bg="#e6e8eb",
     statusbar_bg="#e6e8eb",
     menu_bg="#ffffff",
     menu_hover="#e5f1f7",
-
     plot_bg="#ffffff",
     plot_grid="#d0d7de",
     plot_axis="#8a929b",
@@ -100,28 +94,22 @@ DARK_THEME: Final[ThemeColors] = ThemeColors(
     surface="#2b2b2b",
     surface_alt="#333333",
     surface_raised="#252525",
-
     border="#444444",
     border_strong="#5a5a5a",
-
     text="#e0e0e0",
     text_muted="#9aa0a6",
     text_inverse="#ffffff",
-
     primary="#4a9eff",
     primary_hover="#6cb1ff",
     primary_soft="#1f3a52",
-
     success="#4caf50",
     warning="#ff9800",
     danger="#f44336",
     disabled="#6a6a6a",
-
     toolbar_bg="#252525",
     statusbar_bg="#252525",
     menu_bg="#2b2b2b",
     menu_hover="#1f3a52",
-
     plot_bg="#101214",
     plot_grid="#2a2f35",
     plot_axis="#8a929b",
@@ -149,6 +137,7 @@ def get_theme(name: str) -> ThemeColors:
 # ---------------------------------------------------------------
 # Генерация QSS
 # ---------------------------------------------------------------
+
 
 def build_stylesheet(theme_name: str, large: bool = False) -> str:
     """Сгенерировать QSS для выбранной темы и масштаба."""

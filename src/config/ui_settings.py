@@ -52,7 +52,9 @@ class UISettings:
 
     def _load(self) -> None:
         if not self._path.exists():
-            logger.info("ui_settings.json не найден — используются значения по умолчанию")
+            logger.info(
+                "ui_settings.json не найден — используются значения по умолчанию"
+            )
             self._save()
             return
 
