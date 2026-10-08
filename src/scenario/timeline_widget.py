@@ -254,6 +254,13 @@ class TimelineWidget(QWidget):
         self.duration_spin.blockSignals(False)
         self.refresh()
 
+    def refresh_channels(self) -> None:
+        """Перечитать каналы после подключения другого профиля устройства."""
+        self.channel_combo.clear()
+        for channel in self.generator.channels:
+            self.channel_combo.addItem(f"{channel.id + 1}: {channel.name}", channel.id)
+        self.refresh()
+
     def time_x(self, time: float) -> float:
         return self.label_width + time * self.scale
 

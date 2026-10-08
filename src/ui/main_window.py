@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from PyQt5.QtCore import QSettings, Qt, QTimer
 from PyQt5.QtWidgets import (
@@ -24,6 +24,7 @@ from application.controller import ApplicationController
 from config.ui_settings import UISettings
 from core.channel import AnalogChannel
 from core.channel_repository import ChannelRepository
+from core.device_channels import create_device_channels
 from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 from devices.device_manager import DeviceManager
@@ -48,7 +49,7 @@ class MainWindow(QMainWindow):
 
     CHANNELS_CONFIG_FILE = "channels_config.json"
 
-    def __init__(self):
+    def __init__(self, *, startup_connection: bool = False) -> None:
         super().__init__()
         self.setWindowTitle(__full_version__)
 
@@ -68,7 +69,10 @@ class MainWindow(QMainWindow):
 
         # Каналы
         self.generator = SignalGenerator()
-        self._setup_channels()
+        if not startup_connection:
+            self._setup_channels()
+        self._startup_connection_pending = startup_connection
+        self._device_profile_ready = not startup_connection
 
         # Движок сценариев
         self.scenario_engine = ScenarioEngine(self.generator, self)
@@ -101,10 +105,10 @@ class MainWindow(QMainWindow):
         self._engine_mode = "manual"
 
         # Внешние окна
-        self.plot_window: PlotWindow | None = None
-        self.plc_view: PLCRegisterView | None = None
-        self.connection_dialog: ConnectionDialog | None = None
-        self.settings_dialog: SettingsDialog | None = None
+        self.plot_window: Optional[PlotWindow] = None
+        self.plc_view: Optional[PLCRegisterView] = None
+        self.connection_dialog: Optional[ConnectionDialog] = None
+        self.settings_dialog: Optional[SettingsDialog] = None
 
         # Собираем UI
         self.setup_ui()
@@ -119,6 +123,8 @@ class MainWindow(QMainWindow):
         # Синхронизация UI с исходным состоянием
         self._refresh_status_bar()
         self._refresh_control_buttons()
+        if startup_connection:
+            QTimer.singleShot(0, self.open_startup_connection)
 
     # ==================================================================
     # Конфигурация каналов
@@ -252,6 +258,8 @@ class MainWindow(QMainWindow):
             return {}
 
     def _save_channels_config(self) -> bool:
+        if not self._device_profile_ready:
+            return False
         try:
             self.channel_repository.save(self.generator.channels)
             return True
@@ -588,6 +596,12 @@ class MainWindow(QMainWindow):
 
     def open_connection_dialog(self) -> None:
         """Открыть модальное окно подключения."""
+        self._ensure_connection_dialog()
+        if self.connection_dialog is not None:
+            self.connection_dialog.exec_()
+
+    def _ensure_connection_dialog(self) -> None:
+        """Создать диалог и подключить его к менеджеру устройств."""
         if self.connection_dialog is None:
             self.connection_dialog = ConnectionDialog(self)
             self.connection_dialog.connected.connect(self.on_connection_status_changed)
@@ -597,7 +611,16 @@ class MainWindow(QMainWindow):
             self.connection_dialog.set_connection_status(
                 self.active_output_interface.is_connected()
             )
-        self.connection_dialog.exec_()
+
+    def open_startup_connection(self) -> None:
+        """При запуске предложить подключение к МУ210 без автоматического обмена."""
+        if not self._startup_connection_pending or not self.isVisible():
+            return
+        self._startup_connection_pending = False
+        self._ensure_connection_dialog()
+        if self.connection_dialog is not None:
+            self.connection_dialog.connection_panel.select_device_type("owen")
+            self.connection_dialog.exec_()
 
     def open_settings_dialog(self) -> None:
         """Открыть единый диалог настроек."""
@@ -839,10 +862,52 @@ class MainWindow(QMainWindow):
 
     def _on_device_connected(self, connected: bool) -> None:
         if connected:
+            self._apply_connected_device_profile()
             self._sync_generation_timer()
         if self.connection_dialog is not None:
             self.connection_dialog.set_connection_status(connected)
         self._refresh_status_bar()
+
+    def _apply_connected_device_profile(self) -> None:
+        """Обновить каналы после подтверждённого подключения ко всем модулям."""
+        self.controller.stop_generation()
+        if self.scenario_engine.is_running():
+            self.scenario_engine.stop_scenario()
+        saved = self._load_channels_config()
+        for channel in self.generator.channels:
+            saved[str(channel.id)] = channel.to_dict()
+        module_count = (
+            len(self.active_output_interface.hosts)
+            if self.active_device_type == "owen"
+            else 1
+        )
+        channels = create_device_channels(self.active_device_type, module_count, saved)
+        self.generator.channels = channels
+        self._device_profile_ready = True
+        self.generator.reset()
+        for widget in self.channel_widgets:
+            widget.hide()
+            widget.setParent(None)
+            widget.deleteLater()
+        self.channel_widgets = []
+        for channel in channels:
+            widget = ChannelWidget(channel)
+            widget.channel_selected.connect(self.on_channel_selected)
+            widget.channel_type_changed.connect(self.on_channel_type_changed)
+            widget.channel_settings_changed.connect(self.on_channel_settings_changed)
+            self.channel_widgets.append(widget)
+        self._rebuild_manual_channel_layout()
+        self.discrete_channels_group.setVisible(False)
+        self.scenario_widget.timeline.refresh_channels()
+        if self.plot_window is not None:
+            self.plot_window.close()
+            self.plot_window = None
+        if self.connection_dialog is not None:
+            self.connection_dialog.accept()
+        self.log(
+            f"Профиль устройства применён: {len(channels)} аналоговых каналов",
+            "success",
+        )
 
     def _active_device_name(self) -> str:
         return self.device_manager.active_device_name
@@ -1258,8 +1323,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, "splitter"):
             self._settings.setValue("splitter_sizes", self.splitter.sizes())
 
-        self._save_channels_config()
-        self.log("Настройки каналов сохранены", "info")
+        self._startup_connection_pending = False
+        if self._save_channels_config():
+            self.log("Настройки каналов сохранены", "info")
 
         if self.plot_window:
             self.plot_window.close()

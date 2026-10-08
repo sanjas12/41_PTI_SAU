@@ -31,6 +31,7 @@ Python 3.8, PyQt5, pyqtgraph, pyModbusTCP; сборка — cx_Freeze.
 │   │   ├── __init__.py
 │   │   ├── channel_repository.py
 │   │   ├── channel.py
+│   │   ├── device_channels.py
 │   │   ├── output_devices.py
 │   │   ├── signal_generator.py
 │   │   ├── signal_history.py
@@ -83,6 +84,7 @@ Python 3.8, PyQt5, pyqtgraph, pyModbusTCP; сборка — cx_Freeze.
 │   ├── test_connection_panel.py
 │   ├── test_control_panel.py
 │   ├── test_device_manager.py
+│   ├── test_device_channels.py
 │   ├── test_disable_all_channels.py
 │   ├── test_discrete_signals.py
 │   ├── test_mu210_interface.py
@@ -126,6 +128,11 @@ main.py → MainWindow (ui): координация интерфейса, кан
 
 src/application — управление выполнением и согласование режимов.
 src/core — модели каналов, генерация сигналов, история и файловый repository.
+device_channels.py создаёт каналы по профилю подключения: восемь аналоговых
+выходов на МУ210-501 или 20 аналоговых REAL для PLC/Simulator старой карты.
+При запуске main.py открывается окно подключения с выбранным МУ210-501;
+каналы появляются только после успешного подключения ко всем модулям.
+Отмена и ошибка подключения не стирают сохранённую конфигурацию каналов.
 src/config — конфигурация приложения и настройки интерфейса.
 src/devices — адаптеры PLC и МУ210 и менеджер подключений.
 Ручной валидатор МУ210 проверяет только включённые аналоговые каналы этого

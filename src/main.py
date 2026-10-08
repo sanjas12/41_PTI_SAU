@@ -83,7 +83,7 @@ def main():
         app.setStyleSheet(app_stylesheet())
 
         # Создаем главное окно
-        window = MainWindow()
+        window = MainWindow(startup_connection=True)
         window.show()
 
         log_startup_done(time.monotonic() - t0)
