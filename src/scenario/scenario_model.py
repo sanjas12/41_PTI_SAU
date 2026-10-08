@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 from core.output_devices import default_address
+from scenario.animation import AnimationTrack
 
 TRIGGER_ANY = "any"
 TRIGGER_ALL = "all"
@@ -136,6 +137,8 @@ class Scenario:
     connections: List[ScenarioConnection] = field(default_factory=list)
     loop: bool = False
     version: str = "2.0"
+    tracks: List[AnimationTrack] = field(default_factory=list)
+    timeline_duration: float = 5.0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -144,6 +147,8 @@ class Scenario:
             "loop": self.loop,
             "steps": [step.to_dict() for step in self.steps],
             "connections": [connection.to_dict() for connection in self.connections],
+            "tracks": [track.to_dict() for track in self.tracks],
+            "timeline_duration": self.timeline_duration,
         }
 
     @classmethod
@@ -175,6 +180,8 @@ class Scenario:
             connections=connections,
             loop=bool(data.get("loop", False)),
             version="2.0",
+            tracks=[AnimationTrack.from_dict(item) for item in data.get("tracks", [])],
+            timeline_duration=float(data.get("timeline_duration", 5.0)),
         )
 
     def incoming_ids(self, step_id: str) -> Set[str]:
@@ -328,7 +335,13 @@ class Scenario:
     def get_total_duration(self) -> float:
         """Рассчитать время выполнения графа с учётом параллельных ветвей."""
         timings = self.get_step_timings()
-        return max((end for _, end in timings.values()), default=0.0)
+        graph_duration = max((end for _, end in timings.values()), default=0.0)
+        if not self.tracks:
+            return graph_duration
+        last_key = max(
+            (key.time for track in self.tracks for key in track.keyframes), default=0.0
+        )
+        return max(graph_duration, self.timeline_duration, last_key)
 
     def save_to_file(self, filepath: str) -> None:
         """Атомарно сохранить сценарий в JSON.

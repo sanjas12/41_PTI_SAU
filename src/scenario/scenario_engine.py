@@ -7,6 +7,7 @@ from core.signal_generator import SignalGenerator
 from core.signal_types import SignalType
 
 from .scenario_model import TRIGGER_ANY, TRIGGER_SPECIFIC, Scenario, ScenarioStep
+from .timeline_state import apply_tracks, validate_timeline
 
 
 class ScenarioMode(Enum):
@@ -80,8 +81,18 @@ class ScenarioEngine(QObject):
 
     def start_scenario(self):
         """Запустить сценарий"""
-        if not self.scenario or not self.scenario.steps:
+        if not self.scenario or not (
+            self.scenario.steps
+            or any(track.keyframes for track in self.scenario.tracks)
+        ):
             self.log_signal.emit("Сценарий пуст!", "warning")
+            return
+
+        timeline_errors = validate_timeline(self.scenario, self.generator.channels)
+        if timeline_errors:
+            self.validation_failed.emit(
+                "Нельзя запустить сценарий:\n" + "\n".join(timeline_errors)
+            )
             return
 
         if self.start_validator is not None:
@@ -112,7 +123,11 @@ class ScenarioEngine(QObject):
             self._completed_steps.clear()
 
             self._start_ready_steps()
-            if not self._active_steps:
+            self._enable_timeline_channels()
+            self._apply_timeline()
+            if not self._active_steps and not any(
+                track.keyframes for track in self.scenario.tracks
+            ):
                 self.log_signal.emit(
                     "Сценарий не содержит стартового блока или содержит цикл",
                     "error",
@@ -140,9 +155,8 @@ class ScenarioEngine(QObject):
             # Восстанавливаем настройки каналов
             self._restore_channel_configs()
 
-            # Включаем все каналы обратно
+            # Настройки включения восстановлены из ручного режима.
             for channel in self.generator.channels:
-                channel.enabled = True
                 # Сбрасываем время для корректной генерации
                 channel.time = 0
 
@@ -391,13 +405,20 @@ class ScenarioEngine(QObject):
                 self._disable_channels_without_active_steps(completed_now, step_by_id)
                 self._emit_active_steps()
 
-            if not self._active_steps:
+            self._apply_timeline()
+            if not self._active_steps and (
+                not any(track.keyframes for track in self.scenario.tracks)
+                or self._scenario_time + 1e-9 >= self.scenario.get_total_duration()
+            ):
                 if len(self._completed_steps) == len(self.scenario.steps):
                     if self.scenario.loop:
                         self._started_steps.clear()
                         self._completed_steps.clear()
                         self._scenario_time = 0.0
+                        self._restore_timeline_baseline()
                         self._start_ready_steps()
+                        self._enable_timeline_channels()
+                        self._apply_timeline()
                         self.log_signal.emit("Сценарий зациклен", "info")
                     else:
                         self._finish_scenario()
@@ -423,6 +444,37 @@ class ScenarioEngine(QObject):
         # Обновляем значения сигналов
         self._apply_ramp()
 
+    def _enable_timeline_channels(self) -> None:
+        """При старте каналы дорожек включаются, как каналы шагов графа."""
+        if self.scenario is None:
+            return
+        for track in self.scenario.tracks:
+            if track.keyframes:
+                channel = self.generator.get_channel(track.channel_id)
+                if channel is not None:
+                    channel.enabled = True
+
+    def _restore_timeline_baseline(self) -> None:
+        """При повторе вернуть параметры дорожек до применения начальных ключей."""
+        if self.scenario is None:
+            return
+        for track in self.scenario.tracks:
+            channel = self.generator.get_channel(track.channel_id)
+            config = self._original_channel_configs.get(track.channel_id)
+            if channel is not None and config is not None:
+                setattr(channel, track.parameter, config[track.parameter])
+                if track.parameter in ("output_device", "output_address"):
+                    channel.mu210_register = config["mu210_register"]
+
+    def _apply_timeline(self) -> None:
+        """Общая шкала перекрывает параметры шагов; генератор считает значения."""
+        if self.scenario is not None:
+            apply_tracks(
+                self.scenario,
+                self._scenario_time,
+                {channel.id: channel for channel in self.generator.channels},
+            )
+
     def _disable_channels_without_active_steps(
         self,
         completed_step_ids: List[str],
@@ -432,6 +484,10 @@ class ScenarioEngine(QObject):
         active_channel_ids = {
             step_by_id[step_id].channel_id for step_id in self._active_steps
         }
+        if self.scenario is not None:
+            active_channel_ids.update(
+                track.channel_id for track in self.scenario.tracks if track.keyframes
+            )
         completed_channel_ids = {
             step_by_id[step_id].channel_id for step_id in completed_step_ids
         }
@@ -460,6 +516,7 @@ class ScenarioEngine(QObject):
 
         scenario_channel_ids = (
             {step.channel_id for step in self.scenario.steps}
+            | {track.channel_id for track in self.scenario.tracks if track.keyframes}
             if self.scenario
             else set()
         )

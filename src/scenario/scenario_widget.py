@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -42,6 +43,7 @@ from .scenario_model import (
     Scenario,
     ScenarioStep,
 )
+from .timeline_widget import TimelineWidget
 
 SIGNAL_TYPE_NAMES = {
     "Sine": "Синус",
@@ -267,7 +269,12 @@ class ScenarioWidget(QWidget):
         self.graph_scene.graph_changed.connect(self._emit_scenario_changed)
         self.graph_scene.selectionChanged.connect(self._on_selection_changed)
         self.graph_view = ScenarioGraphView(self.graph_scene, self)
-        layout.addWidget(self.graph_view, stretch=1)
+        self.editor_tabs = QTabWidget()
+        self.editor_tabs.addTab(self.graph_view, "Граф шагов")
+        self.timeline = TimelineWidget(self.generator, self)
+        self.timeline.changed.connect(self.update_graph)
+        self.editor_tabs.addTab(self.timeline, "Шкала параметров")
+        layout.addWidget(self.editor_tabs, stretch=1)
 
         # Нижняя панель
         bottom_layout = QHBoxLayout()
@@ -326,9 +333,12 @@ class ScenarioWidget(QWidget):
     def update_graph(self) -> None:
         """Перестроить графическое представление сценария."""
         self.graph_scene.set_scenario(self.scenario)
+        self.timeline.set_scenario(self.scenario)
         step_count = format_step_count(len(self.scenario.steps))
         total_duration = format_duration(self.scenario.get_total_duration())
-        self.steps_count_label.setText(f"{step_count} · Общее время: {total_duration}")
+        self.steps_count_label.setText(
+            f"{step_count} · Дорожек: {len(self.scenario.tracks)} · Общее время: {total_duration}"
+        )
         self.scenario_changed.emit(self.scenario)
         self._on_selection_changed()
 
@@ -337,7 +347,12 @@ class ScenarioWidget(QWidget):
 
     def fit_scenario_to_view(self) -> None:
         """Показать все элементы сценария в текущем размере редактора."""
-        self.graph_view.fit_scenario()
+        if self.editor_tabs.currentWidget() is self.timeline:
+            self.timeline.view.fitInView(
+                self.timeline.scene.sceneRect(), Qt.KeepAspectRatio
+            )
+        else:
+            self.graph_view.fit_scenario()
 
     def add_step(self, signal_family: str = "analog") -> None:
         """Добавить шаг выбранной категории сигнала."""
@@ -485,13 +500,13 @@ class ScenarioWidget(QWidget):
 
     def clear_steps(self):
         """Очистить все шаги"""
-        if not self.scenario.steps:
+        if not self.scenario.steps and not self.scenario.tracks:
             return
 
         reply = QMessageBox.question(
             self,
             "Подтверждение",
-            "Очистить все шаги?",
+            "Очистить все шаги и дорожки параметров?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -500,6 +515,7 @@ class ScenarioWidget(QWidget):
             removed_count = len(self.scenario.steps)
             self.scenario.steps.clear()
             self.scenario.connections.clear()
+            self.scenario.tracks.clear()
             self.update_graph()
             self._log_change(
                 f"Очищен сценарий: удалено шагов — {removed_count}", "warning"
@@ -587,7 +603,9 @@ class ScenarioWidget(QWidget):
 
     def play_scenario(self):
         """Запустить сценарий"""
-        if not self.scenario.steps:
+        if not self.scenario.steps and not any(
+            track.keyframes for track in self.scenario.tracks
+        ):
             QMessageBox.warning(self, "Предупреждение", "Сценарий пуст!")
             return
 
@@ -627,11 +645,13 @@ class ScenarioWidget(QWidget):
         if target_mode == "scenario":
             if self.engine.mode == ScenarioMode.SCENARIO:
                 return True
-            if not self.scenario.steps:
+            if not self.scenario.steps and not any(
+                track.keyframes for track in self.scenario.tracks
+            ):
                 QMessageBox.warning(
                     self,
                     "Предупреждение",
-                    "Сценарий пуст — добавьте хотя бы один шаг, прежде чем переключаться в этот режим.",
+                    "Сценарий пуст — добавьте шаг или ключевые кадры на шкалу параметров.",
                 )
                 return False
             self.play_scenario()
@@ -653,6 +673,7 @@ class ScenarioWidget(QWidget):
     def on_scenario_stopped(self):
         self._elapsed_scenario_time = 0.0
         self.graph_scene.set_playhead(0.0, 0.0)
+        self.timeline.set_playhead(0.0)
         self.status_label.setText("Остановлен")
         self.status_label.setStyleSheet("color: #f44336;")
 
@@ -660,6 +681,7 @@ class ScenarioWidget(QWidget):
         total = self.scenario.get_total_duration()
         self._elapsed_scenario_time = total
         self.graph_scene.set_playhead(100.0, total)
+        self.timeline.set_playhead(total)
         self.status_label.setText("Завершен")
         self.status_label.setStyleSheet("color: #4CAF50;")
 
@@ -681,11 +703,28 @@ class ScenarioWidget(QWidget):
     def on_time_updated(self, elapsed_seconds: float) -> None:
         """Обновить подпись времени, сохранив текущее положение курсора."""
         self._elapsed_scenario_time = elapsed_seconds
+        self.timeline.set_playhead(elapsed_seconds)
         self.graph_scene.set_playhead(
             self.graph_scene.playhead_progress, elapsed_seconds
         )
 
     def on_mode_changed(self, mode: str):
+        self.timeline.set_locked(mode != "manual")
+        self.graph_view.setInteractive(mode == "manual")
+        for control in (
+            self.add_step_btn,
+            self.clone_step_btn,
+            self.trigger_btn,
+            self.delete_btn,
+            self.load_btn,
+            self.clear_btn,
+            self.add_step_action,
+            self.add_discrete_step_action,
+            self.clone_step_action,
+        ):
+            control.setEnabled(mode == "manual")
+        if mode == "manual":
+            self._on_selection_changed()
         if mode == "manual":
             self.status_label.setText("Режим: Ручной")
             self.status_label.setStyleSheet("color: #4CAF50;")
@@ -697,8 +736,8 @@ class ScenarioWidget(QWidget):
             self.status_label.setStyleSheet("color: #2196F3;")
 
     def save_scenario(self):
-        if not self.scenario.steps:
-            message = "Нельзя сохранить сценарий без шагов"
+        if not self.scenario.steps and not self.scenario.tracks:
+            message = "Добавьте шаги или дорожки параметров"
             QMessageBox.warning(self, "Сценарий пуст", message)
             self._log_change(message, "warning")
             return

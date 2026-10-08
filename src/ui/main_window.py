@@ -30,6 +30,7 @@ from devices.device_manager import DeviceManager
 from scenario.scenario_engine import ScenarioEngine
 from scenario.scenario_model import Scenario
 from scenario.scenario_widget import ScenarioWidget
+from scenario.timeline_state import validate_timeline
 from ui.channel_widget import ChannelWidget
 from ui.connection_dialog import ConnectionDialog
 from ui.event_log_panel import EventLogPanel
@@ -905,12 +906,15 @@ class MainWindow(QMainWindow):
 
     def _get_scenario_channel_ids(self) -> List[int]:
         scenario = getattr(self.scenario_widget, "scenario", None)
-        if not scenario or not getattr(scenario, "steps", None):
+        if not scenario:
             return []
         seen: List[int] = []
         for step in scenario.steps:
             if step.channel_id not in seen:
                 seen.append(step.channel_id)
+        for track in scenario.tracks:
+            if track.keyframes and track.channel_id not in seen:
+                seen.append(track.channel_id)
         return seen
 
     # ==================================================================
@@ -1141,7 +1145,13 @@ class MainWindow(QMainWindow):
     def _validate_scenario_output_map(self, scenario: Scenario) -> List[str]:
         if not self.active_output_interface.is_connected():
             return []
-        return self.active_output_interface.validate_scenario_output_map(scenario)
+        interface = self.active_output_interface
+        module_count = (
+            len(interface.hosts) if self.active_device_type == "owen" else None
+        )
+        return interface.validate_scenario_output_map(scenario) + validate_timeline(
+            scenario, self.generator.channels, module_count
+        )
 
     def _show_output_map_validation_error(self, message: str) -> None:
         QMessageBox.warning(self, "Ошибка карты выходов", message)
